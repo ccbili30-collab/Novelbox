@@ -113,10 +113,7 @@ function humanizeError(error, fallback = "操作失败") {
 function createSettings() {
   return {
     systemPrompt: "你是小说创作助手。回答可以自由，但要尊重已有对话上下文；如果用户要求正文创作，优先输出可直接进入小说的中文正文。",
-    baseUrl: "https://api.openai.com/v1",
-    apiKey: "",
     model: "gpt-4o-mini",
-    models: ["gpt-4o-mini"],
     temperature: 0.8,
     contextCount: 12,
     unlimitedContext: false,
@@ -124,6 +121,14 @@ function createSettings() {
     stream: true,
     layout: createDefaultLayout(),
     layoutPresets: [],
+  };
+}
+
+function createApiSettings() {
+  return {
+    baseUrl: "https://api.openai.com/v1",
+    apiKey: "",
+    models: ["gpt-4o-mini"],
   };
 }
 
@@ -194,6 +199,8 @@ function createSession(title = "新会话") {
     updatedAt: Date.now(),
     rootId: root.id,
     nodes: { [root.id]: root },
+    settings: createSettings(),
+    novel: createDefaultNovel(),
   };
 }
 
@@ -202,8 +209,7 @@ function defaultState() {
   return {
     activeSessionId: session.id,
     sessions: [session],
-    settings: createSettings(),
-    novel: createDefaultNovel(),
+    api: createApiSettings(),
   };
 }
 
@@ -221,15 +227,13 @@ function createDefaultNovel() {
 function hydrate(next) {
   const fallback = defaultState();
   next ||= fallback;
-  next.settings = { ...createSettings(), ...(next.settings || {}) };
-  next.settings.layout = hydrateLayout(next.settings.layout);
-  next.settings.layoutPresets = Array.isArray(next.settings.layoutPresets) ? next.settings.layoutPresets : [];
-  next.novel = { ...createDefaultNovel(), ...(next.novel || {}) };
-  next.settings.models = Array.isArray(next.settings.models) && next.settings.models.length
-    ? Array.from(new Set([next.settings.model, ...next.settings.models].filter(Boolean)))
-    : [next.settings.model || "gpt-4o-mini"];
+  const legacySettings = next.settings || {};
+  const legacyNovel = next.novel || null;
+  next.api = hydrateApiSettings(next.api || legacySettings);
   next.sessions = Array.isArray(next.sessions) && next.sessions.length ? next.sessions : fallback.sessions;
   next.sessions.forEach((session) => {
+    session.settings = hydrateSessionSettings(session.settings || legacySettings);
+    session.novel = { ...createDefaultNovel(), ...(session.novel || {}) };
     session.rootId ||= "root";
     session.nodes ||= {};
     session.nodes[session.rootId] ||= {
@@ -253,6 +257,28 @@ function hydrate(next) {
   if (!next.sessions.some((session) => session.id === next.activeSessionId)) {
     next.activeSessionId = next.sessions[0].id;
   }
+  const active = next.sessions.find((session) => session.id === next.activeSessionId) || next.sessions[0];
+  if (legacyNovel && active && !active.__legacyNovelMigrated) {
+    active.novel = { ...createDefaultNovel(), ...(active.novel || {}), ...legacyNovel };
+    active.__legacyNovelMigrated = true;
+  }
+  delete next.settings;
+  delete next.novel;
+  return next;
+}
+
+function hydrateApiSettings(api) {
+  const next = { ...createApiSettings(), ...(api || {}) };
+  next.models = Array.isArray(next.models) && next.models.length
+    ? Array.from(new Set(next.models.filter(Boolean)))
+    : ["gpt-4o-mini"];
+  return next;
+}
+
+function hydrateSessionSettings(settings) {
+  const next = { ...createSettings(), ...(settings || {}) };
+  next.layout = hydrateLayout(next.layout);
+  next.layoutPresets = Array.isArray(next.layoutPresets) ? next.layoutPresets : [];
   return next;
 }
 
@@ -280,6 +306,21 @@ function saveState() {
 
 function activeSession() {
   return state.sessions.find((session) => session.id === state.activeSessionId) || state.sessions[0];
+}
+
+function apiSettings() {
+  state.api = hydrateApiSettings(state.api);
+  return state.api;
+}
+
+function sessionSettings(session = activeSession()) {
+  session.settings = hydrateSessionSettings(session.settings);
+  return session.settings;
+}
+
+function sessionNovel(session = activeSession()) {
+  session.novel = { ...createDefaultNovel(), ...(session.novel || {}) };
+  return session.novel;
 }
 
 function getNode(id, session = activeSession()) {
@@ -352,12 +393,13 @@ function getMessageContent(node) {
 
 function contextMessages(extraUserText = "", includeDraftAssistantId = null) {
   const path = activePath();
-  const limit = state.settings.unlimitedContext ? Infinity : Math.max(0, Number(state.settings.contextCount) || 0);
+  const settings = sessionSettings();
+  const limit = settings.unlimitedContext ? Infinity : Math.max(0, Number(settings.contextCount) || 0);
   let selected = Number.isFinite(limit) ? path.slice(-limit) : path.slice();
   if (includeDraftAssistantId) selected = selected.filter((node) => node.id !== includeDraftAssistantId);
   const messages = [];
-  if (clean(state.settings.systemPrompt)) {
-    messages.push({ role: "system", content: state.settings.systemPrompt });
+  if (clean(settings.systemPrompt)) {
+    messages.push({ role: "system", content: settings.systemPrompt });
   }
   const novelMemory = buildNovelMemory();
   if (novelMemory) {
@@ -372,7 +414,7 @@ function contextMessages(extraUserText = "", includeDraftAssistantId = null) {
 }
 
 function buildNovelMemory() {
-  const novel = state.novel || createDefaultNovel();
+  const novel = sessionNovel();
   const parts = [
     ["剧情线", novel.plotline],
     ["角色卡", novel.characters],
@@ -389,7 +431,7 @@ function buildNovelMemory() {
 }
 
 function getNovelSourceText() {
-  const novel = state.novel || createDefaultNovel();
+  const novel = sessionNovel();
   const chat = activePath()
     .slice(-12)
     .map((node) => `${node.role === "user" ? "用户" : "AI"}：${getMessageContent(node)}`)
@@ -409,7 +451,8 @@ function contextInfo(extraUserText = "") {
   const messages = contextMessages(extraUserText);
   const text = messages.map((message) => `${message.role}: ${message.content}`).join("\n\n");
   const nonSystem = messages.filter((message) => message.role !== "system").length;
-  const limit = state.settings.unlimitedContext ? "∞" : state.settings.contextCount;
+  const settings = sessionSettings();
+  const limit = settings.unlimitedContext ? "∞" : settings.contextCount;
   return { messages, text, nonSystem, limit, tokens: estimateTokens(text) };
 }
 
@@ -453,7 +496,7 @@ function closePanels() {
 }
 
 function applyLayout() {
-  const layout = state.settings.layout;
+  const layout = sessionSettings().layout;
   const root = document.documentElement.style;
   root.setProperty("--composer-min-height", `${layout.composerMinHeight}px`);
   root.setProperty("--composer-font-size", `${layout.composerFontSize}px`);
@@ -582,10 +625,11 @@ function renderSessions() {
 }
 
 function renderSettings() {
-  const s = state.settings;
+  const s = sessionSettings();
+  const api = apiSettings();
   if (document.activeElement !== els.systemPrompt) els.systemPrompt.value = s.systemPrompt;
-  if (document.activeElement !== els.baseUrl) els.baseUrl.value = s.baseUrl;
-  if (document.activeElement !== els.apiKey) els.apiKey.value = s.apiKey;
+  if (document.activeElement !== els.baseUrl) els.baseUrl.value = api.baseUrl;
+  if (document.activeElement !== els.apiKey) els.apiKey.value = api.apiKey;
   if (document.activeElement !== els.modelInput) els.modelInput.value = s.model;
   if (document.activeElement !== els.contextCount) els.contextCount.value = s.contextCount;
   if (document.activeElement !== els.maxTokens) els.maxTokens.value = s.maxTokens;
@@ -605,7 +649,7 @@ function renderSettings() {
 
 function renderCustomLayoutPresets() {
   if (!els.customLayoutPresets) return;
-  const presets = state.settings.layoutPresets || [];
+  const presets = sessionSettings().layoutPresets || [];
   els.customLayoutPresets.innerHTML = presets.length
     ? presets.map((preset) => `
       <div class="custom-preset-item">
@@ -617,12 +661,12 @@ function renderCustomLayoutPresets() {
 }
 
 function renderNovelPanel() {
+  const novel = sessionNovel();
   els.novelFields.forEach((field) => {
     const key = field.dataset.novelKey;
-    if (document.activeElement !== field) field.value = state.novel[key] || "";
+    if (document.activeElement !== field) field.value = novel[key] || "";
   });
   if (els.novelStats) {
-    const novel = state.novel || {};
     const items = [
       `正文 ${clean(novel.body).length} 字`,
       `剧情线 ${clean(novel.plotline).length} 字`,
@@ -638,9 +682,10 @@ function formatLayoutValue(key, value) {
 }
 
 function renderModelPicker() {
-  const models = Array.from(new Set([state.settings.model, ...state.settings.models].filter(Boolean)));
+  const settings = sessionSettings();
+  const models = Array.from(new Set([settings.model, ...apiSettings().models].filter(Boolean)));
   els.modelSelect.innerHTML = models.map((model) => `<option value="${escapeHtml(model)}">${escapeHtml(model)}</option>`).join("");
-  els.modelSelect.value = state.settings.model;
+  els.modelSelect.value = settings.model;
   els.modelDatalist.innerHTML = models.map((model) => `<option value="${escapeHtml(model)}"></option>`).join("");
 }
 
@@ -651,11 +696,12 @@ function renderContextBadge() {
 
 function renderContextPanel() {
   const info = contextInfo(clean(els.input.value));
+  const settings = sessionSettings();
   els.contextStats.innerHTML = [
     `上下文 ${info.nonSystem}/${info.limit} 条`,
     `估算 ${formatK(info.tokens)} token`,
-    `模型 ${state.settings.model || "未设置"}`,
-    `温度 ${Number(state.settings.temperature).toFixed(2)}`,
+    `模型 ${settings.model || "未设置"}`,
+    `温度 ${Number(settings.temperature).toFixed(2)}`,
   ].map((item) => `<span>${escapeHtml(item)}</span>`).join("");
   els.contextPreview.textContent = info.messages.map((message, index) => {
     return `#${index + 1} ${message.role}\n${message.content}`;
@@ -665,8 +711,9 @@ function renderContextPanel() {
 function setActiveModel(model) {
   const value = clean(model);
   if (!value) return;
-  state.settings.model = value;
-  state.settings.models = Array.from(new Set([value, ...state.settings.models]));
+  sessionSettings().model = value;
+  const api = apiSettings();
+  api.models = Array.from(new Set([value, ...api.models]));
 }
 
 function openEditor(nodeId) {
@@ -778,8 +825,8 @@ async function continueFromAssistant(nodeId) {
 }
 
 function validateApi() {
-  if (!clean(state.settings.apiKey)) throw new Error("请先在设置里填写 API Key");
-  if (!clean(state.settings.model)) throw new Error("请先选择或填写模型");
+  if (!clean(apiSettings().apiKey)) throw new Error("请先在设置里填写 API Key");
+  if (!clean(sessionSettings().model)) throw new Error("请先选择或填写模型");
 }
 
 async function generateIntoAssistant(nodeId, userText, versionId, continueMode = false) {
@@ -798,7 +845,7 @@ async function generateIntoAssistant(nodeId, userText, versionId, continueMode =
   render();
   scrollBottom();
   try {
-    const result = state.settings.stream
+    const result = sessionSettings().stream
       ? await callOpenAIStream((partial) => {
           version.content = partial;
           renderStreamingNode(nodeId, versionId);
@@ -858,13 +905,15 @@ function stopGeneration() {
 
 function requestPayload(assistantNodeId, stream = false) {
   const messages = contextMessages("", assistantNodeId);
+  const api = apiSettings();
+  const settings = sessionSettings();
   return {
-    baseUrl: state.settings.baseUrl,
-    apiKey: state.settings.apiKey,
-    model: state.settings.model,
+    baseUrl: api.baseUrl,
+    apiKey: api.apiKey,
+    model: settings.model,
     messages,
-    temperature: state.settings.temperature,
-    max_tokens: Number(state.settings.maxTokens) || undefined,
+    temperature: settings.temperature,
+    max_tokens: Number(settings.maxTokens) || undefined,
     stream,
   };
 }
@@ -883,9 +932,9 @@ async function callOpenAIText(messages) {
   validateApi();
   abortController = new AbortController();
   const payload = {
-    baseUrl: state.settings.baseUrl,
-    apiKey: state.settings.apiKey,
-    model: state.settings.model,
+    baseUrl: apiSettings().baseUrl,
+    apiKey: apiSettings().apiKey,
+    model: sessionSettings().model,
     messages,
     minimal: true,
   };
@@ -1047,14 +1096,16 @@ async function fetchModels() {
   try {
     validateApi();
     els.modelStatus.textContent = "正在拉取...";
-    const payload = { baseUrl: state.settings.baseUrl, apiKey: state.settings.apiKey };
+    const api = apiSettings();
+    const settings = sessionSettings();
+    const payload = { baseUrl: api.baseUrl, apiKey: api.apiKey };
     const bridge = await callAndroidBridge("openAIModels", payload);
     const data = bridge || await fetchJson("/api/openai-models", payload);
     if (data.__bridgeStatus >= 400) throw new Error(data.error?.message || "模型拉取失败");
     const models = (data.data || []).map((item) => item.id).filter(Boolean).sort();
     if (!models.length) throw new Error("没有读取到模型");
-    state.settings.models = Array.from(new Set([state.settings.model, ...models].filter(Boolean)));
-    if (!state.settings.model) state.settings.model = models[0];
+    api.models = Array.from(new Set([settings.model, ...models].filter(Boolean)));
+    if (!settings.model) settings.model = models[0];
     els.modelStatus.textContent = `已拉取 ${models.length} 个`;
     render();
   } catch (error) {
@@ -1146,8 +1197,9 @@ function deleteSession(sessionId) {
 }
 
 function syncNovelFromFields() {
+  const novel = sessionNovel();
   els.novelFields.forEach((field) => {
-    state.novel[field.dataset.novelKey] = field.value;
+    novel[field.dataset.novelKey] = field.value;
   });
 }
 
@@ -1168,7 +1220,7 @@ async function handleBodyFileSelected() {
   if (!file) return;
   try {
     const text = await file.text();
-    state.novel.body = clean(text);
+    sessionNovel().body = clean(text);
     renderNovelPanel();
     renderContextBadge();
     saveState();
@@ -1181,7 +1233,7 @@ async function handleBodyFileSelected() {
 }
 
 function exportBodyFile() {
-  const text = clean(state.novel.body);
+  const text = clean(sessionNovel().body);
   if (!text) return showToast("正文库为空");
   downloadText(`TBird-正文-${Date.now()}.txt`, text);
   showToast("正文已导出为 TXT");
@@ -1194,7 +1246,7 @@ function syncBodyFromAssistant() {
     .filter(Boolean)
     .join("\n\n");
   if (!bodyText) return showToast("当前会话还没有可同步的 AI 输出");
-  state.novel.body = bodyText;
+  sessionNovel().body = bodyText;
   renderNovelPanel();
   renderContextBadge();
   saveState();
@@ -1252,7 +1304,7 @@ async function generateNovelMaterial(target) {
   showToast(`正在生成${label}`);
   try {
     const text = await callOpenAIText(messages);
-    state.novel[target] = text;
+    sessionNovel()[target] = text;
     renderNovelPanel();
     renderContextBadge();
     saveState();
@@ -1307,50 +1359,53 @@ function handleCommand(command, target) {
 function applyLayoutPreset(name) {
   const preset = layoutPresets[name];
   if (!preset) return;
-  state.settings.layout = hydrateLayout(preset);
+  sessionSettings().layout = hydrateLayout(preset);
   render();
   resizeInput();
   showToast("排版预设已应用");
 }
 
 function applyCustomLayoutPreset(id) {
-  const preset = state.settings.layoutPresets.find((item) => item.id === id);
+  const settings = sessionSettings();
+  const preset = settings.layoutPresets.find((item) => item.id === id);
   if (!preset) return;
-  state.settings.layout = hydrateLayout(preset.layout);
+  settings.layout = hydrateLayout(preset.layout);
   render();
   resizeInput();
   showToast("排版预设已应用");
 }
 
 function saveLayoutPreset() {
-  const name = clean(els.layoutPresetName?.value) || `排版 ${state.settings.layoutPresets.length + 1}`;
+  const settings = sessionSettings();
+  const name = clean(els.layoutPresetName?.value) || `排版 ${settings.layoutPresets.length + 1}`;
   const record = {
     id: uid("layout"),
     name,
-    layout: hydrateLayout(state.settings.layout),
+    layout: hydrateLayout(settings.layout),
     createdAt: Date.now(),
   };
-  state.settings.layoutPresets = [record, ...state.settings.layoutPresets].slice(0, 12);
+  settings.layoutPresets = [record, ...settings.layoutPresets].slice(0, 12);
   if (els.layoutPresetName) els.layoutPresetName.value = "";
   render();
   showToast("已保存排版预设");
 }
 
 function deleteLayoutPreset(id) {
-  state.settings.layoutPresets = state.settings.layoutPresets.filter((item) => item.id !== id);
+  const settings = sessionSettings();
+  settings.layoutPresets = settings.layoutPresets.filter((item) => item.id !== id);
   render();
   showToast("已删除排版预设");
 }
 
 function resetLayoutParams() {
-  state.settings.layout = createDefaultLayout();
+  sessionSettings().layout = createDefaultLayout();
   render();
   resizeInput();
   showToast("已恢复默认排版");
 }
 
 function copyLayoutParams() {
-  copyText(JSON.stringify(state.settings.layout, null, 2));
+  copyText(JSON.stringify(sessionSettings().layout, null, 2));
 }
 
 document.addEventListener("click", (event) => {
@@ -1387,7 +1442,7 @@ els.composer.addEventListener("submit", async (event) => {
 
 function resizeInput() {
   els.input.style.height = "auto";
-  const maxHeight = Math.max(44, state.settings.layout.composerMinHeight + 8);
+  const maxHeight = Math.max(44, sessionSettings().layout.composerMinHeight + 8);
   els.input.style.height = `${Math.min(maxHeight, els.input.scrollHeight)}px`;
   const composerHeight = Math.ceil(els.composer.getBoundingClientRect().height);
   document.documentElement.style.setProperty("--composer-height", `${composerHeight}px`);
@@ -1409,14 +1464,22 @@ els.historySearch.addEventListener("input", renderSessions);
 
 [
   ["input", els.systemPrompt, "systemPrompt"],
-  ["input", els.baseUrl, "baseUrl"],
-  ["input", els.apiKey, "apiKey"],
   ["input", els.contextCount, "contextCount"],
   ["input", els.maxTokens, "maxTokens"],
 ].forEach(([, element, key]) => {
   element.addEventListener("input", () => {
-    state.settings[key] = key === "contextCount" || key === "maxTokens" ? Number(element.value) || 0 : element.value;
+    sessionSettings()[key] = key === "contextCount" || key === "maxTokens" ? Number(element.value) || 0 : element.value;
     renderContextBadge();
+    saveState();
+  });
+});
+
+[
+  ["input", els.baseUrl, "baseUrl"],
+  ["input", els.apiKey, "apiKey"],
+].forEach(([, element, key]) => {
+  element.addEventListener("input", () => {
+    apiSettings()[key] = element.value;
     saveState();
   });
 });
@@ -1434,25 +1497,25 @@ els.modelSelect.addEventListener("change", () => {
 });
 
 els.temperature.addEventListener("input", () => {
-  state.settings.temperature = Number(els.temperature.value);
-  els.temperatureLabel.textContent = state.settings.temperature.toFixed(2);
+  sessionSettings().temperature = Number(els.temperature.value);
+  els.temperatureLabel.textContent = sessionSettings().temperature.toFixed(2);
   saveState();
 });
 
 els.unlimitedContext.addEventListener("change", () => {
-  state.settings.unlimitedContext = els.unlimitedContext.checked;
+  sessionSettings().unlimitedContext = els.unlimitedContext.checked;
   render();
 });
 
 els.stream.addEventListener("change", () => {
-  state.settings.stream = els.stream.checked;
+  sessionSettings().stream = els.stream.checked;
   saveState();
 });
 
 els.layoutInputs.forEach((input) => {
   input.addEventListener("input", () => {
     const key = input.dataset.layoutKey;
-    state.settings.layout[key] = Number(input.value);
+    sessionSettings().layout[key] = Number(input.value);
     applyLayout();
     renderSettings();
     resizeInput();
@@ -1462,7 +1525,7 @@ els.layoutInputs.forEach((input) => {
 
 els.novelFields.forEach((field) => {
   field.addEventListener("input", () => {
-    state.novel[field.dataset.novelKey] = field.value;
+    sessionNovel()[field.dataset.novelKey] = field.value;
     renderContextBadge();
     renderNovelPanel();
     saveState();
