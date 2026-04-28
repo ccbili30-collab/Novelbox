@@ -83,6 +83,7 @@ async function handleOpenAIChat(req, res) {
     const temperature = Number(payload.temperature);
     const maxTokens = Number(payload.max_tokens);
     const stream = Boolean(payload.stream);
+    const minimal = Boolean(payload.minimal);
 
     if (!apiKey) throw new Error("API Key is required");
     if (!model) throw new Error("Model is required");
@@ -97,10 +98,9 @@ async function handleOpenAIChat(req, res) {
       body: JSON.stringify({
         model,
         messages,
-        temperature: Number.isFinite(temperature) ? temperature : 0.8,
-        ...(Number.isFinite(maxTokens) && maxTokens > 0 ? { max_tokens: Math.round(maxTokens) } : {}),
-        stream,
-        ...(stream ? { stream_options: { include_usage: true } } : {}),
+        ...(!minimal && Number.isFinite(temperature) ? { temperature } : {}),
+        ...(!minimal && Number.isFinite(maxTokens) && maxTokens > 0 ? { max_tokens: Math.round(maxTokens) } : {}),
+        ...(stream ? { stream: true, stream_options: { include_usage: true } } : {}),
       }),
     });
 

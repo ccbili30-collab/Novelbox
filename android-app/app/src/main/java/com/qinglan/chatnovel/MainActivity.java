@@ -100,15 +100,18 @@ public class MainActivity extends Activity {
                 String endpoint = normalizeOpenAIUrl(payload.optString("baseUrl", "https://api.openai.com/v1"));
                 String apiKey = payload.optString("apiKey", "").trim();
                 String model = payload.optString("model", "").trim();
+                boolean minimal = payload.optBoolean("minimal", false);
                 if (apiKey.isEmpty()) return bridgeError(400, "API Key is required");
                 if (model.isEmpty()) return bridgeError(400, "Model is required");
 
                 JSONObject body = new JSONObject();
                 body.put("model", model);
                 body.put("messages", payload.getJSONArray("messages"));
-                body.put("temperature", payload.optDouble("temperature", 0.8));
+                if (!minimal && payload.has("temperature")) {
+                    body.put("temperature", payload.optDouble("temperature", 0.8));
+                }
                 int maxTokens = payload.optInt("max_tokens", 0);
-                if (maxTokens > 0) body.put("max_tokens", maxTokens);
+                if (!minimal && maxTokens > 0) body.put("max_tokens", maxTokens);
 
                 HttpURLConnection connection = (HttpURLConnection) new URL(endpoint).openConnection();
                 connection.setConnectTimeout(30000);

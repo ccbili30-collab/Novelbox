@@ -93,6 +93,23 @@ function formatK(tokens) {
   return `${tokens}`;
 }
 
+function humanizeError(error, fallback = "操作失败") {
+  const raw = String(error?.message || error || "").trim();
+  const lower = raw.toLowerCase();
+  if (!raw) return fallback;
+  if (lower.includes("param incorrect") || lower.includes("invalid parameter") || lower.includes("invalid param")) {
+    return "接口参数不兼容：当前模型网关不接受这组请求参数。我已改为兼容模式，请重试。";
+  }
+  if (lower.includes("api key is required")) return "请先在设置里填写 API Key";
+  if (lower.includes("model is required")) return "请先选择或填写模型";
+  if (lower.includes("messages are required")) return "请求内容为空，请先输入或保存资料";
+  if (lower.includes("timeout")) return "请求超时，请检查网络或模型服务";
+  if (lower.includes("failed to fetch")) return "网络请求失败，请检查 Base URL、网络或代理";
+  if (lower.includes("unauthorized") || lower.includes("401")) return "认证失败，请检查 API Key";
+  if (lower.includes("forbidden") || lower.includes("403")) return "模型服务拒绝访问，请检查权限或模型名";
+  return raw;
+}
+
 function createSettings() {
   return {
     systemPrompt: "你是小说创作助手。回答可以自由，但要尊重已有对话上下文；如果用户要求正文创作，优先输出可直接进入小说的中文正文。",
@@ -793,8 +810,9 @@ async function generateIntoAssistant(nodeId, userText, versionId, continueMode =
     touchSession();
   } catch (error) {
     if (error.name !== "AbortError") {
-      version.content = version.content || `请求失败：${error.message || error}`;
-      showToast(error.message || "生成失败");
+      const message = humanizeError(error, "生成失败");
+      version.content = version.content || `请求失败：${message}`;
+      showToast(message);
     }
   } finally {
     isGenerating = false;
@@ -869,9 +887,7 @@ async function callOpenAIText(messages) {
     apiKey: state.settings.apiKey,
     model: state.settings.model,
     messages,
-    temperature: state.settings.temperature,
-    max_tokens: Number(state.settings.maxTokens) || undefined,
-    stream: false,
+    minimal: true,
   };
   try {
     const bridge = await callAndroidBridge("openAIChat", payload);
@@ -1042,8 +1058,9 @@ async function fetchModels() {
     els.modelStatus.textContent = `已拉取 ${models.length} 个`;
     render();
   } catch (error) {
-    els.modelStatus.textContent = error.message || "拉取失败";
-    showToast(error.message || "模型拉取失败");
+    const message = humanizeError(error, "模型拉取失败");
+    els.modelStatus.textContent = message;
+    showToast(message);
   }
 }
 
@@ -1157,7 +1174,7 @@ async function handleBodyFileSelected() {
     saveState();
     showToast("正文 TXT 已导入");
   } catch (error) {
-    showToast(error.message || "正文导入失败");
+    showToast(humanizeError(error, "正文导入失败"));
   } finally {
     if (els.bodyImportFile) els.bodyImportFile.value = "";
   }
@@ -1199,8 +1216,14 @@ function novelPromptFor(target) {
   return {
     label: labels[target] || target,
     messages: [
-      { role: "system", content: "你是严谨的小说资料整理助手。只能整理、归纳、压缩用户提供的小说材料；除非明确要求，不要续写正文。" },
-      { role: "user", content: `${instructions[target] || "请整理小说资料。"}\n\n${getNovelSourceText() || "当前资料为空，请返回：暂无足够资料。"}` },
+      {
+        role: "user",
+        content: [
+          "你是严谨的小说资料整理助手。只能整理、归纳、压缩用户提供的小说材料；除非明确要求，不要续写正文。",
+          instructions[target] || "请整理小说资料。",
+          getNovelSourceText() || "当前资料为空，请返回：暂无足够资料。",
+        ].join("\n\n"),
+      },
     ],
   };
 }
@@ -1220,7 +1243,7 @@ async function generateNovelMaterial(target) {
     saveState();
     showToast(`${label}已填充`);
   } catch (error) {
-    showToast(error.message || `${label}生成失败`);
+    showToast(humanizeError(error, `${label}生成失败`));
   } finally {
     materialGenerating = false;
   }
@@ -1342,7 +1365,7 @@ els.composer.addEventListener("submit", async (event) => {
     renderContextBadge();
     await appendUserMessage(text);
   } catch (error) {
-    showToast(error.message || "发送失败");
+    showToast(humanizeError(error, "发送失败"));
   }
 });
 
