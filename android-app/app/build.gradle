@@ -1,0 +1,32 @@
+plugins {
+    id "com.android.application"
+}
+
+android {
+    namespace "com.qinglan.chatnovel"
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.qinglan.chatnovel"
+        minSdk 23
+        targetSdk 34
+        versionCode 1
+        versionName "0.1.0"
+    }
+}
+
+def webRoot = rootProject.file("..")
+def generatedWebAssets = layout.buildDirectory.dir("generated/assets/web")
+
+tasks.register("syncWebAssets", Sync) {
+    from(webRoot) {
+        include "index.html"
+        include "src/**"
+    }
+    into(generatedWebAssets)
+}
+
+android.sourceSets.main.assets.srcDir(generatedWebAssets)
+tasks.named("preBuild").configure {
+    dependsOn("syncWebAssets")
+}

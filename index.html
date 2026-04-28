@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>TBird</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <button class="icon-button" type="button" data-command="open-history" aria-label="历史会话">☰</button>
+        <h1 id="sessionTitle">新会话</h1>
+        <div class="top-actions">
+        <button class="icon-button" type="button" data-command="open-search" aria-label="搜索">⌕</button>
+        <button class="icon-button" type="button" data-command="open-history" aria-label="历史">◴</button>
+        <button class="icon-button" type="button" data-command="open-novel" aria-label="小说资料">文</button>
+        <button class="icon-button" type="button" data-command="open-settings" aria-label="设置">⋯</button>
+      </div>
+      </header>
+
+      <main id="messageList" class="messages" aria-live="polite"></main>
+
+      <div id="messageMenu" class="message-menu" hidden></div>
+
+      <form id="composer" class="composer">
+        <textarea id="chatInput" rows="1" placeholder="在这里输入你的问题..."></textarea>
+        <div class="composer-bottom">
+          <button class="round-button" type="button" data-command="open-settings" aria-label="设置">⚙</button>
+          <button class="round-button" type="button" data-command="open-context" aria-label="上下文预览">↑</button>
+          <button id="contextBadge" class="context-badge" type="button" data-command="open-context">0/∞ · 0K</button>
+          <select id="modelSelect" aria-label="选择模型"></select>
+          <button id="sendButton" class="send-button" type="submit" aria-label="发送">↑</button>
+        </div>
+      </form>
+    </div>
+
+    <div id="backdrop" class="backdrop" hidden data-command="close-panels"></div>
+
+    <aside id="historyPanel" class="side-panel left-panel" hidden>
+      <div class="panel-head">
+        <strong>历史会话</strong>
+        <button class="icon-button" type="button" data-command="close-panels">×</button>
+      </div>
+      <div class="panel-row">
+        <button class="primary-button" type="button" data-command="new-session">新建会话</button>
+      </div>
+      <input id="historySearch" class="plain-input" placeholder="搜索历史" />
+      <div id="sessionList" class="session-list"></div>
+    </aside>
+
+    <aside id="settingsPanel" class="side-panel right-panel" hidden>
+      <div class="panel-head">
+        <strong>设置</strong>
+        <button class="icon-button" type="button" data-command="close-panels">×</button>
+      </div>
+      <label class="field">
+        <span>系统提示</span>
+        <textarea id="systemPromptInput" rows="6"></textarea>
+      </label>
+      <label class="field">
+        <span>Base URL</span>
+        <input id="baseUrlInput" type="text" placeholder="https://api.openai.com/v1" />
+      </label>
+      <label class="field">
+        <span>API Key</span>
+        <input id="apiKeyInput" type="password" placeholder="sk-..." />
+      </label>
+      <label class="field">
+        <span>模型</span>
+        <input id="modelInput" type="text" list="modelDatalist" placeholder="gpt-4o-mini" />
+      </label>
+      <datalist id="modelDatalist"></datalist>
+      <div class="panel-row">
+        <button type="button" data-command="fetch-models">拉取模型列表</button>
+        <span id="modelStatus" class="muted">未拉取</span>
+      </div>
+      <label class="field">
+        <span>温度 <b id="temperatureLabel">0.8</b></span>
+        <input id="temperatureInput" type="range" min="0" max="2" step="0.05" />
+      </label>
+      <div class="split-fields">
+        <label class="field">
+          <span>上下文条数</span>
+          <input id="contextCountInput" type="number" min="0" step="1" />
+        </label>
+        <label class="check-field">
+          <input id="unlimitedContextInput" type="checkbox" />
+          <span>无限</span>
+        </label>
+      </div>
+      <label class="field">
+        <span>最大输出 token</span>
+        <input id="maxTokensInput" type="number" min="1" step="1" />
+      </label>
+      <label class="check-field">
+        <input id="streamInput" type="checkbox" />
+        <span>流式输出</span>
+      </label>
+      <div class="settings-section">
+        <div class="section-title">
+          <strong>排版调试</strong>
+          <span class="muted">实时生效</span>
+        </div>
+        <label class="range-field"><span>输入栏高度 <b data-layout-value="composerMinHeight"></b></span><input type="range" min="48" max="130" step="1" data-layout-key="composerMinHeight" /></label>
+        <label class="range-field"><span>输入框字号 <b data-layout-value="composerFontSize"></b></span><input type="range" min="12" max="24" step="1" data-layout-key="composerFontSize" /></label>
+        <label class="range-field"><span>发送按钮 <b data-layout-value="sendButtonSize"></b></span><input type="range" min="24" max="52" step="1" data-layout-key="sendButtonSize" /></label>
+        <label class="range-field"><span>工具按钮 <b data-layout-value="toolButtonSize"></b></span><input type="range" min="20" max="44" step="1" data-layout-key="toolButtonSize" /></label>
+        <label class="range-field"><span>消息字号 <b data-layout-value="messageFontSize"></b></span><input type="range" min="13" max="24" step="1" data-layout-key="messageFontSize" /></label>
+        <label class="range-field"><span>行间距 <b data-layout-value="messageLineHeight"></b></span><input type="range" min="120" max="190" step="1" data-layout-key="messageLineHeight" /></label>
+        <label class="range-field"><span>AI 左边距 <b data-layout-value="assistantLeft"></b></span><input type="range" min="0" max="60" step="1" data-layout-key="assistantLeft" /></label>
+        <label class="range-field"><span>消息两侧边距 <b data-layout-value="messageSidePadding"></b></span><input type="range" min="4" max="36" step="1" data-layout-key="messageSidePadding" /></label>
+        <label class="range-field"><span>消息间距 <b data-layout-value="messageGap"></b></span><input type="range" min="8" max="42" step="1" data-layout-key="messageGap" /></label>
+        <label class="range-field"><span>用户气泡内边距 <b data-layout-value="userBubblePadding"></b></span><input type="range" min="4" max="24" step="1" data-layout-key="userBubblePadding" /></label>
+        <label class="range-field"><span>元信息字号 <b data-layout-value="metaFontSize"></b></span><input type="range" min="8" max="16" step="1" data-layout-key="metaFontSize" /></label>
+        <label class="range-field"><span>省略号大小 <b data-layout-value="moreButtonSize"></b></span><input type="range" min="18" max="42" step="1" data-layout-key="moreButtonSize" /></label>
+        <label class="field compact-field">
+          <span>预设名称</span>
+          <input id="layoutPresetName" type="text" placeholder="例如：我的手机排版" />
+        </label>
+        <div class="preset-row">
+          <button type="button" data-command="layout-preset" data-preset="compact">Chatbox 紧凑</button>
+          <button type="button" data-command="layout-preset" data-preset="comfortable">大字舒适</button>
+          <button type="button" data-command="save-layout-preset">存为预设</button>
+          <button type="button" data-command="copy-layout">复制参数</button>
+          <button type="button" data-command="reset-layout">恢复默认</button>
+        </div>
+        <div id="customLayoutPresets" class="custom-preset-list"></div>
+      </div>
+    </aside>
+
+    <aside id="novelPanel" class="side-panel right-panel" hidden>
+      <div class="panel-head">
+        <strong>小说资料</strong>
+        <button class="icon-button" type="button" data-command="close-panels">×</button>
+      </div>
+      <label class="field">
+        <span>正文库</span>
+        <textarea data-novel-key="body" rows="8" placeholder="粘贴或整理当前小说正文。会作为记忆材料进入上下文。"></textarea>
+      </label>
+      <input id="bodyImportFile" type="file" accept=".txt,text/plain" hidden />
+      <div class="novel-actions">
+        <button type="button" data-command="import-body-file">导入 TXT</button>
+        <button type="button" data-command="export-body-file">导出正文</button>
+        <button type="button" data-command="generate-novel" data-novel-target="plotline">AI 归纳剧情线</button>
+        <button type="button" data-command="save-novel">保存资料</button>
+      </div>
+      <label class="field">
+        <span>剧情线</span>
+        <textarea data-novel-key="plotline" rows="5" placeholder="实时概括当前剧情，用来压缩长上下文。"></textarea>
+      </label>
+      <div class="novel-actions"><button type="button" data-command="generate-novel" data-novel-target="plotline">AI 填充剧情线</button></div>
+      <label class="field">
+        <span>角色卡</span>
+        <textarea data-novel-key="characters" rows="5" placeholder="角色设定、关系、动机、口癖。"></textarea>
+      </label>
+      <div class="novel-actions"><button type="button" data-command="generate-novel" data-novel-target="characters">AI 填充角色卡</button></div>
+      <label class="field">
+        <span>世界观</span>
+        <textarea data-novel-key="world" rows="5" placeholder="时代、阵营、规则、地点、技术/魔法体系。"></textarea>
+      </label>
+      <div class="novel-actions"><button type="button" data-command="generate-novel" data-novel-target="world">AI 填充世界观</button></div>
+      <label class="field">
+        <span>大纲</span>
+        <textarea data-novel-key="outline" rows="5" placeholder="章节走向和长期目标。"></textarea>
+      </label>
+      <div class="novel-actions"><button type="button" data-command="generate-novel" data-novel-target="outline">AI 填充大纲</button></div>
+      <label class="field">
+        <span>伏笔线</span>
+        <textarea data-novel-key="foreshadows" rows="4" placeholder="未回收伏笔、悬念、暗线。"></textarea>
+      </label>
+      <div class="novel-actions"><button type="button" data-command="generate-novel" data-novel-target="foreshadows">AI 填充伏笔线</button></div>
+      <div class="context-stats" id="novelStats"></div>
+    </aside>
+
+    <aside id="contextPanel" class="bottom-panel" hidden>
+      <div class="panel-head">
+        <strong>本次上下文预览</strong>
+        <button class="icon-button" type="button" data-command="close-panels">×</button>
+      </div>
+      <div id="contextStats" class="context-stats"></div>
+      <pre id="contextPreview" class="context-preview"></pre>
+    </aside>
+
+    <dialog id="editDialog" class="edit-dialog">
+      <form method="dialog">
+        <div class="panel-head">
+          <strong id="editTitle">编辑内容</strong>
+          <button class="icon-button" value="cancel" type="submit">×</button>
+        </div>
+        <textarea id="editText" rows="10"></textarea>
+        <div class="dialog-actions">
+          <button value="cancel" type="submit">取消</button>
+          <button id="saveEditButton" class="primary-button" value="default" type="button">保存</button>
+          <button id="saveSendEditButton" class="primary-button ghost" value="default" type="button">保存并发送</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast" hidden></div>
+    <script defer src="./src/main.js"></script>
+  </body>
+</html>

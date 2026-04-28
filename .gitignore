@@ -1,0 +1,20 @@
+.godot/
+*.tmp
+.server-job-id
+.server-pid
+tmp/
+android-app/.gradle/
+android-app/build/
+android-app/app/build/
+android-app/local.properties
+
+# Workspace leftovers unrelated to Novelbox
+Simulated-Project/
+_discarded_godot_project/
+aero_probe/
+art/
+crash_*/
+dotf_inspect/
+downloads/
+fungal-war-addon/
+fungal-war-flesh-war/
