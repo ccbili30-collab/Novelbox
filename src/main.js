@@ -592,12 +592,14 @@ function renderMenu() {
     <button type="button" data-command="edit-user" data-node-id="${node.id}">编辑内容</button>
     <button type="button" data-command="resend-user" data-node-id="${node.id}">重新发送</button>
     <button type="button" data-command="copy-message" data-node-id="${node.id}">复制</button>
+    <button type="button" data-command="delete-message" data-node-id="${node.id}">删除</button>
   `;
   const assistantActions = `
     <button type="button" data-command="regen-ai" data-node-id="${node.id}">重新生成</button>
     <button type="button" data-command="edit-ai" data-node-id="${node.id}">编辑AI输出</button>
     <button type="button" data-command="continue-ai" data-node-id="${node.id}">继续</button>
     <button type="button" data-command="copy-message" data-node-id="${node.id}">复制</button>
+    <button type="button" data-command="delete-message" data-node-id="${node.id}">删除</button>
   `;
   els.menu.innerHTML = node.role === "user" ? userActions : assistantActions;
   els.menu.hidden = false;
@@ -1136,6 +1138,31 @@ function switchVersion(nodeId, delta) {
   render();
 }
 
+function collectSubtreeIds(nodeId, session = activeSession()) {
+  const node = getNode(nodeId, session);
+  if (!node) return [];
+  return [node.id, ...node.children.flatMap((childId) => collectSubtreeIds(childId, session))];
+}
+
+function deleteMessage(nodeId) {
+  if (isGenerating) return showToast("生成中不能删除消息");
+  const session = activeSession();
+  const node = getNode(nodeId, session);
+  const parent = getNode(node?.parentId, session);
+  if (!node || !parent) return;
+  const index = parent.children.indexOf(node.id);
+  const ids = collectSubtreeIds(node.id, session);
+  ids.forEach((id) => delete session.nodes[id]);
+  parent.children = parent.children.filter((id) => id !== node.id);
+  if (parent.activeChildId === node.id) {
+    parent.activeChildId = parent.children[Math.max(0, Math.min(index, parent.children.length - 1))] || null;
+  }
+  activeMenuNodeId = null;
+  touchSession(session);
+  render();
+  showToast("已删除这条消息和后续分支");
+}
+
 async function copyText(text) {
   try {
     await navigator.clipboard.writeText(text);
@@ -1347,6 +1374,7 @@ function handleCommand(command, target) {
   }
   if (command === "edit-user" || command === "edit-ai") return openEditor(nodeId);
   if (command === "copy-message") return copyText(getMessageContent(getNode(nodeId)));
+  if (command === "delete-message") return deleteMessage(nodeId);
   if (command === "resend-user") return resendUser(nodeId);
   if (command === "regen-ai") return regenerateAssistant(nodeId);
   if (command === "continue-ai") return continueFromAssistant(nodeId);

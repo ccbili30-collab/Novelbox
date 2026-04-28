@@ -100,7 +100,7 @@ async function handleOpenAIChat(req, res) {
         messages,
         ...(!minimal && Number.isFinite(temperature) ? { temperature } : {}),
         ...(!minimal && Number.isFinite(maxTokens) && maxTokens > 0 ? { max_tokens: Math.round(maxTokens) } : {}),
-        ...(stream ? { stream: true, stream_options: { include_usage: true } } : {}),
+        ...(stream ? { stream: true } : {}),
       }),
     });
 

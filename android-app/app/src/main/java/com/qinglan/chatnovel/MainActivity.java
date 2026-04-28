@@ -167,9 +167,6 @@ public class MainActivity extends Activity {
                 int maxTokens = payload.optInt("max_tokens", 0);
                 if (maxTokens > 0) body.put("max_tokens", maxTokens);
                 body.put("stream", true);
-                JSONObject streamOptions = new JSONObject();
-                streamOptions.put("include_usage", true);
-                body.put("stream_options", streamOptions);
 
                 HttpURLConnection connection = (HttpURLConnection) new URL(endpoint).openConnection();
                 connection.setConnectTimeout(30000);
@@ -187,7 +184,10 @@ public class MainActivity extends Activity {
                         ? connection.getInputStream()
                         : connection.getErrorStream();
                 if (status < 200 || status >= 300) {
-                    throw new Exception(parseOrWrapError(readAll(stream)).getJSONObject("error").optString("message", "OpenAI-compatible request failed"));
+                    String message = parseOrWrapError(readAll(stream))
+                            .getJSONObject("error")
+                            .optString("message", "OpenAI-compatible request failed");
+                    throw new Exception("HTTP " + status + ": " + message);
                 }
 
                 try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {

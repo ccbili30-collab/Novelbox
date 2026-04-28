@@ -223,9 +223,11 @@ button {
   bottom: calc(var(--composer-height) + max(env(safe-area-inset-bottom), 8px) + 8px);
   z-index: 30;
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   max-width: min(94vw, 640px);
   gap: 6px;
-  overflow-x: auto;
+  overflow: visible;
   padding: 8px;
   border: 1px solid var(--line);
   border-radius: 8px;
