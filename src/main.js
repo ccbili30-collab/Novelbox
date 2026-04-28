@@ -724,7 +724,9 @@ function openEditor(nodeId) {
   editTarget = { nodeId, role: node.role };
   els.editTitle.textContent = node.role === "assistant" ? "编辑 AI 输出" : "编辑内容";
   els.editText.value = getMessageContent(node);
-  els.saveSendEdit.style.display = node.role === "assistant" ? "" : "none";
+  els.saveEdit.textContent = "保存";
+  els.saveSendEdit.textContent = node.role === "assistant" ? "保存并继续" : "保存并重新发送";
+  els.saveSendEdit.style.display = "";
   els.editDialog.showModal();
   requestAnimationFrame(() => els.editText.focus());
 }
@@ -751,8 +753,17 @@ async function saveEditor(sendAfterSave = false) {
     else showToast("已直接修改 AI 输出");
     return;
   }
-  await editUserBranch(node.id, text);
+  if (sendAfterSave) {
+    closeEditor();
+    await editUserBranch(node.id, text);
+    return;
+  }
+  node.content = text;
+  node.createdAt = Date.now();
   closeEditor();
+  touchSession();
+  render();
+  showToast("已修改用户内容");
 }
 
 async function appendUserMessage(text) {
