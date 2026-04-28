@@ -1184,6 +1184,21 @@ function exportBodyFile() {
   const text = clean(state.novel.body);
   if (!text) return showToast("正文库为空");
   downloadText(`TBird-正文-${Date.now()}.txt`, text);
+  showToast("正文已导出为 TXT");
+}
+
+function syncBodyFromAssistant() {
+  const bodyText = activePath()
+    .filter((node) => node.role === "assistant")
+    .map((node) => clean(getAssistantVersion(node)?.content || ""))
+    .filter(Boolean)
+    .join("\n\n");
+  if (!bodyText) return showToast("当前会话还没有可同步的 AI 输出");
+  state.novel.body = bodyText;
+  renderNovelPanel();
+  renderContextBadge();
+  saveState();
+  showToast("已按顺序同步全部 AI 输出到正文库");
 }
 
 function downloadText(filename, text) {
@@ -1266,6 +1281,7 @@ function handleCommand(command, target) {
   if (command === "save-novel") return saveNovel();
   if (command === "import-body-file") return importBodyFile();
   if (command === "export-body-file") return exportBodyFile();
+  if (command === "sync-body-from-ai") return syncBodyFromAssistant();
   if (command === "generate-novel") return generateNovelMaterial(target.dataset.novelTarget);
   if (command === "layout-preset") return applyLayoutPreset(target.dataset.preset);
   if (command === "layout-custom-preset") return applyCustomLayoutPreset(target.dataset.presetId);
