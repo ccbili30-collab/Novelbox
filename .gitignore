@@ -1,8 +1,11 @@
 .godot/
+node_modules/
 *.tmp
 .server-job-id
 .server-pid
 tmp/
+outputs/
+spore_lore_extract/
 android-app/.gradle/
 android-app/build/
 android-app/app/build/
