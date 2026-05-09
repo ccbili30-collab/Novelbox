@@ -35,6 +35,8 @@ import { renderSessions as drawSessions } from "./ui/renderers/session-renderer.
 
 const CONTINUE_PROMPT = "继续完成上一条请求，直接输出正文，不要重复确认。";
 const BRIDGE_TIMEOUT = 160000;
+const AUTO_CONTEXT_TOKEN_THRESHOLD = 18000;
+const COMPRESSED_CONTEXT_TAIL_COUNT = 6;
 const DEFAULT_ROUNDTABLE_CONTEXT = {
   includeManuscript: true,
   includeNovel: true,
@@ -136,6 +138,7 @@ const els = {
   novelFields: Array.from(document.querySelectorAll("[data-novel-key]")),
   novelStats: $("#novelStats"),
   novelVersionList: $("#novelVersionList"),
+  novelSegmentList: $("#novelSegmentList"),
   bodyImportFile: $("#bodyImportFile"),
   sessionList: $("#sessionList"),
   historySearch: $("#historySearch"),
@@ -434,20 +437,129 @@ function contextMessages(extraUserText = "", includeDraftAssistantId = null) {
   const limit = settings.unlimitedContext ? Infinity : Math.max(0, Number(settings.contextCount) || 0);
   let selected = Number.isFinite(limit) ? path.slice(-limit) : path.slice();
   if (includeDraftAssistantId) selected = selected.filter((node) => node.id !== includeDraftAssistantId);
-  const messages = [];
-  if (clean(settings.systemPrompt)) {
-    messages.push({ role: "system", content: settings.systemPrompt });
-  }
+  const buildMessagesFromSelection = (selection, compressed = false) => {
+    const messages = [];
+    if (clean(settings.systemPrompt)) {
+      messages.push({ role: "system", content: settings.systemPrompt });
+    }
+    const novelMemory = buildNovelMemory();
+    if (novelMemory) {
+      messages.push({ role: "system", content: novelMemory });
+    }
+    if (compressed) {
+      messages.push({
+        role: "system",
+        content: "当前对话过长，已自动改用小说资料和最近对话继续。剧情线、角色卡、世界观、大纲、伏笔线是压缩后的长期记忆，请优先依据它们保持连续性。",
+      });
+    }
+    selection.forEach((node) => {
+      if (node.role === "user") messages.push({ role: "user", content: node.content });
+      if (node.role === "assistant") messages.push({ role: "assistant", content: getAssistantVersion(node)?.content || "" });
+    });
+    if (clean(extraUserText)) messages.push({ role: "user", content: extraUserText });
+    return messages;
+  };
+  let messages = buildMessagesFromSelection(selected);
+  const estimated = estimateTokens(messages.map((message) => `${message.role}: ${message.content}`).join("\n\n"));
   const novelMemory = buildNovelMemory();
-  if (novelMemory) {
-    messages.push({ role: "system", content: novelMemory });
+  if (estimated > AUTO_CONTEXT_TOKEN_THRESHOLD && novelMemory && selected.length > COMPRESSED_CONTEXT_TAIL_COUNT) {
+    selected = selected.slice(-COMPRESSED_CONTEXT_TAIL_COUNT);
+    messages = buildMessagesFromSelection(selected, true);
   }
-  selected.forEach((node) => {
-    if (node.role === "user") messages.push({ role: "user", content: node.content });
-    if (node.role === "assistant") messages.push({ role: "assistant", content: getAssistantVersion(node)?.content || "" });
-  });
-  if (clean(extraUserText)) messages.push({ role: "user", content: extraUserText });
   return messages.filter((message) => clean(message.content));
+}
+
+function getAutoContextCompressedInfo(extraUserText = "") {
+  const full = contextMessages(extraUserText);
+  const text = full.map((message) => `${message.role}: ${message.content}`).join("\n\n");
+  return {
+    compressed: text.includes("当前对话过长，已自动改用小说资料和最近对话继续。"),
+    tokens: estimateTokens(text),
+  };
+}
+
+function estimateFullContextTokens(extraUserText = "", includeDraftAssistantId = null) {
+  const path = activePath();
+  const settings = sessionSettings();
+  const limit = settings.unlimitedContext ? Infinity : Math.max(0, Number(settings.contextCount) || 0);
+  let selected = Number.isFinite(limit) ? path.slice(-limit) : path.slice();
+  if (includeDraftAssistantId) selected = selected.filter((node) => node.id !== includeDraftAssistantId);
+  const parts = [
+    settings.systemPrompt,
+    buildNovelMemory(),
+    ...selected.map((node) => getMessageContent(node)),
+    extraUserText,
+  ].filter((part) => clean(part));
+  return estimateTokens(parts.join("\n\n"));
+}
+
+function extractJsonObject(text) {
+  const source = clean(text)
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/```$/i, "")
+    .trim();
+  try {
+    return JSON.parse(source);
+  } catch {}
+  const match = source.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try {
+    return JSON.parse(match[0]);
+  } catch {
+    return null;
+  }
+}
+
+function autoCompressionSourceSize() {
+  return [
+    sessionNovel().body,
+    activePath().map((node) => getMessageContent(node)).join("\n\n"),
+  ].join("\n\n").length;
+}
+
+async function ensureAutoCompressNovelMemory(extraUserText = "", includeDraftAssistantId = null) {
+  syncNovelFromFields();
+  const fullTokens = estimateFullContextTokens(extraUserText, includeDraftAssistantId);
+  if (fullTokens <= AUTO_CONTEXT_TOKEN_THRESHOLD) return false;
+  const novel = sessionNovel();
+  const sourceSize = autoCompressionSourceSize();
+  if (novel.autoCompression && Math.abs((Number(novel.autoCompression.sourceSize) || 0) - sourceSize) < 2000) {
+    return false;
+  }
+  showToast("上下文过长，正在自动压缩到小说资料");
+  const recentChat = activePath()
+    .slice(-24)
+    .map((node) => `${node.role === "user" ? "用户" : "AI"}：${getMessageContent(node)}`)
+    .join("\n\n");
+  const source = [
+    clean(novel.body) ? `【正文库后段】\n${clean(novel.body).slice(-24000)}` : "",
+    buildNovelMemory() ? `【已有小说资料】\n${buildNovelMemory()}` : "",
+    clean(recentChat) ? `【最近对话】\n${recentChat}` : "",
+    clean(extraUserText) ? `【本次请求】\n${extraUserText}` : "",
+  ].filter(Boolean).join("\n\n");
+  const prompt = [
+    "请把以下长篇小说创作上下文压缩成可长期复用的小说资料。",
+    "只输出 JSON，不要解释。字段必须是 plotline, characters, world, outline, foreshadows。",
+    "要求：保留已经发生的剧情、人物关系与动机、世界规则、后续目标、未回收伏笔；删除闲聊和重复表达；用中文。",
+    source,
+  ].join("\n\n");
+  const text = await aiClient.generateText({
+    api: apiSettings(),
+    settings: { ...sessionSettings(), temperature: 0.25, maxTokens: Math.max(1600, Number(sessionSettings().maxTokens) || 0) },
+    messages: [{ role: "user", content: prompt }],
+  });
+  const data = extractJsonObject(text);
+  if (!data) throw new Error("自动压缩失败：模型没有返回可读取的 JSON");
+  ["plotline", "characters", "world", "outline", "foreshadows"].forEach((key) => {
+    if (clean(data[key])) novel[key] = clean(data[key]);
+  });
+  novel.autoCompression = { updatedAt: Date.now(), sourceSize, fullTokens };
+  renderNovelPanel();
+  renderContextBadge();
+  persistState(state);
+  showToast("已自动压缩到小说资料，并继续生成");
+  return true;
 }
 
 function buildNovelMemory() {
@@ -973,8 +1085,10 @@ function renderRoundtableMenu() {
     ${canDecide ? `<button type="button" data-command="mark-roundtable-ignored" data-round-id="${message.id}">标记忽略</button>` : ""}
     ${isReview ? `<button type="button" data-command="mark-roundtable-approved" data-round-id="${message.id}">审稿通过</button>` : ""}
     ${isReview ? `<button type="button" data-command="mark-roundtable-revision" data-round-id="${message.id}">需修改</button>` : ""}
+    ${isWriter ? `<button type="button" data-command="locate-writer-segment" data-round-id="${message.id}">定位正文</button>` : ""}
     ${isWriter ? `<button type="button" data-command="undo-writer-sync" data-round-id="${message.id}">撤回正文</button>` : ""}
     ${isWriter ? `<button type="button" data-command="rewrite-writer-sync" data-round-id="${message.id}">重写并替换</button>` : ""}
+    ${isWriter ? `<button type="button" data-command="hide-writer-message" data-round-id="${message.id}">仅保留正文</button>` : ""}
     ${canRegenerate ? `<button type="button" data-command="regen-roundtable-message" data-round-id="${message.id}">重新回答</button>` : ""}
     <button type="button" data-command="delete-roundtable-message" data-round-id="${message.id}">删除</button>
   `;
@@ -1043,6 +1157,7 @@ function renderNovelPanel() {
     els.novelStats.innerHTML = items.map((item) => `<span>${escapeHtml(item)}</span>`).join("");
   }
   renderNovelVersions();
+  renderNovelSegments();
 }
 
 function renderNovelVersions() {
@@ -1066,6 +1181,55 @@ function renderNovelVersions() {
         <div class="novel-version-actions">
           <button type="button" data-command="restore-manuscript-version" data-version-id="${escapeHtml(version.id)}">恢复</button>
           <button type="button" data-command="delete-manuscript-version" data-version-id="${escapeHtml(version.id)}">删除</button>
+        </div>
+      </article>
+    `).join("")}
+  `;
+}
+
+function getWriterManuscriptSegments() {
+  const body = sessionNovel().body || "";
+  return roundtableState().messages
+    .filter((message) => message.speakerId === "writer" && message.manuscriptSync?.active)
+    .map((message) => {
+      const sync = message.manuscriptSync;
+      const start = Number.isFinite(sync.start) ? sync.start : body.indexOf(sync.segment || sync.content || "");
+      const end = Number.isFinite(sync.end) ? sync.end : start + clean(sync.segment || sync.content).length;
+      const stillLinked = start >= 0 && end > start && body.slice(start, end) === sync.segment;
+      return {
+        message,
+        start,
+        end,
+        stillLinked,
+        content: clean(sync.content || message.content),
+      };
+    })
+    .filter((segment) => segment.content);
+}
+
+function renderNovelSegments() {
+  if (!els.novelSegmentList) return;
+  const segments = getWriterManuscriptSegments();
+  if (!segments.length) {
+    els.novelSegmentList.innerHTML = "";
+    return;
+  }
+  els.novelSegmentList.innerHTML = `
+    <div class="novel-version-head">
+      <strong>写手正文片段</strong>
+      <span>${segments.length}</span>
+    </div>
+    ${segments.slice(-12).reverse().map(({ message, content, stillLinked }) => `
+      <article class="novel-segment-item ${stillLinked ? "" : "is-stale"}">
+        <div>
+          <b>${escapeHtml(message.speakerName || "写手")} · ${escapeHtml(formatTime(message.createdAt))}</b>
+          <small>${stillLinked ? "已关联正文" : "正文已改动"} · ${content.length} 字 · ${escapeHtml(content.slice(0, 42))}</small>
+        </div>
+        <div class="novel-version-actions">
+          <button type="button" data-command="locate-writer-segment" data-round-id="${escapeHtml(message.id)}">定位</button>
+          <button type="button" data-command="rewrite-writer-sync" data-round-id="${escapeHtml(message.id)}">重写</button>
+          <button type="button" data-command="hide-writer-message" data-round-id="${escapeHtml(message.id)}">仅留正文</button>
+          <button type="button" data-command="undo-writer-sync" data-round-id="${escapeHtml(message.id)}">撤回</button>
         </div>
       </article>
     `).join("")}
@@ -1252,6 +1416,14 @@ async function generateIntoAssistant(nodeId, userText, versionId, continueMode =
   activeMenuNodeId = nodeId;
   setAssistantVersionContent(node, version, "");
   version.usage = null;
+  try {
+    await ensureAutoCompressNovelMemory(continueMode ? CONTINUE_PROMPT : userText, nodeId);
+  } catch (error) {
+    if (error.name === "AbortError") throw error;
+    showToast(humanizeError(error, "自动压缩失败，已改用现有资料继续"));
+  }
+  const contextCompression = getAutoContextCompressedInfo(continueMode ? CONTINUE_PROMPT : userText);
+  if (contextCompression.compressed) showToast("上下文过长，已自动使用小说资料压缩续写");
   render();
   scrollBottom();
   try {
@@ -2091,6 +2263,48 @@ function removeSyncedWriterSegment(message) {
   return false;
 }
 
+function locateWriterSegment(id) {
+  const message = getRoundtableMessage(id);
+  const sync = message?.manuscriptSync;
+  if (!message || message.speakerId !== "writer" || !sync?.active) return showToast("找不到这段写手正文");
+  const body = sessionNovel().body || "";
+  const start = Number.isFinite(sync.start) ? sync.start : body.indexOf(sync.segment || sync.content || "");
+  if (start < 0) return showToast("正文已被修改，无法定位这段");
+  const rt = roundtableState();
+  rt.enabled = true;
+  rt.paperReveal = Math.max(rt.paperReveal, 0.82);
+  rt.paperHasNewProse = false;
+  activeRoundtableMessageId = null;
+  closePanels();
+  render();
+  resizeInput();
+  requestAnimationFrame(() => {
+    const viewport = els.roundtablePaperViewport;
+    if (!viewport) return;
+    const maxTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+    const ratio = body.length ? start / body.length : 1;
+    viewport.scrollTop = clamp(Math.round(maxTop * ratio), 0, maxTop);
+    rt.paperScrollTop = viewport.scrollTop;
+    rt.paperAtBottom = isRoundtablePaperNearBottom();
+    persistState(state);
+  });
+  showToast("已定位到写手正文片段");
+}
+
+function hideWriterMessageKeepText(id) {
+  if (roundtableGenerating || isGenerating) return showToast("生成中不能整理正文片段");
+  const rt = roundtableState();
+  const message = getRoundtableMessage(id);
+  if (!message || message.speakerId !== "writer" || !message.manuscriptSync?.active) return;
+  rt.messages = rt.messages.filter((item) => item.id !== id);
+  activeRoundtableMessageId = null;
+  touchSession(activeSession());
+  render();
+  renderNovelPanel();
+  persistState(state);
+  showToast("已隐藏圆桌气泡，正文保留在正文库");
+}
+
 function undoWriterManuscriptSync(id) {
   if (roundtableGenerating || isGenerating) return showToast("生成中不能撤回正文");
   const message = getRoundtableMessage(id);
@@ -2368,6 +2582,12 @@ async function generateRoundtableWriter(userText) {
 }
 
 async function callRoundtableAssistant(assistant, instruction) {
+  try {
+    await ensureAutoCompressNovelMemory(instruction);
+  } catch (error) {
+    if (error.name === "AbortError") throw error;
+    showToast(humanizeError(error, "圆桌自动压缩失败，已改用现有资料继续"));
+  }
   const messages = buildRoundtableMessages(assistant, instruction);
   const settings = {
     ...sessionSettings(),
@@ -2383,21 +2603,31 @@ function buildRoundtableMessages(assistant, instruction) {
   const participants = getRoundAssistants()
     .map((current) => `${current.name}：${current.role}`)
     .join("；");
-  const discussion = options.includeDiscussion ? rt.messages
-    .slice(-options.discussionCount)
-    .map((message) => `${message.speakerName}：${message.content}`)
-    .join("\n") : "";
-  const source = [
-    `【当前模式】圆桌小说共创。参与者包括：${participants}`,
-    "【发言规则】必须知道是谁说的话，不要把不同成员的意见串成同一个人。可自然赞同或反驳其他成员。",
-    options.roundTopic ? `【本轮主题】${options.roundTopic}` : "",
-    `【你的身份】${assistant.name}。${assistant.prompt}`,
-    options.includeManuscript ? `【当前正文小窗】\n${getRoundtablePromptExcerpt(options.excerptMax)}` : "",
-    options.includeNovel ? `【小说资料】\n${buildNovelMemory() || "暂无小说资料。"}` : "",
-    options.includeMainChat ? `【最近主线对话】\n${getNovelSourceText() || "暂无主线对话。"}` : "",
-    options.includeDiscussion ? `【圆桌讨论记录】\n${discussion || "暂无讨论。"}` : "",
-    `【本轮任务】${instruction}`,
-  ].filter(Boolean).join("\n\n");
+  const buildSource = (compressed = false) => {
+    const discussionCount = compressed ? Math.min(options.discussionCount, 8) : options.discussionCount;
+    const excerptMax = compressed ? Math.min(options.excerptMax, 360) : options.excerptMax;
+    const discussion = options.includeDiscussion ? rt.messages
+      .slice(-discussionCount)
+      .map((message) => `${message.speakerName}：${message.content}`)
+      .join("\n") : "";
+    return [
+      `【当前模式】圆桌小说共创。参与者包括：${participants}`,
+      "【发言规则】必须知道是谁说的话，不要把不同成员的意见串成同一个人。可自然赞同或反驳其他成员。",
+      compressed ? "【自动压缩】本轮上下文过长，已只保留小说资料、短正文摘录和最近圆桌记录。请根据剧情线/角色卡/世界观/大纲/伏笔线保持连续性。" : "",
+      options.roundTopic ? `【本轮主题】${options.roundTopic}` : "",
+      `【你的身份】${assistant.name}。${assistant.prompt}`,
+      options.includeManuscript ? `【当前正文小窗】\n${getRoundtablePromptExcerpt(excerptMax)}` : "",
+      options.includeNovel ? `【小说资料】\n${buildNovelMemory() || "暂无小说资料。"}` : "",
+      options.includeMainChat && !compressed ? `【最近主线对话】\n${getNovelSourceText() || "暂无主线对话。"}` : "",
+      options.includeDiscussion ? `【圆桌讨论记录】\n${discussion || "暂无讨论。"}` : "",
+      `【本轮任务】${instruction}`,
+    ].filter(Boolean).join("\n\n");
+  };
+  let source = buildSource(false);
+  if (estimateTokens(source) > AUTO_CONTEXT_TOKEN_THRESHOLD) {
+    source = buildSource(true);
+    showToast("圆桌上下文过长，已自动压缩本轮材料");
+  }
   return [{ role: "user", content: source }];
 }
 
@@ -2452,6 +2682,8 @@ const handleCommand = createCommandRegistry({
   "roundtable-write-adopted": () => writeFromAdoptedRoundtableMessages(),
   "undo-writer-sync": (target) => undoWriterManuscriptSync(target.dataset.roundId),
   "rewrite-writer-sync": (target) => rewriteWriterManuscriptSync(target.dataset.roundId),
+  "locate-writer-segment": (target) => locateWriterSegment(target.dataset.roundId),
+  "hide-writer-message": (target) => hideWriterMessageKeepText(target.dataset.roundId),
   "regen-roundtable-message": (target) => regenerateRoundtableMessage(target.dataset.roundId),
   "toggle-menu": (target) => {
     const nodeId = target.dataset.nodeId;

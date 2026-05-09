@@ -586,6 +586,56 @@ Validation:
 - `git diff --check`
 - `android-app\gradlew.bat assembleDebug --offline --no-daemon`
 
+### Main Update: Writer Segment Management
+
+Implemented on `main`:
+
+- writer outputs synced into the manuscript now appear as manageable segments in the novel panel
+- each writer segment can be located in the floating paper, rewritten, withdrawn from the manuscript, or kept only in manuscript while hiding the roundtable bubble
+- writer roundtable message menus also expose `定位正文` and `仅保留正文`
+- stale segment cards show when the manuscript text has been edited and no longer exactly matches the stored sync segment
+
+Important code locations:
+
+- `index.html`
+  - `#novelSegmentList`
+- `src/main.js`
+  - `getWriterManuscriptSegments()`
+  - `renderNovelSegments()`
+  - `locateWriterSegment()`
+  - `hideWriterMessageKeepText()`
+  - existing `rewriteWriterManuscriptSync()` / `undoWriterManuscriptSync()`
+- `src/styles/panels.css`
+  - `.novel-segment-list`
+  - `.novel-segment-item`
+
+### Main Update: Automatic Context Compression
+
+Implemented on `main`:
+
+- mainline generation estimates full context size before calling the model
+- when context exceeds the threshold, TBird asks the model to compress current materials into plotline, characters, world, outline, and foreshadows
+- after compression, generation continues using the novel material memory and a shorter recent-chat tail
+- roundtable calls also compress oversized roundtable prompts by keeping short manuscript excerpts, recent roundtable records, and novel memory
+- repeated compression is skipped when the source size has not changed enough
+
+Important code locations:
+
+- `src/main.js`
+  - `AUTO_CONTEXT_TOKEN_THRESHOLD`
+  - `contextMessages()`
+  - `estimateFullContextTokens()`
+  - `ensureAutoCompressNovelMemory()`
+  - `buildRoundtableMessages()`
+- `src/domain/novel/novel-model.js`
+  - `autoCompression`
+
+Validation:
+
+- `node --check src/main.js`
+- `node --check dev-server.mjs`
+- `git diff --check`
+
 ### Priority 1: Real device tuning
 
 Test in Android/WebView-like sizes and tune:

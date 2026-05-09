@@ -184,14 +184,16 @@
   font-size: 13px;
 }
 
-.novel-version-list {
+.novel-version-list,
+.novel-segment-list {
   display: grid;
   gap: 8px;
   margin: -2px 0 14px;
 }
 
 .novel-version-head,
-.novel-version-item {
+.novel-version-item,
+.novel-segment-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -203,31 +205,42 @@
   font-size: 12px;
 }
 
-.novel-version-item {
+.novel-version-item,
+.novel-segment-item {
   padding: 9px;
   border: 1px solid var(--line);
   border-radius: 9px;
   background: #fafafa;
 }
 
-.novel-version-item div:first-child {
+.novel-segment-item.is-stale {
+  border-style: dashed;
+  background: #fff8ec;
+}
+
+.novel-version-item div:first-child,
+.novel-segment-item div:first-child {
   min-width: 0;
 }
 
 .novel-version-item b,
-.novel-version-item small {
+.novel-version-item small,
+.novel-segment-item b,
+.novel-segment-item small {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.novel-version-item b {
+.novel-version-item b,
+.novel-segment-item b {
   color: var(--text);
   font-size: 13px;
 }
 
-.novel-version-item small {
+.novel-version-item small,
+.novel-segment-item small {
   color: var(--muted);
   font-size: 11px;
 }
@@ -235,6 +248,8 @@
 .novel-version-actions {
   display: flex;
   flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 6px;
 }
 
