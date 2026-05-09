@@ -192,6 +192,37 @@ Not yet fully done:
 
 ## Recommended Next Steps
 
+### Feature Line Update: Roundtable Context Controls
+
+Functional branch: `codex/roundtable-features`
+
+Implemented in the feature line:
+
+- the composer send area now includes per-session context controls for each round
+- users can choose whether assistants see the manuscript excerpt, novel materials, main chat, and roundtable discussion history
+- users can tune manuscript excerpt length from 120 to 2400 characters
+- users can tune roundtable discussion history count from 0 to 80 messages
+- default settings preserve previous behavior for existing sessions
+- `buildRoundtableMessages()` now omits disabled context blocks completely instead of sending empty placeholders
+- this gives users a practical way to reduce oversized prompt failures while keeping the visible manuscript paper unchanged
+
+Important code locations:
+
+- `index.html`
+  - `#roundtableContextButton`
+  - `#roundtableContextDock`
+- `src/main.js`
+  - `DEFAULT_ROUNDTABLE_CONTEXT`
+  - `normalizeRoundtableContextOptions()`
+  - `renderRoundtableContextControls()`
+  - `toggleRoundtableContextDock()`
+  - `updateRoundtableContextOption()`
+  - `buildRoundtableMessages()`
+- `src/styles/components.css`
+  - `.roundtable-context-button`
+  - `.roundtable-context-dock`
+  - `.roundtable-context-options`
+
 ### Feature Line Update: Writer Manuscript Sync Control
 
 Functional branch: `codex/roundtable-features`
