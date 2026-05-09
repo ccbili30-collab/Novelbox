@@ -75,14 +75,14 @@
   overflow-y: auto;
   padding: 12px 12px calc(var(--composer-height) + 14px);
   background:
-    linear-gradient(180deg, rgba(255, 253, 247, 0.96), rgba(247, 243, 234, 0.94)),
-    radial-gradient(circle at 50% 120px, rgba(180, 151, 92, 0.12), transparent 260px);
+    radial-gradient(circle at 50% 160px, rgba(225, 205, 167, 0.22), transparent 260px),
+    linear-gradient(180deg, rgba(252, 251, 247, 0.98), rgba(242, 243, 245, 0.98));
   scroll-behavior: smooth;
 }
 
 .roundtable-mode .topbar {
-  border-bottom-color: #e5d8bf;
-  background: rgba(255, 250, 239, 0.96);
+  border-bottom-color: #e4ddd1;
+  background: rgba(253, 252, 248, 0.96);
 }
 
 .roundtable-mode .roundtable-entry {
@@ -92,8 +92,8 @@
 }
 
 .roundtable-mode .composer {
-  border-color: #ddd0b9;
-  background: #fffaf0;
+  border-color: #d8dee6;
+  background: rgba(255, 255, 255, 0.96);
 }
 
 .message-row {

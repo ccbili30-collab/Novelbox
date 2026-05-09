@@ -87,7 +87,12 @@ const els = {
   roundtablePanel: $("#roundtablePanel"),
   roundtableWorkspace: $("#roundtableWorkspace"),
   roundtableMembersPanel: $("#roundtableMembersPanel"),
+  roundtablePaper: $("#roundtablePaper"),
+  roundtablePaperViewport: $("#roundtablePaperViewport"),
+  roundtablePaperGrip: $("#roundtablePaperGrip"),
+  roundtablePaperGripLabel: $("#roundtablePaperGripLabel"),
   roundtableManuscript: $("#roundtableManuscript"),
+  roundtablePaperStatus: $("#roundtablePaperStatus"),
   roundtableDiscussion: $("#roundtableDiscussion"),
   novelFields: Array.from(document.querySelectorAll("[data-novel-key]")),
   novelStats: $("#novelStats"),
@@ -131,6 +136,13 @@ let materialGenerating = false;
 let roundtableGenerating = false;
 let streamShouldFollow = true;
 let toastTimer = null;
+const paperDrag = {
+  active: false,
+  moved: false,
+  pointerId: null,
+  startY: 0,
+  startReveal: 0.68,
+};
 const bridgeCallbacks = new Map();
 const bridgeStreamCallbacks = new Map();
 const panelManager = createPanelManager(els, {
@@ -214,7 +226,12 @@ function roundtableState(session = activeSession()) {
     ? rt.selectedIds.filter((id) => ROUND_ASSISTANTS.some((assistant) => assistant.id === id && id !== "writer"))
     : ["setting", "plot", "review"];
   rt.messages = Array.isArray(rt.messages) ? rt.messages : [];
+  rt.paperReveal = clamp(Number.isFinite(Number(rt.paperReveal)) ? Number(rt.paperReveal) : 0.68, 0, 1);
   return rt;
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function getRoundAssistant(id) {
@@ -363,10 +380,12 @@ function renderRoundtable() {
   if (els.roundtableManuscript) {
     els.roundtableManuscript.textContent = getRoundtableManuscript();
   }
+  if (els.roundtablePaperStatus) {
+    els.roundtablePaperStatus.textContent = getRoundtablePaperStatus();
+  }
+  syncRoundtablePaper();
   if (els.roundtableDiscussion) {
-    els.roundtableDiscussion.innerHTML = rt.messages.length
-      ? rt.messages.map(renderRoundtableMessage).join("")
-      : renderRoundtableEmpty();
+    els.roundtableDiscussion.innerHTML = renderRoundtableDiscussion(rt.messages);
   }
 }
 
@@ -390,37 +409,194 @@ function renderRoundtableMembers(rt) {
 function renderRoundtableEmpty() {
   return `
     <div class="roundtable-empty">
-      <strong>把正文放到桌上，开始讨论。</strong>
-      <span>先说你的想法，或点“开始本轮”让成员按顺序审视当前正文。</span>
+      <strong>把正文放到桌上，再让群里开始聊。</strong>
+      <span>你可以先说一句需求，或点“开始本轮”让设定师、剧情师、审稿依次发言。</span>
     </div>
   `;
+}
+
+function renderRoundtableDiscussion(messages) {
+  if (!messages.length) return renderRoundtableEmpty();
+  let lastDateKey = "";
+  return messages
+    .map((message, index) => {
+      const dateKey = roundtableDateKey(message.createdAt);
+      const divider = index === 0 || dateKey !== lastDateKey
+        ? `<div class="roundtable-divider"><span>${escapeHtml(formatTime(message.createdAt))}</span></div>`
+        : "";
+      lastDateKey = dateKey;
+      return `${divider}${renderRoundtableMessage(message)}`;
+    })
+    .join("");
+}
+
+function getRoundtableSpeakerProfile(message) {
+  const profiles = {
+    user: { avatar: "我", badge: "发起人", tone: "tone-user", name: "你" },
+    setting: { avatar: "设", badge: "设定", tone: "tone-setting", name: "设定师" },
+    plot: { avatar: "剧", badge: "剧情", tone: "tone-plot", name: "剧情师" },
+    review: { avatar: "审", badge: "审稿", tone: "tone-review", name: "审稿" },
+    style: { avatar: "风", badge: "文风", tone: "tone-style", name: "文风师" },
+    writer: { avatar: "写", badge: "写手", tone: "tone-writer", name: "写手" },
+  };
+  const profile = profiles[message.speakerId];
+  const fallbackName = clean(message.speakerName) || profile?.name || "成员";
+  return {
+    ...(profile || { avatar: fallbackName.slice(0, 1) || "聊", badge: "讨论", tone: "tone-review", name: fallbackName }),
+    name: fallbackName,
+  };
 }
 
 function renderRoundtableMessage(message) {
   const isUser = message.speakerId === "user";
   const isWriter = message.speakerId === "writer";
+  const profile = getRoundtableSpeakerProfile(message);
+  const time = formatTime(message.createdAt);
+  if (isWriter) {
+    return `
+      <article class="roundtable-writer-block ${profile.tone}">
+        <div class="roundtable-writer-card">
+          <div class="roundtable-writer-head">
+            <div class="roundtable-avatar ${profile.tone}">${profile.avatar}</div>
+            <div class="roundtable-writer-meta">
+              <div class="roundtable-writer-title">
+                <strong>${escapeHtml(profile.name)}</strong>
+                <span class="roundtable-role-badge ${profile.tone}">${escapeHtml(profile.badge)}</span>
+              </div>
+              <time>${escapeHtml(time)}</time>
+            </div>
+          </div>
+          <div class="roundtable-writer-tip">已将这一段同步到上方正文区</div>
+          <div class="roundtable-writer-snippet">${escapeHtml(message.content || "")}</div>
+        </div>
+      </article>
+    `;
+  }
   return `
-    <article class="roundtable-line ${isUser ? "user" : ""} ${isWriter ? "writer" : ""}">
-      <div class="roundtable-speaker">${escapeHtml(message.speakerName || "成员")}</div>
-      <div class="roundtable-speech">${escapeHtml(message.content || "")}</div>
+    <article class="roundtable-line ${isUser ? "user" : ""} ${profile.tone}">
+      <div class="roundtable-avatar ${profile.tone}">${profile.avatar}</div>
+      <div class="roundtable-bubble-stack">
+        <div class="roundtable-bubble-meta">
+          <span class="roundtable-speaker">${escapeHtml(profile.name)}</span>
+          <span class="roundtable-role-badge ${profile.tone}">${escapeHtml(profile.badge)}</span>
+          <time>${escapeHtml(time)}</time>
+        </div>
+        <div class="roundtable-speech">${escapeHtml(message.content || "")}</div>
+      </div>
     </article>
   `;
 }
 
-function getRoundtableManuscript() {
+function getRoundtablePaperSource() {
+  const body = clean(sessionNovel().body);
+  if (body) {
+    return {
+      text: body,
+      source: "正文历史稿",
+      updatedAt: activeSession()?.updatedAt || Date.now(),
+    };
+  }
   const rt = roundtableState();
   const lastWriter = [...rt.messages].reverse().find((message) => message.speakerId === "writer" && clean(message.content));
-  if (lastWriter) return trimForPaper(lastWriter.content);
-  const body = clean(sessionNovel().body);
-  if (body) return trimForPaper(body);
+  if (lastWriter) {
+    return {
+      text: lastWriter.content,
+      source: "写手最新正文",
+      updatedAt: lastWriter.createdAt,
+    };
+  }
   const lastAssistant = [...activePath()].reverse().find((node) => node.role === "assistant" && clean(getMessageContent(node)));
-  if (lastAssistant) return trimForPaper(getMessageContent(lastAssistant));
-  return "正文还没有放上桌。先在普通模式写一段，或在这里 @写手 开始。";
+  if (lastAssistant) {
+    return {
+      text: getMessageContent(lastAssistant),
+      source: "主线对话摘录",
+      updatedAt: lastAssistant.createdAt || Date.now(),
+    };
+  }
+  return {
+    text: "正文还没有放上桌。先在普通模式写一段，或在这里 @写手 开始。",
+    source: "待开始",
+    updatedAt: Date.now(),
+  };
 }
 
-function trimForPaper(text) {
-  const value = clean(text).replace(/\n{3,}/g, "\n\n");
-  return value.length > 260 ? `...${value.slice(-260)}` : value;
+function normalizePaperText(text) {
+  return clean(text).replace(/\n{3,}/g, "\n\n");
+}
+
+function getRoundtableManuscript() {
+  return normalizePaperText(getRoundtablePaperSource().text);
+}
+
+function getRoundtablePaperStatus() {
+  const source = getRoundtablePaperSource();
+  const length = clean(source.text).length;
+  return `${source.source} · ${length} 字 · ${getRoundtableRevealLabel()} · ${formatTime(source.updatedAt)}`;
+}
+
+function getRoundtablePromptExcerpt(max = 520) {
+  const value = normalizePaperText(getRoundtablePaperSource().text);
+  return value.length > max ? `...${value.slice(-max)}` : value;
+}
+
+function roundtableDateKey(value) {
+  const date = new Date(value || Date.now());
+  return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+}
+
+function getViewportHeight() {
+  return Math.round(window.visualViewport?.height || window.innerHeight || 760);
+}
+
+function getRoundtablePaperMetrics() {
+  const viewportHeight = getViewportHeight();
+  const minHeight = clamp(Math.round(viewportHeight * 0.16), 108, 148);
+  const maxHeight = clamp(Math.round(viewportHeight * 0.46), 228, 430);
+  const reveal = roundtableState().paperReveal;
+  const currentHeight = Math.round(minHeight + (maxHeight - minHeight) * reveal);
+  return {
+    minHeight,
+    maxHeight,
+    currentHeight,
+    reveal,
+  };
+}
+
+function getRoundtableRevealLabel() {
+  return `展开 ${Math.round(getRoundtablePaperMetrics().reveal * 100)}%`;
+}
+
+function syncRoundtablePaper() {
+  if (!els.roundtablePaper) return;
+  const metrics = getRoundtablePaperMetrics();
+  els.roundtablePaper.style.setProperty("--paper-body-height", `${metrics.currentHeight}px`);
+  els.roundtablePaper.style.setProperty("--paper-progress", `${metrics.reveal.toFixed(3)}`);
+  els.roundtablePaper.classList.toggle("paper-peek", metrics.reveal < 0.96);
+  els.roundtablePaper.classList.toggle("paper-deep-collapsed", metrics.reveal < 0.24);
+  if (els.roundtablePaperGripLabel) {
+    els.roundtablePaperGripLabel.textContent = `${Math.round(metrics.reveal * 100)}%`;
+  }
+  if (els.roundtablePaperGrip) {
+    els.roundtablePaperGrip.dataset.state = metrics.reveal < 0.32 ? "collapsed" : metrics.reveal > 0.8 ? "expanded" : "mid";
+  }
+}
+
+function setRoundtablePaperReveal(nextReveal, options = {}) {
+  const rt = roundtableState();
+  rt.paperReveal = clamp(nextReveal, 0, 1);
+  syncRoundtablePaper();
+  if (els.roundtablePaperStatus) {
+    els.roundtablePaperStatus.textContent = getRoundtablePaperStatus();
+  }
+  if (!options.silent) {
+    touchSession(activeSession());
+    persistState(state);
+  }
+}
+
+function toggleRoundtablePaperReveal() {
+  const reveal = roundtableState().paperReveal;
+  setRoundtablePaperReveal(reveal > 0.72 ? 0.24 : 0.88);
 }
 
 function renderMessages() {
@@ -1104,6 +1280,9 @@ function toggleRoundtableMember(id) {
 
 function addRoundtableMessage(speakerId, speakerName, content) {
   const rt = roundtableState();
+  const shouldFollowPaper = speakerId === "writer" && els.roundtablePaperViewport
+    ? els.roundtablePaperViewport.scrollHeight - els.roundtablePaperViewport.scrollTop - els.roundtablePaperViewport.clientHeight < 72
+    : false;
   rt.messages.push({
     id: uid("round"),
     speakerId,
@@ -1114,6 +1293,9 @@ function addRoundtableMessage(speakerId, speakerName, content) {
   rt.messages = rt.messages.slice(-80);
   touchSession(activeSession());
   render();
+  if (speakerId === "writer" && shouldFollowPaper) {
+    scrollRoundtablePaperBottom();
+  }
   scrollRoundtableBottom();
 }
 
@@ -1121,6 +1303,14 @@ function scrollRoundtableBottom() {
   requestAnimationFrame(() => {
     if (els.roundtableWorkspace) {
       els.roundtableWorkspace.scrollTop = els.roundtableWorkspace.scrollHeight;
+    }
+  });
+}
+
+function scrollRoundtablePaperBottom() {
+  requestAnimationFrame(() => {
+    if (els.roundtablePaperViewport) {
+      els.roundtablePaperViewport.scrollTop = els.roundtablePaperViewport.scrollHeight;
     }
   });
 }
@@ -1192,7 +1382,7 @@ function buildRoundtableMessages(assistant, instruction) {
     `【当前模式】圆桌小说共创。参与者包括：${participants}`,
     "【发言规则】必须知道是谁说的话，不要把不同成员的意见串成同一个人。可自然赞同或反驳其他成员。",
     `【你的身份】${assistant.name}。${assistant.prompt}`,
-    `【当前正文小窗】\n${getRoundtableManuscript()}`,
+    `【当前正文小窗】\n${getRoundtablePromptExcerpt()}`,
     `【小说资料】\n${buildNovelMemory() || "暂无小说资料。"}`,
     `【最近主线对话】\n${getNovelSourceText() || "暂无主线对话。"}`,
     `【圆桌讨论记录】\n${discussion || "暂无讨论。"}`,
@@ -1336,6 +1526,49 @@ function resizeInput() {
   els.input.style.height = `${Math.min(maxHeight, els.input.scrollHeight)}px`;
   const composerHeight = Math.ceil(els.composer.getBoundingClientRect().height);
   document.documentElement.style.setProperty("--composer-height", `${composerHeight}px`);
+  syncRoundtablePaper();
+}
+
+function handleRoundtablePaperPointerDown(event) {
+  if (!roundtableState().enabled || !els.roundtablePaperGrip) return;
+  paperDrag.active = true;
+  paperDrag.moved = false;
+  paperDrag.pointerId = event.pointerId;
+  paperDrag.startY = event.clientY;
+  paperDrag.startReveal = roundtableState().paperReveal;
+  els.roundtablePaperGrip.setPointerCapture?.(event.pointerId);
+  els.body.classList.add("paper-dragging");
+  event.preventDefault();
+}
+
+function handleRoundtablePaperPointerMove(event) {
+  if (!paperDrag.active || event.pointerId !== paperDrag.pointerId) return;
+  const metrics = getRoundtablePaperMetrics();
+  const range = Math.max(1, metrics.maxHeight - metrics.minHeight);
+  const delta = paperDrag.startY - event.clientY;
+  if (Math.abs(delta) > 4) paperDrag.moved = true;
+  setRoundtablePaperReveal(paperDrag.startReveal + delta / range, { silent: true });
+  event.preventDefault();
+}
+
+function finishRoundtablePaperDrag(event) {
+  if (!paperDrag.active) return;
+  if (event && paperDrag.pointerId !== null && event.pointerId !== undefined && event.pointerId !== paperDrag.pointerId) return;
+  if (els.roundtablePaperGrip && paperDrag.pointerId !== null) {
+    try {
+      els.roundtablePaperGrip.releasePointerCapture?.(paperDrag.pointerId);
+    } catch {}
+  }
+  const wasMoved = paperDrag.moved;
+  paperDrag.active = false;
+  paperDrag.pointerId = null;
+  paperDrag.startY = 0;
+  paperDrag.startReveal = roundtableState().paperReveal;
+  paperDrag.moved = false;
+  els.body.classList.remove("paper-dragging");
+  touchSession(activeSession());
+  persistState(state);
+  if (!wasMoved) toggleRoundtablePaperReveal();
 }
 
 els.input.addEventListener("input", () => {
@@ -1427,7 +1660,14 @@ els.bodyImportFile?.addEventListener("change", handleBodyFileSelected);
 els.saveEdit.addEventListener("click", () => saveEditor(false));
 els.saveSendEdit.addEventListener("click", () => saveEditor(true));
 
+els.roundtablePaperGrip?.addEventListener("pointerdown", handleRoundtablePaperPointerDown);
+els.roundtablePaperGrip?.addEventListener("pointermove", handleRoundtablePaperPointerMove);
+els.roundtablePaperGrip?.addEventListener("pointerup", finishRoundtablePaperDrag);
+els.roundtablePaperGrip?.addEventListener("pointercancel", finishRoundtablePaperDrag);
+els.roundtablePaperGrip?.addEventListener("click", (event) => event.preventDefault());
+
 window.addEventListener("resize", resizeInput);
+window.visualViewport?.addEventListener("resize", resizeInput);
 
 render();
 resizeInput();

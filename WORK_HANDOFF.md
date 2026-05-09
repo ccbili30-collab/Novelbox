@@ -1,66 +1,225 @@
-# TBird / Novelbox 工作交接
+# TBird Novelbox Handoff
 
-迁移时间：2026-04-29  
-新工作目录：`D:\CodexW\TBird_Novelbox`  
-旧工作目录：`C:\Users\16014\Documents\New project`
+Updated: 2026-05-09
+Workspace: `D:\CodexW\TBird_Novelbox`
+Preview URL: `http://127.0.0.1:5177/`
 
-## 当前项目状态
+## UI Approval
 
-- 项目名称：圆桌小说盒子 / Roundtable Novelbox
-- 形态：移动端优先的 AI 小说创作工作台，灵感来自对话式 AI 工具，核心方向是圆桌群聊式小说共创。Web 原型 + Android WebView 打包。
-- GitHub：`https://github.com/ccbili30-collab/Novelbox`
-- 当前本地分支：`master`
-- 远端主分支：`main`
-- 最近已推送提交：
-  - `94211f9 Separate user edit save from resend`
-  - `06f0bbf Improve model compatibility and message menu`
-  - `e7fa90f Isolate novel settings per session`
+The current floating-paper-over-chat UI direction has been accepted by the user as good enough to keep.
 
-## 关键功能约定
+Keep this core composition:
 
-- API 配置全局共享：`Base URL`、`API Key`、模型列表。
-- 每个会话独立保存：系统提示、模型选择、温度、上下文条数、最大 token、流式开关、排版参数、正文库、剧情线、角色卡、世界观、大纲、伏笔线。
-- 用户消息编辑：
-  - `保存`：只修改用户消息文本，不调用模型。
-  - `保存并重新发送`：创建新分支并重新生成。
-- AI 消息编辑：
-  - `保存`：实打实修改当前 AI 输出文本。
-  - `保存并继续`：保存后让 AI 从该输出继续。
-- 正文库：
-  - 支持 TXT 导入。
-  - 支持 TXT 导出。
-  - `同步正文` 会把当前会话路径上的所有 AI 输出按顺序写入正文库，不写入用户输入。
-- OpenAI 兼容接口：
-  - 已移除流式请求里的 `stream_options.include_usage`，避免兼容模型报 `param incorrect`。
-  - 安卓桥会把流式错误显示为 `HTTP 状态码 + 上游错误信息`。
+- clean, low-distraction writing surface
+- manuscript paper visually floating above the group chat
+- QQ/WeChat-like discussion underneath
+- draggable/collapsible paper, not a hard split panel
 
-## 主要文件
+## Current Goal
 
-- `index.html`：应用壳、面板、编辑弹窗。
-- `src/main.js`：核心状态、会话树、OpenAI 调用、正文/资料逻辑。
-- `src/styles.css`：移动端写作 UI 和排版调试参数。
-- `dev-server.mjs`：本地开发服务器和 OpenAI 兼容代理。
-- `android-app/`：Android WebView 打包工程。
+The current UI direction is a mobile-first Android chat scene for Roundtable Novelbox:
 
-## 常用命令
+- A manuscript paper floats above the group discussion area instead of being a hard split panel.
+- The paper should feel like a draggable, collapsible sheet laid on top of a QQ/WeChat-style group chat.
+- The manuscript paper is now meant for human reading of historical prose.
+- The AI roundtable context must still use a trimmed excerpt instead of the full manuscript body.
+
+## What Was Implemented In This Session
+
+### 1. Roundtable visual structure was redesigned
+
+The previous roundtable beta block was reshaped into:
+
+- top floating manuscript paper
+- lower chat-style discussion timeline
+- time dividers
+- avatars
+- role badges
+- distinct writer update card
+
+Files:
+
+- `index.html`
+- `src/main.js`
+- `src/styles/components.css`
+- `src/styles/layout.css`
+
+### 2. Manuscript paper became a floating interactive sheet
+
+Implemented:
+
+- paper overlap visual over the chat region
+- internal paper scroll viewport
+- draggable grip at the bottom of the paper
+- tap-to-toggle expand/collapse behavior
+- reveal percentage label
+- adaptive height based on Android/WebView viewport
+
+Important implementation details:
+
+- reveal state is stored in `session.roundtable.paperReveal`
+- grip uses pointer events, not mouse-only logic
+- viewport height uses `window.visualViewport` when available
+- min/max paper heights are derived from screen height, then clamped
+
+### 3. Manuscript paper now shows full manuscript history
+
+The paper now shows the full text from `sessionNovel().body` when available.
+
+That means:
+
+- users can scroll inside the paper to review older prose
+- the paper is no longer just a short excerpt
+- if the writer appends new prose and the paper was already near the bottom, the paper follows to the latest text
+
+### 4. AI roundtable still uses trimmed context
+
+This was intentionally preserved.
+
+The visible paper and the prompt excerpt were split:
+
+- visible paper text: full normalized manuscript history
+- AI prompt paper text: trimmed tail excerpt only
+
+This prevents giant novel bodies from being dumped into every roundtable turn.
+
+## Files Changed
+
+- `D:\CodexW\TBird_Novelbox\index.html`
+- `D:\CodexW\TBird_Novelbox\src\main.js`
+- `D:\CodexW\TBird_Novelbox\src\styles\components.css`
+- `D:\CodexW\TBird_Novelbox\src\styles\layout.css`
+
+## Key Code Locations
+
+### Markup
+
+- `index.html`
+  - `#roundtableWorkspace`
+  - `#roundtablePaper`
+  - `#roundtablePaperViewport`
+  - `#roundtablePaperGrip`
+
+### Roundtable rendering and manuscript logic
+
+- `src/main.js`
+  - `renderRoundtable()`
+  - `renderRoundtableDiscussion()`
+  - `renderRoundtableMessage()`
+  - `getRoundtablePaperSource()`
+  - `getRoundtableManuscript()`
+  - `getRoundtablePromptExcerpt()`
+
+### Drag / collapse / responsive paper behavior
+
+- `src/main.js`
+  - `getRoundtablePaperMetrics()`
+  - `syncRoundtablePaper()`
+  - `setRoundtablePaperReveal()`
+  - `toggleRoundtablePaperReveal()`
+  - `handleRoundtablePaperPointerDown()`
+  - `handleRoundtablePaperPointerMove()`
+  - `finishRoundtablePaperDrag()`
+
+### Styles
+
+- `src/styles/components.css`
+  - `.manuscript-desk`
+  - `.manuscript-paper`
+  - `.paper-scroll-viewport`
+  - `.paper-grip`
+  - `.roundtable-discussion`
+  - `.roundtable-line`
+  - `.roundtable-writer-card`
+
+- `src/styles/layout.css`
+  - `.roundtable-workspace`
+  - `.roundtable-mode .topbar`
+  - `.roundtable-mode .composer`
+
+## Important Behavior Contracts
+
+### Visible manuscript vs AI prompt manuscript
+
+Do not merge these back together accidentally.
+
+- `getRoundtableManuscript()` is for the visible paper.
+- `getRoundtablePromptExcerpt()` is for the AI prompt.
+
+This split is intentional and necessary.
+
+### Writer output sync
+
+When roundtable writer generates text:
+
+- it is added as a roundtable writer message
+- it is appended to `sessionNovel().body`
+- the paper updates from that manuscript body
+
+### Screen fitting
+
+The UI is intended for Android WebView behavior, not desktop-first layout.
+
+Current sizing logic:
+
+- min paper height: about `16%` of viewport, clamped
+- max paper height: about `46%` of viewport, clamped
+- viewport source: `window.visualViewport?.height || window.innerHeight`
+
+## Current Local Status
+
+These changes should be treated as the accepted baseline for the next round of work.
+
+Commit/push status should be checked with:
 
 ```powershell
-# 语法检查
-node --check src\main.js
-node --check dev-server.mjs
-
-# Android debug 包
-cd android-app
-.\gradlew.bat assembleDebug --offline --no-daemon
+git status --short
+git log --oneline -3
 ```
 
-APK 输出：
+## Validation Done
 
-`android-app\app\build\outputs\apk\debug\app-debug.apk`
+Checked:
 
-## 注意事项
+- `node --check src/main.js`
+- preview server responds at `http://127.0.0.1:5177/`
 
-- `localStorage` key：`tbird-chatbox-v1`。
-- 旧数据迁移逻辑在 `hydrate()` 中，旧版顶层 `settings/novel` 会被迁到 `api` 和当前会话。
-- 工作目录之前混入了其他临时项目和缓存，迁移时只保留 TBird/Novelbox 本体。
-- 不要把 `node_modules/`、`outputs/`、`spore_lore_extract/`、Godot/菌临天下等残余当成 TBird 项目文件。
+Not yet fully done:
+
+- full manual device QA across multiple Android screen sizes
+- optional hand-feel tuning for drag resistance and collapse thresholds
+- optional visual polish for the grip so it feels even more like a paper tab/bookmark
+
+## Recommended Next Steps
+
+### Priority 1: Real device tuning
+
+Test in Android/WebView-like sizes and tune:
+
+- collapsed visible height
+- expanded height ceiling
+- drag sensitivity
+- whether the grip overlaps the paper too much on narrow phones
+
+### Priority 2: Better paper reading feel
+
+Possible improvements:
+
+- show only first paragraph(s) when deeply collapsed
+- show a subtle paper scroll progress indicator
+- add stronger shadow/depth change while dragging
+- add light inertia or snapping between 3 states: collapsed / reading / expanded
+
+### Priority 3: Writer-specific manuscript navigation
+
+Potential future improvement:
+
+- remember paper scroll position per session
+- optionally jump to latest appended writer segment
+- add a small “new prose” anchor when not at bottom
+
+## Quick Resume Prompt For Next Agent
+
+Use this if another session needs to continue:
+
+“Continue work on the Roundtable Novelbox floating manuscript paper UI in `D:\CodexW\TBird_Novelbox`. The paper now overlaps the chat, is draggable/collapsible, and shows full manuscript history in the visible viewport, while AI still receives a trimmed excerpt through `getRoundtablePromptExcerpt()`. Please continue mobile Android/WebView tuning and improve the paper grip / collapse interaction without breaking the visible-paper vs prompt-excerpt split.”

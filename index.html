@@ -39,15 +39,32 @@
           </div>
         </div>
         <div id="roundtableMembersPanel" class="roundtable-member-panel" hidden></div>
+        <div class="roundtable-section-label">
+          <span>写手区</span>
+          <small>正文像一张放在群聊上方的纸页</small>
+        </div>
         <section class="manuscript-desk" aria-label="写手正文小窗">
-          <div class="manuscript-paper">
+          <div id="roundtablePaper" class="manuscript-paper">
             <div class="paper-meta">
-              <span>正文小窗 · 写手</span>
+              <span id="roundtablePaperStatus">正文小窗 · 写手</span>
               <button type="button" data-command="open-novel">正文库</button>
             </div>
-            <p id="roundtableManuscript"></p>
+            <div id="roundtablePaperViewport" class="paper-scroll-viewport">
+              <p id="roundtableManuscript"></p>
+            </div>
+            <button id="roundtablePaperGrip" class="paper-grip" type="button" aria-label="拖动控制正文展开程度">
+              <span class="paper-grip-ribs" aria-hidden="true">
+                <i></i><i></i><i></i>
+              </span>
+              <span class="paper-grip-copy">拖动展开正文</span>
+              <span id="roundtablePaperGripLabel" class="paper-grip-meter">68%</span>
+            </button>
           </div>
         </section>
+        <div class="roundtable-section-label roundtable-section-label-chat">
+          <span>群聊讨论</span>
+          <small>像 QQ / 微信群一样往下读讨论，再决定是否 @写手</small>
+        </div>
         <div id="roundtableDiscussion" class="roundtable-discussion" aria-live="polite"></div>
       </section>
 
