@@ -636,6 +636,44 @@ Validation:
 - `node --check dev-server.mjs`
 - `git diff --check`
 
+### Main Update: Per-Assistant Runtime Settings
+
+Implemented on `main`:
+
+- each roundtable assistant, including the writer, can override Base URL, API Key, model, temperature, and max tokens
+- blank assistant API/model fields fall back to the global settings
+- the top roundtable toolbar now has a direct writer settings entry
+- each assistant can independently choose whether it sees manuscript excerpt, novel materials, main chat, and roundtable discussion
+- selected roundtable members can be moved up/down; `session.roundtable.selectedIds` is the formal speaking order, and `roundProgress.ids` freezes the queue for a running round
+- roundtable rounds isolate failures: if one assistant API fails, TBird records a failed assistant message and continues to the next selected assistant
+
+Important code locations:
+
+- `index.html`
+  - assistant config fields for API/model/max tokens/context visibility
+  - `data-command="roundtable-writer-settings"`
+- `src/main.js`
+  - `getRoundAssistant()`
+  - `getRoundAssistantConfig()`
+  - `currentAssistantFormConfig()`
+  - `saveAssistantConfig()`
+  - `moveRoundtableMember()`
+  - `addRoundtableFailureMessage()`
+  - `callRoundtableAssistant()`
+  - `buildRoundtableMessages()`
+- `src/styles/panels.css`
+  - `.assistant-context-options`
+- `src/styles/components.css`
+  - `.roundtable-line.failed`
+
+Validation:
+
+- `node --check src/main.js`
+- `node --check scripts/build-android-assets.mjs`
+- `node --check dev-server.mjs`
+- `git diff --check`
+- `android-app\gradlew.bat assembleDebug --offline --no-daemon`
+
 ### Priority 1: Real device tuning
 
 Test in Android/WebView-like sizes and tune:

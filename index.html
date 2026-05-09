@@ -33,7 +33,8 @@
             <strong>圆桌共创</strong>
           </div>
           <div class="mode-actions">
-            <button type="button" data-command="toggle-roundtable-members">成员</button>
+            <button type="button" data-command="toggle-roundtable-members">助手设置</button>
+            <button type="button" data-command="roundtable-writer-settings">写手设置</button>
             <button type="button" data-command="roundtable-start">开始本轮</button>
             <button type="button" data-command="roundtable-resume">继续本轮</button>
             <button type="button" data-command="roundtable-write-adopted">采纳续写</button>
@@ -50,13 +51,12 @@
           <div id="roundtablePaper" class="manuscript-paper">
             <div class="paper-meta">
               <span id="roundtablePaperStatus">正文小窗 · 写手</span>
-              <button type="button" data-command="open-novel">正文库</button>
             </div>
             <div id="roundtablePaperViewport" class="paper-scroll-viewport">
               <p id="roundtableManuscript"></p>
             </div>
             <button id="roundtablePaperJump" class="paper-new-anchor" type="button" data-command="jump-roundtable-paper" hidden>跳到最新正文</button>
-            <button id="roundtablePaperGrip" class="paper-grip" type="button" aria-label="拖动控制正文展开程度">
+            <button id="roundtablePaperGrip" class="paper-grip" type="button" data-command="toggle-roundtable-paper" aria-label="点按展开正文，拖动调整高度">
               <span class="paper-grip-ribs" aria-hidden="true">
                 <i></i><i></i><i></i>
               </span>
@@ -315,9 +315,27 @@
           <input id="assistantModelInput" type="text" list="modelDatalist" placeholder="留空则使用当前会话模型" />
         </label>
         <label class="field">
+          <span>Base URL</span>
+          <input id="assistantBaseUrlInput" type="text" placeholder="留空则使用全局 Base URL" />
+        </label>
+        <label class="field">
+          <span>API Key</span>
+          <input id="assistantApiKeyInput" type="password" placeholder="留空则使用全局 Key" />
+        </label>
+        <label class="field">
+          <span>最大输出 token</span>
+          <input id="assistantMaxTokensInput" type="number" min="1" step="1" placeholder="留空则使用全局设置" />
+        </label>
+        <label class="field">
           <span>温度 <b id="assistantTemperatureLabel">0.80</b></span>
           <input id="assistantTemperatureInput" type="range" min="0" max="2" step="0.05" />
         </label>
+        <div class="assistant-context-options">
+          <label><input id="assistantIncludeManuscriptInput" type="checkbox" /> 正文小窗</label>
+          <label><input id="assistantIncludeNovelInput" type="checkbox" /> 小说资料</label>
+          <label><input id="assistantIncludeMainChatInput" type="checkbox" /> 主线对话</label>
+          <label><input id="assistantIncludeDiscussionInput" type="checkbox" /> 圆桌记录</label>
+        </div>
         <label class="field">
           <span>角色提示词</span>
           <textarea id="assistantPromptInput" rows="8"></textarea>

@@ -67,7 +67,7 @@
   min-height: 0;
   overflow-y: auto;
   padding: 12px var(--message-side-padding) calc(var(--composer-height) + 12px);
-  background: linear-gradient(180deg, rgba(248, 246, 241, 0.94), rgba(246, 245, 241, 0.98));
+  background: var(--bg);
   scroll-behavior: smooth;
 }
 
@@ -79,7 +79,7 @@
   min-height: 0;
   overflow-y: auto;
   padding: 10px 10px calc(var(--composer-height) + 92px);
-  background: linear-gradient(180deg, rgba(248, 246, 241, 0.94), rgba(246, 245, 241, 0.98));
+  background: var(--bg);
   scroll-behavior: smooth;
 }
 

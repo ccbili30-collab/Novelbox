@@ -29,6 +29,12 @@ tasks.register("syncWebAssets", Sync) {
 
 tasks.register("bundleAndroidWebAssets", Exec) {
     dependsOn("syncWebAssets")
+    inputs.file(webRoot.toPath().resolve("index.html").toFile())
+    inputs.files(fileTree(webRoot.toPath().resolve("src").toFile()) {
+        include "**/*.js"
+    })
+    outputs.file(generatedWebAssets.map { it.file("index.html") })
+    outputs.file(generatedWebAssets.map { it.file("src/android-main.js") })
     workingDir(webRoot)
     commandLine "node", "scripts/build-android-assets.mjs", webRoot.absolutePath, generatedWebAssets.get().asFile.absolutePath
 }
@@ -36,4 +42,10 @@ tasks.register("bundleAndroidWebAssets", Exec) {
 android.sourceSets.main.assets.srcDir(generatedWebAssets)
 tasks.named("preBuild").configure {
     dependsOn("bundleAndroidWebAssets")
+}
+
+tasks.configureEach { task ->
+    if (task.name.startsWith("merge") && task.name.endsWith("Assets")) {
+        task.dependsOn("bundleAndroidWebAssets")
+    }
 }

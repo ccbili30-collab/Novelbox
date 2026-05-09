@@ -170,9 +170,16 @@ const els = {
   assistantConfigTitle: $("#assistantConfigTitle"),
   assistantNameInput: $("#assistantNameInput"),
   assistantTemplateSelect: $("#assistantTemplateSelect"),
+  assistantBaseUrlInput: $("#assistantBaseUrlInput"),
+  assistantApiKeyInput: $("#assistantApiKeyInput"),
   assistantModelInput: $("#assistantModelInput"),
+  assistantMaxTokensInput: $("#assistantMaxTokensInput"),
   assistantTemperatureInput: $("#assistantTemperatureInput"),
   assistantTemperatureLabel: $("#assistantTemperatureLabel"),
+  assistantIncludeManuscriptInput: $("#assistantIncludeManuscriptInput"),
+  assistantIncludeNovelInput: $("#assistantIncludeNovelInput"),
+  assistantIncludeMainChatInput: $("#assistantIncludeMainChatInput"),
+  assistantIncludeDiscussionInput: $("#assistantIncludeDiscussionInput"),
   assistantPromptInput: $("#assistantPromptInput"),
   resetAssistantConfig: $("#resetAssistantConfigButton"),
   deleteAssistant: $("#deleteAssistantButton"),
@@ -198,6 +205,7 @@ let roundtableShouldStop = false;
 let streamShouldFollow = true;
 let toastTimer = null;
 let paperScrollPersistTimer = null;
+let paperGripSuppressClickUntil = 0;
 const paperDrag = {
   active: false,
   moved: false,
@@ -364,6 +372,10 @@ function getRoundAssistant(id) {
   const base = getRoundAssistantBase(id);
   if (!base) return null;
   const config = roundtableState().assistantConfigs[id] || {};
+  const contextOptions = normalizeRoundtableContextOptions({
+    ...roundtableState().contextOptions,
+    ...(config.contextOptions || {}),
+  });
   return {
     ...base,
     ...config,
@@ -371,8 +383,12 @@ function getRoundAssistant(id) {
     role: base.role,
     name: clean(config.name) || base.name,
     prompt: clean(config.prompt) || base.prompt,
+    apiBaseUrl: clean(config.apiBaseUrl),
+    apiKey: clean(config.apiKey),
     model: clean(config.model),
+    maxTokens: Number(config.maxTokens) || 0,
     temperature: Number.isFinite(Number(config.temperature)) ? Number(config.temperature) : sessionSettings().temperature,
+    contextOptions,
   };
 }
 
@@ -382,8 +398,12 @@ function getRoundAssistantConfig(id) {
   return {
     name: assistant.name,
     prompt: assistant.prompt,
+    apiBaseUrl: assistant.apiBaseUrl || "",
+    apiKey: assistant.apiKey || "",
     model: assistant.model || "",
+    maxTokens: Number(assistant.maxTokens) || 0,
     temperature: Number.isFinite(Number(assistant.temperature)) ? Number(assistant.temperature) : sessionSettings().temperature,
+    contextOptions: assistant.contextOptions || normalizeRoundtableContextOptions(),
   };
 }
 
@@ -701,6 +721,8 @@ function renderRoundtableMembers(rt) {
             <b>${escapeHtml(assistant.name)}</b>
             <small>${escapeHtml(assistant.role)} · ${escapeHtml(model)}</small>
           </button>
+          ${!isWriter && selected ? `<button class="roundtable-member-edit" type="button" data-command="roundtable-member-up" data-member-id="${assistant.id}">↑</button>` : ""}
+          ${!isWriter && selected ? `<button class="roundtable-member-edit" type="button" data-command="roundtable-member-down" data-member-id="${assistant.id}">↓</button>` : ""}
           <button class="roundtable-member-edit" type="button" data-command="roundtable-edit-assistant" data-member-id="${assistant.id}">改</button>
         </div>
       `;
@@ -797,6 +819,7 @@ function renderRoundtableMessage(message) {
   const profile = getRoundtableSpeakerProfile(message);
   const time = formatTime(message.createdAt);
   const decision = renderRoundtableDecisionBadge(message);
+  const failedClass = message.failed ? " failed" : "";
   if (isWriter) {
     return `
       <article class="roundtable-writer-block ${profile.tone}">
@@ -819,7 +842,7 @@ function renderRoundtableMessage(message) {
     `;
   }
   return `
-    <article class="roundtable-line ${isUser ? "user" : ""} ${profile.tone}">
+    <article class="roundtable-line ${isUser ? "user" : ""} ${profile.tone}${failedClass}">
       <div class="roundtable-avatar ${profile.tone}">${profile.avatar}</div>
       <div class="roundtable-bubble-stack">
         <div class="roundtable-bubble-meta">
@@ -906,8 +929,15 @@ function getViewportHeight() {
 
 function getRoundtablePaperMetrics() {
   const viewportHeight = getViewportHeight();
-  const minHeight = clamp(Math.round(viewportHeight * 0.13), 92, 124);
-  const maxHeight = clamp(Math.round(viewportHeight * 0.42), 210, 390);
+  const composerHeight = Math.ceil(els.composer?.getBoundingClientRect().height || 118);
+  const minHeight = clamp(Math.round(viewportHeight * 0.14), 96, 132);
+  const paperTop = els.roundtablePaperViewport?.getBoundingClientRect().top || 0;
+  const composerTop = els.composer?.getBoundingClientRect().top || 0;
+  const measuredAvailableHeight = paperTop > 0 && composerTop > paperTop
+    ? composerTop - paperTop - 72
+    : 0;
+  const fallbackAvailableHeight = viewportHeight - composerHeight - 300;
+  const maxHeight = clamp(Math.round(measuredAvailableHeight || fallbackAvailableHeight), 280, 560);
   const reveal = roundtableState().paperReveal;
   const currentHeight = Math.round(minHeight + (maxHeight - minHeight) * reveal);
   return {
@@ -982,8 +1012,9 @@ function setRoundtablePaperReveal(nextReveal, options = {}) {
 }
 
 function toggleRoundtablePaperReveal() {
+  if (Date.now() < paperGripSuppressClickUntil) return;
   const reveal = roundtableState().paperReveal;
-  setRoundtablePaperReveal(reveal > 0.72 ? 0.24 : 0.88);
+  setRoundtablePaperReveal(reveal > 0.72 ? 0.18 : 1);
 }
 
 function renderMessages() {
@@ -1398,8 +1429,8 @@ async function continueFromAssistant(nodeId) {
   await generateIntoAssistant(next.id, "", next.versions[0].id, true);
 }
 
-function validateApi(settings = sessionSettings()) {
-  if (!clean(apiSettings().apiKey)) throw new Error("请先在设置里填写 API Key");
+function validateApi(settings = sessionSettings(), api = apiSettings()) {
+  if (!clean(api.apiKey)) throw new Error("请先在设置里填写 API Key");
   if (!clean(settings.model)) throw new Error("请先选择或填写模型");
 }
 
@@ -1518,12 +1549,13 @@ async function callOpenAIText(messages) {
   }
 }
 
-async function callOpenAITextWithSettings(messages, settingsOverride) {
-  validateApi(settingsOverride || sessionSettings());
+async function callOpenAITextWithSettings(messages, settingsOverride, apiOverride = null) {
+  const api = apiOverride || apiSettings();
+  validateApi(settingsOverride || sessionSettings(), api);
   abortController = new AbortController();
   try {
     return await aiClient.generateText({
-      api: apiSettings(),
+      api,
       settings: settingsOverride || sessionSettings(),
       messages,
     });
@@ -1976,9 +2008,17 @@ function openAssistantConfig(id) {
   assistantConfigTargetId = id;
   els.assistantConfigTitle.textContent = `${assistant.name}设置`;
   els.assistantNameInput.value = config.name;
+  if (els.assistantBaseUrlInput) els.assistantBaseUrlInput.value = config.apiBaseUrl || "";
+  if (els.assistantApiKeyInput) els.assistantApiKeyInput.value = config.apiKey || "";
   els.assistantModelInput.value = config.model;
+  if (els.assistantMaxTokensInput) els.assistantMaxTokensInput.value = config.maxTokens || "";
   els.assistantTemperatureInput.value = config.temperature;
   els.assistantTemperatureLabel.textContent = Number(config.temperature).toFixed(2);
+  const contextOptions = normalizeRoundtableContextOptions(config.contextOptions);
+  if (els.assistantIncludeManuscriptInput) els.assistantIncludeManuscriptInput.checked = contextOptions.includeManuscript;
+  if (els.assistantIncludeNovelInput) els.assistantIncludeNovelInput.checked = contextOptions.includeNovel;
+  if (els.assistantIncludeMainChatInput) els.assistantIncludeMainChatInput.checked = contextOptions.includeMainChat;
+  if (els.assistantIncludeDiscussionInput) els.assistantIncludeDiscussionInput.checked = contextOptions.includeDiscussion;
   els.assistantPromptInput.value = config.prompt;
   if (els.assistantTemplateSelect) els.assistantTemplateSelect.value = "";
   if (els.deleteAssistant) {
@@ -1998,8 +2038,17 @@ function applyAssistantTemplate(templateId) {
 function currentAssistantFormConfig() {
   return {
     name: clean(els.assistantNameInput.value),
+    apiBaseUrl: clean(els.assistantBaseUrlInput?.value),
+    apiKey: clean(els.assistantApiKeyInput?.value),
     model: clean(els.assistantModelInput.value),
+    maxTokens: Number(els.assistantMaxTokensInput?.value) || 0,
     temperature: Number(els.assistantTemperatureInput.value),
+    contextOptions: {
+      includeManuscript: els.assistantIncludeManuscriptInput?.checked !== false,
+      includeNovel: els.assistantIncludeNovelInput?.checked !== false,
+      includeMainChat: els.assistantIncludeMainChatInput?.checked !== false,
+      includeDiscussion: els.assistantIncludeDiscussionInput?.checked !== false,
+    },
     prompt: clean(els.assistantPromptInput.value),
   };
 }
@@ -2033,10 +2082,18 @@ async function handleAssistantImportSelected() {
     const prompt = clean(config?.prompt);
     if (!name || !prompt) return showToast("助手配置 JSON 缺少 name/prompt");
     els.assistantNameInput.value = name;
+    if (els.assistantBaseUrlInput) els.assistantBaseUrlInput.value = clean(config.apiBaseUrl);
+    if (els.assistantApiKeyInput) els.assistantApiKeyInput.value = clean(config.apiKey);
     els.assistantModelInput.value = clean(config.model);
+    if (els.assistantMaxTokensInput) els.assistantMaxTokensInput.value = Number(config.maxTokens) || "";
     const temperature = Number(config.temperature);
     els.assistantTemperatureInput.value = Number.isFinite(temperature) ? clamp(temperature, 0, 2) : sessionSettings().temperature;
     els.assistantTemperatureLabel.textContent = Number(els.assistantTemperatureInput.value).toFixed(2);
+    const contextOptions = normalizeRoundtableContextOptions(config.contextOptions);
+    if (els.assistantIncludeManuscriptInput) els.assistantIncludeManuscriptInput.checked = contextOptions.includeManuscript;
+    if (els.assistantIncludeNovelInput) els.assistantIncludeNovelInput.checked = contextOptions.includeNovel;
+    if (els.assistantIncludeMainChatInput) els.assistantIncludeMainChatInput.checked = contextOptions.includeMainChat;
+    if (els.assistantIncludeDiscussionInput) els.assistantIncludeDiscussionInput.checked = contextOptions.includeDiscussion;
     els.assistantPromptInput.value = prompt;
     showToast("助手配置已导入，保存后生效");
   } catch (error) {
@@ -2059,8 +2116,17 @@ function saveAssistantConfig() {
   const model = clean(els.assistantModelInput.value);
   rt.assistantConfigs[id] = {
     name: clean(els.assistantNameInput.value) || base.name,
+    apiBaseUrl: clean(els.assistantBaseUrlInput?.value),
+    apiKey: clean(els.assistantApiKeyInput?.value),
     model,
+    maxTokens: Number(els.assistantMaxTokensInput?.value) || 0,
     temperature: Number(els.assistantTemperatureInput.value),
+    contextOptions: {
+      includeManuscript: els.assistantIncludeManuscriptInput?.checked !== false,
+      includeNovel: els.assistantIncludeNovelInput?.checked !== false,
+      includeMainChat: els.assistantIncludeMainChatInput?.checked !== false,
+      includeDiscussion: els.assistantIncludeDiscussionInput?.checked !== false,
+    },
     prompt: clean(els.assistantPromptInput.value) || base.prompt,
   };
   if (model) {
@@ -2121,6 +2187,14 @@ function addRoundtableMessage(speakerId, speakerName, content, extra = {}) {
   }
   scrollRoundtableBottom();
   return message;
+}
+
+function addRoundtableFailureMessage(assistant, error) {
+  const message = humanizeError(error, `${assistant.name}发言失败`);
+  addRoundtableMessage(assistant.id, assistant.name, `请求失败：${message}`, {
+    failed: true,
+    errorMessage: message,
+  });
 }
 
 function getRoundtableMessage(id) {
@@ -2348,7 +2422,6 @@ async function rewriteWriterManuscriptSync(id) {
   activeRoundtableMessageId = null;
   render();
   try {
-    validateApi();
     const writer = getRoundAssistant("writer");
     const text = await callRoundtableAssistant(writer, `请重写下面这段正文。保留创作意图，但改善表达、节奏和画面。只输出重写后的正文：\n${message.content}`);
     if (roundtableShouldStop) return;
@@ -2390,7 +2463,6 @@ async function regenerateRoundtableMessage(id) {
   activeRoundtableMessageId = null;
   render();
   try {
-    validateApi();
     const text = await callRoundtableAssistant(assistant, `请重新回答你上一条圆桌发言。上一条内容是：\n${message.content}`);
     message.content = clean(text);
     message.createdAt = Date.now();
@@ -2460,6 +2532,19 @@ function jumpRoundtablePaperLatest() {
   render();
 }
 
+function moveRoundtableMember(id, delta) {
+  const rt = roundtableState();
+  const index = rt.selectedIds.indexOf(id);
+  if (index < 0) return;
+  const next = clamp(index + delta, 0, rt.selectedIds.length - 1);
+  if (next === index) return;
+  const [item] = rt.selectedIds.splice(index, 1);
+  rt.selectedIds.splice(next, 0, item);
+  touchSession(activeSession());
+  render();
+  persistState(state);
+}
+
 async function handleRoundtableUser(text) {
   addRoundtableMessage("user", "我", text);
   const mentions = parseRoundtableMentions(text);
@@ -2477,13 +2562,17 @@ async function generateMentionedRoundtableAssistants(assistants, userText) {
   roundtableGenerating = true;
   render();
   try {
-    validateApi();
     for (const assistant of targets) {
       if (roundtableShouldStop) break;
       showToast(`${assistant.name}正在回应`);
-      const text = await callRoundtableAssistant(assistant, `用户刚刚点名你发言：${userText}`);
-      if (roundtableShouldStop) break;
-      addRoundtableMessage(assistant.id, assistant.name, text);
+      try {
+        const text = await callRoundtableAssistant(assistant, `用户刚刚点名你发言：${userText}`);
+        if (roundtableShouldStop) break;
+        addRoundtableMessage(assistant.id, assistant.name, text);
+      } catch (error) {
+        if (error.name === "AbortError" || roundtableShouldStop) break;
+        addRoundtableFailureMessage(assistant, error);
+      }
     }
   } catch (error) {
     if (!roundtableShouldStop && error.name !== "AbortError") {
@@ -2520,7 +2609,6 @@ async function runRoundtableProgress() {
   roundtableGenerating = true;
   render();
   try {
-    validateApi();
     for (let index = Number(progress.nextIndex) || 0; index < progress.ids.length; index += 1) {
       progress.nextIndex = index;
       progress.updatedAt = Date.now();
@@ -2533,9 +2621,14 @@ async function runRoundtableProgress() {
       }
       showToast(`${assistant.name}正在发言`);
       const topic = clean(progress.topic || rt.contextOptions?.roundTopic);
-      const text = await callRoundtableAssistant(assistant, topic ? `请围绕本轮主题发表意见：${topic}` : "请根据当前正文和以上圆桌讨论发表你的意见。");
-      if (roundtableShouldStop) break;
-      addRoundtableMessage(assistant.id, assistant.name, text);
+      try {
+        const text = await callRoundtableAssistant(assistant, topic ? `请围绕本轮主题发表意见：${topic}` : "请根据当前正文和以上圆桌讨论发表你的意见。");
+        if (roundtableShouldStop) break;
+        addRoundtableMessage(assistant.id, assistant.name, text);
+      } catch (error) {
+        if (error.name === "AbortError" || roundtableShouldStop) break;
+        addRoundtableFailureMessage(assistant, error);
+      }
       progress.nextIndex = index + 1;
     }
     if (!roundtableShouldStop && progress.nextIndex >= progress.ids.length) {
@@ -2561,7 +2654,6 @@ async function generateRoundtableWriter(userText) {
   roundtableGenerating = true;
   render();
   try {
-    validateApi();
     const writer = getRoundAssistant("writer");
     const text = await callRoundtableAssistant(writer, userText || "请根据圆桌讨论继续写正文。");
     if (roundtableShouldStop) return;
@@ -2592,14 +2684,23 @@ async function callRoundtableAssistant(assistant, instruction) {
   const settings = {
     ...sessionSettings(),
     model: assistant.model || sessionSettings().model,
+    maxTokens: Number(assistant.maxTokens) || sessionSettings().maxTokens,
     temperature: Number.isFinite(Number(assistant.temperature)) ? Number(assistant.temperature) : sessionSettings().temperature,
   };
-  return callOpenAITextWithSettings(messages, settings);
+  const api = {
+    ...apiSettings(),
+    baseUrl: assistant.apiBaseUrl || apiSettings().baseUrl,
+    apiKey: assistant.apiKey || apiSettings().apiKey,
+  };
+  return callOpenAITextWithSettings(messages, settings, api);
 }
 
 function buildRoundtableMessages(assistant, instruction) {
   const rt = roundtableState();
-  const options = normalizeRoundtableContextOptions(rt.contextOptions);
+  const options = normalizeRoundtableContextOptions({
+    ...rt.contextOptions,
+    ...(assistant.contextOptions || {}),
+  });
   const participants = getRoundAssistants()
     .map((current) => `${current.name}：${current.role}`)
     .join("；");
@@ -2640,8 +2741,12 @@ const handleCommand = createCommandRegistry({
   "toggle-roundtable": () => toggleRoundtable(),
   "toggle-roundtable-members": () => toggleRoundtableMembers(),
   "toggle-roundtable-context": () => toggleRoundtableContextDock(),
+  "toggle-roundtable-paper": () => toggleRoundtablePaperReveal(),
+  "roundtable-writer-settings": () => openAssistantConfig("writer"),
   "roundtable-add-assistant": () => createCustomRoundAssistant(),
   "roundtable-toggle-member": (target) => toggleRoundtableMember(target.dataset.memberId),
+  "roundtable-member-up": (target) => moveRoundtableMember(target.dataset.memberId, -1),
+  "roundtable-member-down": (target) => moveRoundtableMember(target.dataset.memberId, 1),
   "roundtable-edit-assistant": (target) => openAssistantConfig(target.dataset.memberId),
   "roundtable-start": () => startRoundtableRound(),
   "roundtable-resume": () => resumeRoundtableRound(),
@@ -2809,7 +2914,6 @@ function handleRoundtablePaperPointerDown(event) {
   paperDrag.startReveal = roundtableState().paperReveal;
   els.roundtablePaperGrip.setPointerCapture?.(event.pointerId);
   els.body.classList.add("paper-dragging");
-  event.preventDefault();
 }
 
 function handleRoundtablePaperPointerMove(event) {
@@ -2830,7 +2934,7 @@ function finishRoundtablePaperDrag(event) {
       els.roundtablePaperGrip.releasePointerCapture?.(paperDrag.pointerId);
     } catch {}
   }
-  const wasMoved = paperDrag.moved;
+  if (paperDrag.moved) paperGripSuppressClickUntil = Date.now() + 350;
   paperDrag.active = false;
   paperDrag.pointerId = null;
   paperDrag.startY = 0;
@@ -2839,7 +2943,6 @@ function finishRoundtablePaperDrag(event) {
   els.body.classList.remove("paper-dragging");
   touchSession(activeSession());
   persistState(state);
-  if (!wasMoved) toggleRoundtablePaperReveal();
 }
 
 els.input.addEventListener("input", () => {
