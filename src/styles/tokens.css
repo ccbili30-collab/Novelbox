@@ -26,11 +26,11 @@
   --tool-button-size: 26px;
   --font-size: 17px;
   --line-height: 1.5;
-  --assistant-left: 12px;
-  --message-side-padding: 18px;
-  --message-gap: 12px;
-  --user-bubble-padding-y: 2px;
-  --user-bubble-padding-x: 3px;
+  --assistant-left: 8px;
+  --message-side-padding: 14px;
+  --message-gap: 8px;
+  --user-bubble-padding-y: 0px;
+  --user-bubble-padding-x: 1px;
   --meta-font-size: 12px;
   --footer-gap: 8px;
   --more-button-size: 28px;

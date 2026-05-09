@@ -1,9 +1,9 @@
 .avatar {
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 12px;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
   overflow: hidden;
   color: #fff;
   background: #61758c;
@@ -28,7 +28,7 @@
   border-radius: 16px;
   color: var(--text);
   font-size: var(--font-size);
-  line-height: var(--line-height);
+  line-height: 1.48;
   letter-spacing: 0;
   white-space: pre-wrap;
   word-break: break-word;
@@ -37,10 +37,11 @@
 .user .message-card {
   width: fit-content;
   max-width: min(64ch, calc(100vw - 58px));
-  padding: max(9px, var(--user-bubble-padding-y) + 7px) max(11px, var(--user-bubble-padding-x) + 8px);
+  padding: max(7px, var(--user-bubble-padding-y) + 6px) max(10px, var(--user-bubble-padding-x) + 8px);
   border: 1px solid rgba(210, 217, 225, 0.95);
+  border-radius: 13px;
   background: var(--surface-user);
-  box-shadow: 0 6px 18px rgba(44, 56, 71, 0.04);
+  box-shadow: 0 4px 12px rgba(44, 56, 71, 0.035);
 }
 
 .assistant .message-card {
@@ -49,10 +50,10 @@
 }
 
 .message-meta {
-  margin-top: 6px;
+  margin-top: 4px;
   color: var(--muted);
   font-size: var(--meta-font-size);
-  line-height: 1.4;
+  line-height: 1.32;
 }
 
 .user .message-meta {
@@ -523,10 +524,10 @@ body.paper-dragging .paper-grip {
 .roundtable-discussion {
   position: relative;
   display: grid;
-  gap: 12px;
+  gap: 8px;
   max-width: 680px;
   margin: 0 auto;
-  padding: 64px 0 12px;
+  padding: 58px 0 10px;
 }
 
 .roundtable-discussion::before {
@@ -581,14 +582,14 @@ body.paper-dragging .paper-grip {
 
 .roundtable-line {
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr);
-  gap: 10px;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 8px;
   align-items: start;
-  padding: 0 12px;
+  padding: 0 10px;
 }
 
 .roundtable-line.user {
-  grid-template-columns: minmax(0, 1fr) 48px;
+  grid-template-columns: minmax(0, 1fr) 38px;
 }
 
 .roundtable-line.user .roundtable-avatar {
@@ -615,44 +616,45 @@ body.paper-dragging .paper-grip {
 
 .roundtable-bubble-stack {
   display: grid;
-  gap: 4px;
+  gap: 3px;
   min-width: 0;
+  justify-items: start;
 }
 
 .roundtable-bubble-meta {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
-  min-height: 20px;
+  gap: 5px;
+  min-height: 16px;
 }
 
 .roundtable-avatar {
   display: grid;
   place-items: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
   color: #fff;
-  box-shadow: 0 8px 14px rgba(38, 34, 28, 0.08);
-  font-size: 14px;
+  box-shadow: 0 6px 12px rgba(38, 34, 28, 0.07);
+  font-size: 13px;
   font-weight: 800;
   letter-spacing: 0;
 }
 
 .roundtable-speaker {
   color: var(--text-soft);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
 }
 
 .roundtable-role-badge {
   display: inline-flex;
   align-items: center;
-  min-height: 18px;
-  padding: 0 8px;
+  min-height: 16px;
+  padding: 0 6px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
 }
 
@@ -663,44 +665,50 @@ body.paper-dragging .paper-grip {
 }
 
 .roundtable-speech {
+  justify-self: start;
+  width: fit-content;
   min-width: 0;
   max-width: min(76vw, 430px);
-  padding: 12px 14px;
+  padding: 8px 10px;
   border: 1px solid rgba(228, 224, 217, 0.95);
-  border-radius: 14px 18px 18px 18px;
+  border-radius: 11px 15px 15px 15px;
   color: var(--text);
   background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 8px 18px rgba(44, 39, 33, 0.04);
+  box-shadow: 0 5px 14px rgba(44, 39, 33, 0.035);
   font-size: 15px;
-  line-height: 1.62;
+  line-height: 1.48;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
+.roundtable-line.user .roundtable-speech {
+  justify-self: end;
+}
+
 .roundtable-writer-block {
-  padding: 0 12px;
+  padding: 0 10px;
 }
 
 .roundtable-writer-card {
-  padding: 14px;
+  padding: 11px 12px;
   border: 1px solid var(--surface-paper-edge);
-  border-radius: 16px;
+  border-radius: 13px;
   background:
     linear-gradient(180deg, rgba(255, 254, 250, 0.98), rgba(252, 249, 243, 0.95)),
     linear-gradient(90deg, rgba(173, 166, 151, 0.14) 1px, transparent 1px) 34px 0 / 1px 100% no-repeat;
-  box-shadow: 0 12px 26px rgba(54, 46, 36, 0.06);
+  box-shadow: 0 8px 20px rgba(54, 46, 36, 0.05);
 }
 
 .roundtable-writer-head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: 8px;
+  margin-bottom: 7px;
 }
 
 .roundtable-writer-meta {
   display: grid;
-  gap: 3px;
+  gap: 2px;
 }
 
 .roundtable-writer-title {
@@ -716,9 +724,9 @@ body.paper-dragging .paper-grip {
 }
 
 .roundtable-writer-tip {
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
 }
 
@@ -726,7 +734,7 @@ body.paper-dragging .paper-grip {
   color: #24211d;
   font-family: "Iowan Old Style", "Palatino Linotype", "Songti SC", "STSong", serif;
   font-size: 15px;
-  line-height: 1.84;
+  line-height: 1.68;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -824,27 +832,28 @@ body.paper-dragging .paper-grip {
   }
 
   .roundtable-line {
-    grid-template-columns: 42px minmax(0, 1fr);
-    gap: 8px;
-    padding: 0 8px;
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 7px;
+    padding: 0 6px;
   }
 
   .roundtable-line.user {
-    grid-template-columns: minmax(0, 1fr) 42px;
+    grid-template-columns: minmax(0, 1fr) 34px;
   }
 
   .roundtable-avatar {
-    width: 38px;
-    height: 38px;
-    border-radius: 12px;
-    font-size: 14px;
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    font-size: 12px;
   }
 
   .roundtable-speech {
-    max-width: min(76vw, 290px);
+    max-width: min(76vw, 300px);
+    padding: 7px 9px;
   }
 
   .roundtable-discussion {
-    padding-top: 56px;
+    padding-top: 52px;
   }
 }
