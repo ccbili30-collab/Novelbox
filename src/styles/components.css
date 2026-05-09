@@ -1,6 +1,7 @@
 .avatar {
   display: grid;
   place-items: center;
+  align-self: start;
   width: 30px;
   height: 30px;
   border-radius: 10px;
@@ -9,6 +10,13 @@
   background: #61758c;
   font-size: 14px;
   font-weight: 700;
+}
+
+.assistant .avatar {
+  color: #f7f4ed;
+  background: #353839;
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .user .avatar {
@@ -23,9 +31,10 @@
 
 .message-card {
   position: relative;
+  min-width: 0;
   max-width: min(74ch, calc(100vw - 58px));
   padding: 0;
-  border-radius: 16px;
+  border-radius: 13px;
   color: var(--text);
   font-size: var(--font-size);
   line-height: 1.48;
@@ -36,24 +45,34 @@
 
 .user .message-card {
   width: fit-content;
-  max-width: min(64ch, calc(100vw - 58px));
+  max-width: min(62ch, calc(100vw - 68px));
   padding: max(7px, var(--user-bubble-padding-y) + 6px) max(10px, var(--user-bubble-padding-x) + 8px);
-  border: 1px solid rgba(210, 217, 225, 0.95);
+  border: 1px solid rgba(209, 216, 224, 0.82);
   border-radius: 13px;
   background: var(--surface-user);
   box-shadow: 0 4px 12px rgba(44, 56, 71, 0.035);
 }
 
 .assistant .message-card {
-  padding: 0;
+  max-width: min(72ch, calc(100vw - 74px));
+  padding: 2px 0 0;
   background: transparent;
 }
 
+.message-content {
+  display: block;
+}
+
+.assistant .message-content {
+  padding-top: 1px;
+}
+
 .message-meta {
-  margin-top: 4px;
+  margin-top: 5px;
   color: var(--muted);
   font-size: var(--meta-font-size);
   line-height: 1.32;
+  opacity: 0.78;
 }
 
 .user .message-meta {
@@ -72,10 +91,20 @@
 .switcher {
   display: inline-flex;
   align-items: center;
-  gap: 14px;
-  margin-top: 4px;
-  color: #a0a0a0;
-  font-size: 15px;
+  gap: 8px;
+  margin-top: -1px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.switcher button {
+  min-width: 26px;
+  min-height: 22px;
+  border-radius: 8px;
+}
+
+.switcher button:not(:disabled):hover {
+  background: rgba(255, 255, 255, 0.68);
 }
 
 .switcher button:disabled {
@@ -90,28 +119,32 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  max-width: min(94vw, 640px);
-  gap: 6px;
+  max-width: min(92vw, 620px);
+  gap: 5px;
   overflow: visible;
-  padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  padding: 6px;
+  border: 1px solid rgba(224, 220, 211, 0.9);
+  border-radius: 14px;
   background: rgba(255, 255, 255, 0.98);
-  box-shadow: var(--shadow);
+  box-shadow: 0 14px 34px rgba(35, 31, 25, 0.1);
+  backdrop-filter: blur(18px);
   transform: translateX(-50%);
 }
 
 .message-menu button {
   flex: 0 0 auto;
-  padding: 8px 10px;
-  border-radius: 6px;
-  color: #2d68a8;
-  font-size: 15px;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 10px;
+  color: var(--text-soft);
+  font-size: 13px;
+  font-weight: 650;
 }
 
 .message-menu button:active,
 .message-menu button:hover {
-  background: #f0f4f8;
+  color: var(--text);
+  background: var(--surface-soft);
 }
 
 .composer {
@@ -121,25 +154,25 @@
   left: max(7px, calc((100vw - 820px) / 2 + 7px));
   z-index: 20;
   min-height: var(--composer-min-height);
-  padding: 8px 10px 8px;
-  border: 1px solid var(--line);
-  border-radius: 18px;
+  padding: 7px 8px 7px;
+  border: 1px solid rgba(220, 216, 207, 0.96);
+  border-radius: 16px;
   background: rgba(255, 255, 255, 0.97);
-  box-shadow: 0 16px 34px rgba(35, 31, 25, 0.08);
+  box-shadow: 0 14px 30px rgba(35, 31, 25, 0.075);
 }
 
 .composer textarea {
   display: block;
   width: 100%;
   max-height: var(--composer-max-textarea);
-  min-height: 24px;
+  min-height: 23px;
   resize: none;
   border: 0;
   outline: 0;
   background: transparent;
   color: var(--text);
   font-size: var(--composer-font-size);
-  line-height: 1.4;
+  line-height: 1.38;
 }
 
 .composer textarea::placeholder {
@@ -150,15 +183,15 @@
   display: grid;
   grid-template-columns: var(--tool-button-size) var(--tool-button-size) minmax(62px, auto) minmax(0, 1fr) var(--send-button-size);
   align-items: center;
-  gap: 4px;
-  margin-top: 4px;
+  gap: 3px;
+  margin-top: 3px;
 }
 
 .context-badge,
 .composer select {
   min-width: 0;
-  height: 28px;
-  padding: 0 8px;
+  height: 26px;
+  padding: 0 7px;
   border: 0;
   border-radius: 999px;
   background: var(--surface-soft);
@@ -186,7 +219,7 @@
   flex: 0 0 auto;
   width: var(--send-button-size);
   height: var(--send-button-size);
-  border-radius: 12px;
+  border-radius: 10px;
   color: #ffffff;
   background: #d9d5cd;
   font-size: 18px;
@@ -237,10 +270,10 @@ body.is-generating .send-button {
 }
 
 .mode-actions button {
-  min-height: 32px;
-  padding: 0 12px;
+  min-height: 30px;
+  padding: 0 10px;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: 10px;
   color: var(--text-soft);
   background: rgba(255, 255, 255, 0.86);
   font-size: 12px;
@@ -403,10 +436,10 @@ body.is-generating .send-button {
   bottom: -24px;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  min-width: 178px;
+  gap: 8px;
+  min-width: 150px;
   max-width: calc(100% - 36px);
-  padding: 10px 14px;
+  padding: 8px 11px;
   border: 1px solid rgba(193, 187, 176, 0.88);
   border-radius: 999px;
   color: var(--text-soft);
@@ -457,8 +490,8 @@ body.paper-dragging .paper-grip {
 
 .paper-grip-meter {
   flex: 0 0 auto;
-  min-width: 44px;
-  padding: 4px 8px;
+  min-width: 40px;
+  padding: 3px 7px;
   border-radius: 999px;
   color: #fff;
   background: var(--accent);
@@ -468,15 +501,15 @@ body.paper-dragging .paper-grip {
 }
 
 .paper-grip[data-state="collapsed"] .paper-grip-copy::before {
-  content: "上拉展开 · ";
+  content: "展开 · ";
 }
 
 .paper-grip[data-state="mid"] .paper-grip-copy::before {
-  content: "拖动调节 · ";
+  content: "调整 · ";
 }
 
 .paper-grip[data-state="expanded"] .paper-grip-copy::before {
-  content: "下拉收起 · ";
+  content: "收起 · ";
 }
 
 .manuscript-paper::before {
@@ -498,7 +531,7 @@ body.paper-dragging .paper-grip {
   gap: 10px;
   margin-bottom: 12px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
 }
 
@@ -669,14 +702,14 @@ body.paper-dragging .paper-grip {
   width: fit-content;
   min-width: 0;
   max-width: min(76vw, 430px);
-  padding: 8px 10px;
+  padding: 7px 10px;
   border: 1px solid rgba(228, 224, 217, 0.95);
   border-radius: 11px 15px 15px 15px;
   color: var(--text);
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 5px 14px rgba(44, 39, 33, 0.035);
   font-size: 15px;
-  line-height: 1.48;
+  line-height: 1.46;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -690,7 +723,7 @@ body.paper-dragging .paper-grip {
 }
 
 .roundtable-writer-card {
-  padding: 11px 12px;
+  padding: 10px 12px;
   border: 1px solid var(--surface-paper-edge);
   border-radius: 13px;
   background:
@@ -734,7 +767,7 @@ body.paper-dragging .paper-grip {
   color: #24211d;
   font-family: "Iowan Old Style", "Palatino Linotype", "Songti SC", "STSong", serif;
   font-size: 15px;
-  line-height: 1.68;
+  line-height: 1.64;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -821,10 +854,10 @@ body.paper-dragging .paper-grip {
   }
 
   .paper-grip {
-    min-width: 164px;
+    min-width: 148px;
     max-width: calc(100% - 24px);
     gap: 8px;
-    padding: 9px 12px;
+    padding: 8px 10px;
   }
 
   .paper-grip-copy {

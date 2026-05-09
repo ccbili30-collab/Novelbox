@@ -67,7 +67,7 @@
 .messages {
   min-height: 0;
   overflow-y: auto;
-  padding: 10px var(--message-side-padding) calc(var(--composer-height) + 12px);
+  padding: 12px var(--message-side-padding) calc(var(--composer-height) + 12px);
   background: linear-gradient(180deg, rgba(248, 246, 241, 0.94), rgba(246, 245, 241, 0.98));
   scroll-behavior: smooth;
 }
@@ -98,17 +98,38 @@
 }
 
 .message-row {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  margin: 4px 0 var(--message-gap);
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 5px 8px;
+  align-items: start;
+  margin: 5px 0 var(--message-gap);
 }
 
 .message-row.user {
-  align-items: flex-end;
+  grid-template-columns: minmax(0, 1fr) 32px;
 }
 
 .message-row.assistant {
-  align-items: flex-start;
   padding-left: var(--assistant-left);
+}
+
+.message-row.user .avatar {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.message-row.user .message-card,
+.message-row.user .switcher {
+  grid-column: 1;
+  justify-self: end;
+}
+
+.message-row.assistant .message-card,
+.message-row.assistant .switcher {
+  grid-column: 2;
+  justify-self: start;
+}
+
+.message-row .switcher {
+  grid-row: 2;
 }
