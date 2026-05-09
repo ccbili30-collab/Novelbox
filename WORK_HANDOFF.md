@@ -192,6 +192,25 @@ Not yet fully done:
 
 ## Recommended Next Steps
 
+### Feature Line Update: Mainline / Roundtable Handoff
+
+Functional branch: `codex/roundtable-features`
+
+Implemented in the feature line:
+
+- ordinary main chat messages now have `发到圆桌` in the message menu
+- sending a mainline message to roundtable enables roundtable mode and adds it as a roundtable discussion item with source metadata
+- roundtable messages now have `发回主线` in their menu
+- sending a roundtable message back to mainline exits roundtable mode and posts the message as a new user turn, then calls the normal mainline AI flow
+
+Important code locations:
+
+- `src/main.js`
+  - `sendMainMessageToRoundtable()`
+  - `sendRoundtableMessageToMain()`
+  - `renderMenu()`
+  - `renderRoundtableMenu()`
+
 ### Feature Line Update: Roundtable Approval Flow
 
 Functional branch: `codex/roundtable-features`

@@ -885,6 +885,7 @@ function renderMenu() {
   const userActions = `
     <button type="button" data-command="edit-user" data-node-id="${node.id}">编辑内容</button>
     <button type="button" data-command="resend-user" data-node-id="${node.id}">重新发送</button>
+    <button type="button" data-command="send-main-to-roundtable" data-node-id="${node.id}">发到圆桌</button>
     <button type="button" data-command="copy-message" data-node-id="${node.id}">复制</button>
     <button type="button" data-command="delete-message" data-node-id="${node.id}">删除</button>
   `;
@@ -892,6 +893,7 @@ function renderMenu() {
     <button type="button" data-command="regen-ai" data-node-id="${node.id}">重新生成</button>
     <button type="button" data-command="edit-ai" data-node-id="${node.id}">编辑AI输出</button>
     <button type="button" data-command="continue-ai" data-node-id="${node.id}">继续</button>
+    <button type="button" data-command="send-main-to-roundtable" data-node-id="${node.id}">发到圆桌</button>
     <button type="button" data-command="copy-message" data-node-id="${node.id}">复制</button>
     <button type="button" data-command="delete-message" data-node-id="${node.id}">删除</button>
   `;
@@ -913,6 +915,7 @@ function renderRoundtableMenu() {
   const isReview = message.speakerId === "review";
   els.menu.innerHTML = `
     <button type="button" data-command="copy-roundtable-message" data-round-id="${message.id}">复制</button>
+    <button type="button" data-command="send-roundtable-to-main" data-round-id="${message.id}">发回主线</button>
     <button type="button" data-command="adopt-roundtable-message" data-round-id="${message.id}">让写手采纳</button>
     ${canDecide ? `<button type="button" data-command="mark-roundtable-adopted" data-round-id="${message.id}">标记采纳</button>` : ""}
     ${canDecide ? `<button type="button" data-command="mark-roundtable-ignored" data-round-id="${message.id}">标记忽略</button>` : ""}
@@ -1409,6 +1412,36 @@ function stopRoundtableGeneration() {
   abortController = null;
   showToast("已停止圆桌生成");
   render();
+}
+
+function sendMainMessageToRoundtable(nodeId) {
+  const node = getNode(nodeId);
+  const content = clean(getMessageContent(node));
+  if (!node || !content) return;
+  const rt = roundtableState();
+  rt.enabled = true;
+  const speakerName = node.role === "user" ? "主线用户" : "主线AI";
+  addRoundtableMessage("mainline", speakerName, content, {
+    source: { type: "mainline", nodeId },
+  });
+  activeMenuNodeId = null;
+  closePanels();
+  render();
+  resizeInput();
+  showToast("已发送到圆桌讨论");
+}
+
+async function sendRoundtableMessageToMain(id) {
+  if (isGenerating || roundtableGenerating || materialGenerating) return showToast("已有生成任务进行中");
+  const message = getRoundtableMessage(id);
+  const content = clean(message?.content);
+  if (!message || !content) return;
+  const text = `圆桌消息：${message.speakerName}\n\n${content}`;
+  roundtableState().enabled = false;
+  activeRoundtableMessageId = null;
+  render();
+  resizeInput();
+  await appendUserMessage(text);
 }
 
 function switchSession(sessionId) {
@@ -2222,6 +2255,8 @@ const handleCommand = createCommandRegistry({
   "reset-layout": () => resetLayoutParams(),
   "toggle-roundtable-menu": (target) => toggleRoundtableMenu(target.dataset.roundId),
   "copy-roundtable-message": (target) => copyRoundtableMessage(target.dataset.roundId),
+  "send-main-to-roundtable": (target) => sendMainMessageToRoundtable(target.dataset.nodeId),
+  "send-roundtable-to-main": (target) => sendRoundtableMessageToMain(target.dataset.roundId),
   "delete-roundtable-message": (target) => deleteRoundtableMessage(target.dataset.roundId),
   "adopt-roundtable-message": (target) => adoptRoundtableMessage(target.dataset.roundId),
   "mark-roundtable-adopted": (target) => markRoundtableDecision(target.dataset.roundId, "adopted"),
