@@ -145,6 +145,7 @@ let streamRequestId = null;
 let generatingNodeId = null;
 let materialGenerating = false;
 let roundtableGenerating = false;
+let roundtableShouldStop = false;
 let streamShouldFollow = true;
 let toastTimer = null;
 const paperDrag = {
@@ -1103,7 +1104,7 @@ async function callOpenAITextWithSettings(messages, settingsOverride) {
       messages,
     });
   } finally {
-    abortController = null;
+    if (!roundtableGenerating) abortController = null;
   }
 }
 
@@ -1205,6 +1206,16 @@ function newSession() {
   activeMenuNodeId = null;
   activeRoundtableMessageId = null;
   closePanels();
+  render();
+}
+
+function stopRoundtableGeneration() {
+  if (!roundtableGenerating) return showToast("当前没有圆桌生成任务");
+  roundtableShouldStop = true;
+  abortController?.abort();
+  roundtableGenerating = false;
+  abortController = null;
+  showToast("已停止圆桌生成");
   render();
 }
 
@@ -1564,19 +1575,26 @@ async function generateMentionedRoundtableAssistants(assistants, userText) {
   if (roundtableGenerating || isGenerating || materialGenerating) return showToast("已有生成任务进行中");
   const targets = assistants.filter((assistant) => assistant.id !== "writer");
   if (!targets.length) return;
+  roundtableShouldStop = false;
   roundtableGenerating = true;
   render();
   try {
     validateApi();
     for (const assistant of targets) {
+      if (roundtableShouldStop) break;
       showToast(`${assistant.name}正在回应`);
       const text = await callRoundtableAssistant(assistant, `用户刚刚点名你发言：${userText}`);
+      if (roundtableShouldStop) break;
       addRoundtableMessage(assistant.id, assistant.name, text);
     }
   } catch (error) {
-    showToast(humanizeError(error, "点名发言失败"));
+    if (!roundtableShouldStop && error.name !== "AbortError") {
+      showToast(humanizeError(error, "点名发言失败"));
+    }
   } finally {
     roundtableGenerating = false;
+    abortController = null;
+    roundtableShouldStop = false;
     render();
   }
 }
@@ -1585,42 +1603,55 @@ async function startRoundtableRound() {
   const rt = roundtableState();
   if (roundtableGenerating || isGenerating || materialGenerating) return showToast("已有生成任务进行中");
   if (!rt.selectedIds.length) return showToast("先在成员里选择至少一个参与者");
+  roundtableShouldStop = false;
   roundtableGenerating = true;
   render();
   try {
     validateApi();
     for (const id of rt.selectedIds) {
+      if (roundtableShouldStop) break;
       const assistant = getRoundAssistant(id);
       if (!assistant) continue;
       showToast(`${assistant.name}正在发言`);
       const text = await callRoundtableAssistant(assistant, "请根据当前正文和以上圆桌讨论发表你的意见。");
+      if (roundtableShouldStop) break;
       addRoundtableMessage(assistant.id, assistant.name, text);
     }
   } catch (error) {
-    showToast(humanizeError(error, "圆桌发言失败"));
+    if (!roundtableShouldStop && error.name !== "AbortError") {
+      showToast(humanizeError(error, "圆桌发言失败"));
+    }
   } finally {
     roundtableGenerating = false;
+    abortController = null;
+    roundtableShouldStop = false;
     render();
   }
 }
 
 async function generateRoundtableWriter(userText) {
   if (roundtableGenerating || isGenerating || materialGenerating) return showToast("已有生成任务进行中");
+  roundtableShouldStop = false;
   roundtableGenerating = true;
   render();
   try {
     validateApi();
     const writer = getRoundAssistant("writer");
     const text = await callRoundtableAssistant(writer, userText || "请根据圆桌讨论继续写正文。");
+    if (roundtableShouldStop) return;
     addRoundtableMessage("writer", "写手", text);
     const novel = sessionNovel();
     novel.body = [clean(novel.body), clean(text)].filter(Boolean).join("\n\n");
     persistState(state);
     showToast("写手已更新正文，并同步到正文库");
   } catch (error) {
-    showToast(humanizeError(error, "写手续写失败"));
+    if (!roundtableShouldStop && error.name !== "AbortError") {
+      showToast(humanizeError(error, "写手续写失败"));
+    }
   } finally {
     roundtableGenerating = false;
+    abortController = null;
+    roundtableShouldStop = false;
     render();
   }
 }
@@ -1669,6 +1700,7 @@ const handleCommand = createCommandRegistry({
   "roundtable-toggle-member": (target) => toggleRoundtableMember(target.dataset.memberId),
   "roundtable-edit-assistant": (target) => openAssistantConfig(target.dataset.memberId),
   "roundtable-start": () => startRoundtableRound(),
+  "roundtable-stop": () => stopRoundtableGeneration(),
   "open-search": () => showPanel("history"),
   "roundtable-preview": () => showToast("圆桌共创仍是 Beta 预览，完整群聊发言正在开发中"),
   "close-panels": () => closePanels(),
@@ -1773,6 +1805,10 @@ els.composer.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (isGenerating) {
     stopGeneration();
+    return;
+  }
+  if (roundtableGenerating) {
+    stopRoundtableGeneration();
     return;
   }
   const text = clean(els.input.value);

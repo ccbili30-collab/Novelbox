@@ -192,6 +192,37 @@ Not yet fully done:
 
 ## Recommended Next Steps
 
+### Feature Line Update: Roundtable Stop Control
+
+Functional branch: `codex/roundtable-features`
+
+Implemented in the feature line:
+
+- roundtable mode now has a visible `停止` action next to `开始本轮`
+- pressing `停止` aborts the current assistant request and prevents the remaining selected assistants from continuing the queued round
+- pressing the composer send button while roundtable generation is active also stops the current roundtable task
+- aborted roundtable requests suppress failure toasts, so manual stops do not look like upstream errors
+- roundtable stop state is reset after each queued mention, full round, or writer generation finishes
+
+Important code locations:
+
+- `index.html`
+  - roundtable action button: `data-command="roundtable-stop"`
+- `src/main.js`
+  - `roundtableShouldStop`
+  - `stopRoundtableGeneration()`
+  - `generateMentionedRoundtableAssistants()`
+  - `startRoundtableRound()`
+  - `generateRoundtableWriter()`
+  - composer `submit` handler
+
+Validation:
+
+- `node --check src/main.js`
+- `node --check dev-server.mjs`
+- `git diff --check`
+- `android-app\gradlew.bat assembleDebug --offline --no-daemon`
+
 ### Feature Line Update: Assistant Configuration
 
 Functional branch: `codex/roundtable-features`
