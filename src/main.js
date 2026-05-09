@@ -276,6 +276,38 @@ function getRoundAssistantConfig(id) {
   };
 }
 
+function normalizeMentionName(value) {
+  return clean(value)
+    .replace(/^@+/, "")
+    .replace(/\s+/g, "")
+    .toLowerCase();
+}
+
+function assistantAliases(assistant) {
+  const base = getRoundAssistantBase(assistant.id) || assistant;
+  const names = new Set([
+    assistant.id,
+    assistant.name,
+    base.name,
+  ]);
+  if (assistant.id === "setting") ["设定", "设定师", "世界观"].forEach((name) => names.add(name));
+  if (assistant.id === "plot") ["剧情", "剧情师", "编剧", "剧情大手"].forEach((name) => names.add(name));
+  if (assistant.id === "review") ["审稿", "审稿人", "审核", "编辑"].forEach((name) => names.add(name));
+  if (assistant.id === "style") ["文风", "文风师", "润色", "风格"].forEach((name) => names.add(name));
+  if (assistant.id === "writer") ["写手", "writer", "作者", "正文"].forEach((name) => names.add(name));
+  return [...names].map(normalizeMentionName).filter(Boolean);
+}
+
+function parseRoundtableMentions(text) {
+  const source = clean(text);
+  if (!source.includes("@")) return [];
+  const normalized = normalizeMentionName(source);
+  return ROUND_ASSISTANTS
+    .map((base) => getRoundAssistant(base.id))
+    .filter(Boolean)
+    .filter((assistant) => assistantAliases(assistant).some((alias) => normalized.includes(`@${alias}`)));
+}
+
 function getNode(id, session = activeSession()) {
   return getSessionNode(session, id);
 }
@@ -1428,8 +1460,31 @@ function scrollRoundtablePaperBottom() {
 
 async function handleRoundtableUser(text) {
   addRoundtableMessage("user", "我", text);
-  if (/@写手|@writer/i.test(text)) {
-    await generateRoundtableWriter(text);
+  const mentions = parseRoundtableMentions(text);
+  if (!mentions.length) return;
+  const writer = mentions.find((assistant) => assistant.id === "writer");
+  if (writer) return generateRoundtableWriter(text);
+  await generateMentionedRoundtableAssistants(mentions, text);
+}
+
+async function generateMentionedRoundtableAssistants(assistants, userText) {
+  if (roundtableGenerating || isGenerating || materialGenerating) return showToast("已有生成任务进行中");
+  const targets = assistants.filter((assistant) => assistant.id !== "writer");
+  if (!targets.length) return;
+  roundtableGenerating = true;
+  render();
+  try {
+    validateApi();
+    for (const assistant of targets) {
+      showToast(`${assistant.name}正在回应`);
+      const text = await callRoundtableAssistant(assistant, `用户刚刚点名你发言：${userText}`);
+      addRoundtableMessage(assistant.id, assistant.name, text);
+    }
+  } catch (error) {
+    showToast(humanizeError(error, "点名发言失败"));
+  } finally {
+    roundtableGenerating = false;
+    render();
   }
 }
 

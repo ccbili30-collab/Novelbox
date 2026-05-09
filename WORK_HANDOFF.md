@@ -204,6 +204,11 @@ Implemented in the feature line:
 - roundtable calls use the assistant-specific model and temperature when provided
 - empty assistant model falls back to the current session model
 - assistant configuration is stored under `session.roundtable.assistantConfigs`
+- users can mention a specific assistant in the roundtable input
+- supported mentions include `@设定师`, `@剧情师`, `@审稿`, `@文风师`, and `@写手`
+- custom assistant display names are also accepted as mention aliases
+- `@写手` still generates manuscript prose and appends it to the manuscript body
+- ordinary assistant mentions generate only the named assistant reply, not a full round
 
 Important code locations:
 
@@ -215,6 +220,8 @@ Important code locations:
   - `#assistantPromptInput`
 - `src/main.js`
   - `getRoundAssistant()`
+  - `parseRoundtableMentions()`
+  - `generateMentionedRoundtableAssistants()`
   - `openAssistantConfig()`
   - `saveAssistantConfig()`
   - `resetAssistantConfig()`
