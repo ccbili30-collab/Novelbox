@@ -184,6 +184,68 @@
   font-size: 13px;
 }
 
+.novel-version-list {
+  display: grid;
+  gap: 8px;
+  margin: -2px 0 14px;
+}
+
+.novel-version-head,
+.novel-version-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.novel-version-head {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.novel-version-item {
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #fafafa;
+}
+
+.novel-version-item div:first-child {
+  min-width: 0;
+}
+
+.novel-version-item b,
+.novel-version-item small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.novel-version-item b {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.novel-version-item small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.novel-version-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+.novel-version-actions button {
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+  font-size: 12px;
+}
+
 .primary-button,
 .panel-row button,
 .dialog-actions button {
@@ -440,6 +502,25 @@
   padding: 12px;
   font-size: 17px;
   line-height: 1.55;
+}
+
+.assistant-config-dialog input[type="text"],
+.assistant-config-dialog select {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  outline: 0;
+  padding: 10px 12px;
+  color: var(--text);
+  background: #fff;
+}
+
+.assistant-config-dialog input[type="range"] {
+  width: 100%;
+}
+
+.assistant-config-dialog textarea {
+  min-height: 210px;
 }
 
 .dialog-actions {

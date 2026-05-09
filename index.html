@@ -35,6 +35,8 @@
           <div class="mode-actions">
             <button type="button" data-command="toggle-roundtable-members">成员</button>
             <button type="button" data-command="roundtable-start">开始本轮</button>
+            <button type="button" data-command="roundtable-write-adopted">采纳续写</button>
+            <button type="button" data-command="roundtable-stop">停止</button>
             <button type="button" data-command="toggle-roundtable">退出</button>
           </div>
         </div>
@@ -63,7 +65,7 @@
         </section>
         <div class="roundtable-section-label roundtable-section-label-chat">
           <span>群聊讨论</span>
-          <small>像 QQ / 微信群一样往下读讨论，再决定是否 @写手</small>
+          <small>@审稿 / @剧情师 / @设定师 / @文风师 / @写手</small>
         </div>
         <div id="roundtableDiscussion" class="roundtable-discussion" aria-live="polite"></div>
       </section>
@@ -77,8 +79,10 @@
           <button class="round-button" type="button" data-command="open-context" aria-label="上下文预览">↑</button>
           <button id="contextBadge" class="context-badge" type="button" data-command="open-context">0/∞ · 0K</button>
           <select id="modelSelect" aria-label="选择模型"></select>
+          <button id="roundtableContextButton" class="roundtable-context-button" type="button" data-command="toggle-roundtable-context" aria-label="圆桌上下文">材</button>
           <button id="sendButton" class="send-button" type="submit" aria-label="发送">↑</button>
         </div>
+        <div id="roundtableContextDock" class="roundtable-context-dock" hidden></div>
       </form>
     </div>
 
@@ -190,8 +194,10 @@
         <button type="button" data-command="import-body-file">导入 TXT</button>
         <button type="button" data-command="export-body-file">导出 TXT</button>
         <button type="button" data-command="sync-body-from-ai">同步正文</button>
+        <button type="button" data-command="save-manuscript-version">保存版本</button>
         <button type="button" data-command="save-novel">保存资料</button>
       </div>
+      <div id="novelVersionList" class="novel-version-list"></div>
       <label class="field">
         <span>剧情线</span>
         <textarea data-novel-key="plotline" rows="5" placeholder="实时概括当前剧情，用来压缩长上下文。"></textarea>
@@ -232,8 +238,8 @@
     <aside id="roundtablePanel" class="bottom-panel roundtable-panel" hidden>
       <div class="panel-head roundtable-head">
         <div>
-          <strong>圆桌共创 Beta</strong>
-          <span class="muted">Roundtable Novelbox · 设计预览</span>
+          <strong>圆桌共创</strong>
+          <span class="muted">Roundtable Novelbox · 多助手创作会议</span>
         </div>
         <button class="icon-button" type="button" data-command="close-panels">×</button>
       </div>
@@ -243,15 +249,15 @@
           <p>夜雨贴着城墙往下淌，他停在审判庭门前，忽然发现自己想不起妹妹的声音了。</p>
         </section>
         <div class="roundtable-beta-copy">
-          <span>实验功能预览</span>
-          <p>当前版本先展示“正文在上、圆桌讨论在下”的创作方向。完整多助手顺序发言、成员配置和 @写手 续写仍在开发中。</p>
+          <span>创作会议入口</span>
+          <p>正文像一张纸放在桌面上，你可以让设定师、剧情师、审稿和自定义助手按顺序讨论，再 @写手 把意见续写成正文。</p>
         </div>
         <div class="roundtable-members" aria-label="圆桌成员示例">
           <span class="member-chip selected">1 设定师</span>
           <span class="member-chip selected">2 剧情师</span>
           <span class="member-chip">审稿</span>
           <span class="member-chip">文风师</span>
-          <button class="member-chip more-chip" type="button" data-command="roundtable-preview">···</button>
+          <button class="member-chip more-chip" type="button" data-command="toggle-roundtable">进入</button>
         </div>
         <div class="roundtable-chat-preview" aria-label="讨论预览">
           <p><b>设定师</b><span>转折最好来自诅咒规则本身，这样不会像临时加戏。</span></p>
@@ -276,6 +282,46 @@
           <button value="cancel" type="submit">取消</button>
           <button id="saveEditButton" class="primary-button" value="default" type="button">保存</button>
           <button id="saveSendEditButton" class="primary-button ghost" value="default" type="button">保存并发送</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="assistantConfigDialog" class="edit-dialog assistant-config-dialog">
+      <form method="dialog">
+        <div class="panel-head">
+          <div>
+            <strong id="assistantConfigTitle">助手设置</strong>
+            <span class="muted">仅影响当前会话的圆桌成员</span>
+          </div>
+          <button class="icon-button" value="cancel" type="submit">×</button>
+        </div>
+        <label class="field">
+          <span>显示名</span>
+          <input id="assistantNameInput" type="text" />
+        </label>
+        <label class="field">
+          <span>助手模板</span>
+          <select id="assistantTemplateSelect">
+            <option value="">选择模板套用...</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>模型</span>
+          <input id="assistantModelInput" type="text" list="modelDatalist" placeholder="留空则使用当前会话模型" />
+        </label>
+        <label class="field">
+          <span>温度 <b id="assistantTemperatureLabel">0.80</b></span>
+          <input id="assistantTemperatureInput" type="range" min="0" max="2" step="0.05" />
+        </label>
+        <label class="field">
+          <span>角色提示词</span>
+          <textarea id="assistantPromptInput" rows="8"></textarea>
+        </label>
+        <div class="dialog-actions">
+          <button value="cancel" type="submit">取消</button>
+          <button id="resetAssistantConfigButton" value="default" type="button">恢复默认</button>
+          <button id="deleteAssistantButton" value="default" type="button">删除助手</button>
+          <button id="saveAssistantConfigButton" class="primary-button" value="default" type="button">保存</button>
         </div>
       </form>
     </dialog>

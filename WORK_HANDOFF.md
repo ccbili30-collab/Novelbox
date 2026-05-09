@@ -192,6 +192,293 @@ Not yet fully done:
 
 ## Recommended Next Steps
 
+### Feature Line Update: Round Topic
+
+Functional branch: `codex/roundtable-features`
+
+Implemented in the feature line:
+
+- the composer-side roundtable material panel now includes `本轮主题`
+- the topic is stored per session in `session.roundtable.contextOptions.roundTopic`
+- `开始本轮` uses the topic as the round instruction when present
+- `buildRoundtableMessages()` includes the topic as a separate prompt block, so all assistants stay focused on the same question
+
+Important code locations:
+
+- `src/main.js`
+  - `normalizeRoundtableContextOptions()`
+  - `renderRoundtableContextControls()`
+  - `updateRoundtableContextOption()`
+  - `startRoundtableRound()`
+  - `buildRoundtableMessages()`
+- `src/styles/components.css`
+  - `.roundtable-context-topic`
+
+### Feature Line Update: Mainline / Roundtable Handoff
+
+Functional branch: `codex/roundtable-features`
+
+Implemented in the feature line:
+
+- ordinary main chat messages now have `发到圆桌` in the message menu
+- sending a mainline message to roundtable enables roundtable mode and adds it as a roundtable discussion item with source metadata
+- roundtable messages now have `发回主线` in their menu
+- sending a roundtable message back to mainline exits roundtable mode and posts the message as a new user turn, then calls the normal mainline AI flow
+
+Important code locations:
+
+- `src/main.js`
+  - `sendMainMessageToRoundtable()`
+  - `sendRoundtableMessageToMain()`
+  - `renderMenu()`
+  - `renderRoundtableMenu()`
+
+### Feature Line Update: Roundtable Approval Flow
+
+Functional branch: `codex/roundtable-features`
+
+Implemented in the feature line:
+
+- non-writer assistant messages can be marked as `采纳` or `忽略`
+- review messages can also be marked as `通过` or `需修改`
+- decision badges render directly on roundtable messages
+- the roundtable header has `采纳续写`, which asks the writer to continue using only messages marked `采纳`
+- existing single-message `让写手采纳` remains available for quick one-off adoption
+
+Important code locations:
+
+- `index.html`
+  - `data-command="roundtable-write-adopted"`
+- `src/main.js`
+  - `renderRoundtableDecisionBadge()`
+  - `markRoundtableDecision()`
+  - `writeFromAdoptedRoundtableMessages()`
+  - `renderRoundtableMenu()`
+- `src/styles/components.css`
+  - `.roundtable-decision`
+
+### Feature Line Update: Manuscript Version History
+
+Functional branch: `codex/roundtable-features`
+
+Implemented in the feature line:
+
+- the novel panel now has a `保存版本` action for manually saving the current manuscript body
+- the novel panel shows the latest manuscript versions with restore/delete actions
+- up to 40 manuscript versions are stored per session under `session.novel.versions`
+- importing TXT and syncing all AI output into the body now records manuscript versions
+- writer continuation, writer replacement, and writer rollback now record manuscript versions automatically
+- restoring a version first saves a `恢复前备份` version of the current body, then replaces `sessionNovel().body`
+
+Important code locations:
+
+- `index.html`
+  - `#novelVersionList`
+  - `data-command="save-manuscript-version"`
+- `src/main.js`
+  - `recordManuscriptVersion()`
+  - `saveManuscriptVersion()`
+  - `restoreManuscriptVersion()`
+  - `deleteManuscriptVersion()`
+  - `renderNovelVersions()`
+- `src/styles/panels.css`
+  - `.novel-version-list`
+  - `.novel-version-item`
+
+### Feature Line Update: Assistant Templates
+
+Functional branch: `codex/roundtable-features`
+
+Implemented in the feature line:
+
+- assistant settings now include an assistant template selector
+- selecting a template fills the assistant display name and role prompt before saving
+- available templates: 反对者, 伏笔管理员, 节奏剪辑师, 角色心理师, 连续性检查员
+- templates work for custom assistants and can also be applied to built-in assistants when the user wants to repurpose one for the current session
+
+Important code locations:
+
+- `index.html`
+  - `#assistantTemplateSelect`
+- `src/main.js`
+  - `ASSISTANT_TEMPLATES`
+  - `renderAssistantTemplates()`
+  - `applyAssistantTemplate()`
+- `src/styles/panels.css`
+  - assistant config select styling
+
+### Feature Line Update: Roundtable Context Controls
+
+Functional branch: `codex/roundtable-features`
+
+Implemented in the feature line:
+
+- the composer send area now includes per-session context controls for each round
+- users can choose whether assistants see the manuscript excerpt, novel materials, main chat, and roundtable discussion history
+- users can tune manuscript excerpt length from 120 to 2400 characters
+- users can tune roundtable discussion history count from 0 to 80 messages
+- default settings preserve previous behavior for existing sessions
+- `buildRoundtableMessages()` now omits disabled context blocks completely instead of sending empty placeholders
+- this gives users a practical way to reduce oversized prompt failures while keeping the visible manuscript paper unchanged
+
+Important code locations:
+
+- `index.html`
+  - `#roundtableContextButton`
+  - `#roundtableContextDock`
+- `src/main.js`
+  - `DEFAULT_ROUNDTABLE_CONTEXT`
+  - `normalizeRoundtableContextOptions()`
+  - `renderRoundtableContextControls()`
+  - `toggleRoundtableContextDock()`
+  - `updateRoundtableContextOption()`
+  - `buildRoundtableMessages()`
+- `src/styles/components.css`
+  - `.roundtable-context-button`
+  - `.roundtable-context-dock`
+  - `.roundtable-context-options`
+
+### Feature Line Update: Writer Manuscript Sync Control
+
+Functional branch: `codex/roundtable-features`
+
+Implemented in the feature line:
+
+- new writer outputs now store manuscript sync metadata on the writer roundtable message
+- writer message menu includes `撤回正文`
+- `撤回正文` removes only the prose segment that this writer message synced into `sessionNovel().body`
+- old writer messages without sync metadata can still be reverted if their text is still the exact tail of the manuscript body
+- writer message menu includes `重写并替换`
+- `重写并替换` asks the writer to rewrite that prose card and replaces the corresponding manuscript segment instead of appending another copy
+- if the manuscript was edited and the original segment can no longer be matched, the app refuses automatic rollback/replacement instead of corrupting the body
+
+Important code locations:
+
+- `src/main.js`
+  - `syncWriterMessageToNovel()`
+  - `replaceSyncedWriterSegment()`
+  - `removeSyncedWriterSegment()`
+  - `undoWriterManuscriptSync()`
+  - `rewriteWriterManuscriptSync()`
+  - `generateRoundtableWriter()`
+  - `renderRoundtableMenu()`
+
+### Feature Line Update: Custom Roundtable Assistants
+
+Functional branch: `codex/roundtable-features`
+
+Implemented in the feature line:
+
+- roundtable member panel now supports adding custom assistants per session
+- a new custom assistant is selected into the speaking order immediately and opens the assistant settings dialog
+- custom assistants can use their own display name, prompt, model, and temperature
+- custom assistant names work as `@` mention aliases, just like built-in assistants
+- custom assistants are included in roundtable context so other assistants can see who is present
+- custom assistants can be deleted from the settings dialog without deleting old discussion history
+- the old bottom-sheet Beta preview copy was rewritten as a formal roundtable entry
+
+Important code locations:
+
+- `src/main.js`
+  - `roundtableState()`
+  - `normalizeCustomAssistant()`
+  - `getRoundAssistantBases()`
+  - `createCustomRoundAssistant()`
+  - `deleteCustomRoundAssistant()`
+  - `renderRoundtableMembers()`
+  - `parseRoundtableMentions()`
+- `index.html`
+  - `#deleteAssistantButton`
+  - `#roundtablePanel`
+- `src/styles/components.css`
+  - `.roundtable-member-add`
+
+### Feature Line Update: Roundtable Stop Control
+
+Functional branch: `codex/roundtable-features`
+
+Implemented in the feature line:
+
+- roundtable mode now has a visible `停止` action next to `开始本轮`
+- pressing `停止` aborts the current assistant request and prevents the remaining selected assistants from continuing the queued round
+- pressing the composer send button while roundtable generation is active also stops the current roundtable task
+- aborted roundtable requests suppress failure toasts, so manual stops do not look like upstream errors
+- roundtable stop state is reset after each queued mention, full round, or writer generation finishes
+
+Important code locations:
+
+- `index.html`
+  - roundtable action button: `data-command="roundtable-stop"`
+- `src/main.js`
+  - `roundtableShouldStop`
+  - `stopRoundtableGeneration()`
+  - `generateMentionedRoundtableAssistants()`
+  - `startRoundtableRound()`
+  - `generateRoundtableWriter()`
+  - composer `submit` handler
+
+Validation:
+
+- `node --check src/main.js`
+- `node --check dev-server.mjs`
+- `git diff --check`
+- `android-app\gradlew.bat assembleDebug --offline --no-daemon`
+
+### Feature Line Update: Assistant Configuration
+
+Functional branch: `codex/roundtable-features`
+
+Implemented in the feature line:
+
+- per-session assistant configuration for roundtable members
+- editable assistant display name, prompt, model, and temperature
+- writer can be configured from the member panel, but is not part of the ordinary discussion order
+- roundtable calls use the assistant-specific model and temperature when provided
+- empty assistant model falls back to the current session model
+- assistant configuration is stored under `session.roundtable.assistantConfigs`
+- users can mention a specific assistant in the roundtable input
+- supported mentions include `@设定师`, `@剧情师`, `@审稿`, `@文风师`, and `@写手`
+- custom assistant display names are also accepted as mention aliases
+- `@写手` still generates manuscript prose and appends it to the manuscript body
+- ordinary assistant mentions generate only the named assistant reply, not a full round
+- roundtable messages now open a bottom action menu when tapped
+- roundtable menu supports copy, delete, regenerate assistant reply, and ask writer to adopt the message
+- writer-message regenerate creates a new writer continuation rather than editing old manuscript history in place
+
+Important code locations:
+
+- `index.html`
+  - `#assistantConfigDialog`
+  - `#assistantNameInput`
+  - `#assistantModelInput`
+  - `#assistantTemperatureInput`
+  - `#assistantPromptInput`
+- `src/main.js`
+  - `getRoundAssistant()`
+  - `parseRoundtableMentions()`
+  - `generateMentionedRoundtableAssistants()`
+  - `renderRoundtableMenu()`
+  - `deleteRoundtableMessage()`
+  - `adoptRoundtableMessage()`
+  - `regenerateRoundtableMessage()`
+  - `openAssistantConfig()`
+  - `saveAssistantConfig()`
+  - `resetAssistantConfig()`
+  - `callRoundtableAssistant()`
+- `src/services/api/request-builder.js`
+  - minimal text calls now preserve temperature and max token settings
+
+Validation:
+
+- `node --check src/main.js`
+- `node --check dev-server.mjs`
+- `git diff --check`
+- `android-app\gradlew.bat assembleDebug --offline --no-daemon`
+
+Note for additional worktrees:
+
+- Android builds need ignored `android-app/local.properties` in each worktree, or `ANDROID_HOME` / `ANDROID_SDK_ROOT`.
+
 ### Priority 1: Real device tuning
 
 Test in Android/WebView-like sizes and tune:
