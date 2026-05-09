@@ -663,6 +663,7 @@ function renderRoundtableMessage(message) {
   const isWriter = message.speakerId === "writer";
   const profile = getRoundtableSpeakerProfile(message);
   const time = formatTime(message.createdAt);
+  const decision = renderRoundtableDecisionBadge(message);
   if (isWriter) {
     return `
       <article class="roundtable-writer-block ${profile.tone}">
@@ -677,6 +678,7 @@ function renderRoundtableMessage(message) {
               <time>${escapeHtml(time)}</time>
             </div>
           </div>
+          ${decision}
           <div class="roundtable-writer-tip">已将这一段同步到上方正文区</div>
           <div class="roundtable-writer-snippet">${escapeHtml(message.content || "")}</div>
         </div>
@@ -690,12 +692,22 @@ function renderRoundtableMessage(message) {
         <div class="roundtable-bubble-meta">
           <span class="roundtable-speaker">${escapeHtml(profile.name)}</span>
           <span class="roundtable-role-badge ${profile.tone}">${escapeHtml(profile.badge)}</span>
+          ${decision}
           <time>${escapeHtml(time)}</time>
         </div>
         <div class="roundtable-speech" data-command="toggle-roundtable-menu" data-round-id="${message.id}">${escapeHtml(message.content || "")}</div>
       </div>
     </article>
   `;
+}
+
+function renderRoundtableDecisionBadge(message) {
+  const status = message.decisionStatus;
+  if (status === "adopted") return `<span class="roundtable-decision adopted">已采纳</span>`;
+  if (status === "ignored") return `<span class="roundtable-decision ignored">已忽略</span>`;
+  if (status === "approved") return `<span class="roundtable-decision approved">通过</span>`;
+  if (status === "revision") return `<span class="roundtable-decision revision">需修改</span>`;
+  return "";
 }
 
 function getRoundtablePaperSource() {
@@ -897,9 +909,15 @@ function renderRoundtableMenu() {
   }
   const canRegenerate = message.speakerId !== "user";
   const isWriter = message.speakerId === "writer";
+  const canDecide = message.speakerId !== "user" && !isWriter;
+  const isReview = message.speakerId === "review";
   els.menu.innerHTML = `
     <button type="button" data-command="copy-roundtable-message" data-round-id="${message.id}">复制</button>
     <button type="button" data-command="adopt-roundtable-message" data-round-id="${message.id}">让写手采纳</button>
+    ${canDecide ? `<button type="button" data-command="mark-roundtable-adopted" data-round-id="${message.id}">标记采纳</button>` : ""}
+    ${canDecide ? `<button type="button" data-command="mark-roundtable-ignored" data-round-id="${message.id}">标记忽略</button>` : ""}
+    ${isReview ? `<button type="button" data-command="mark-roundtable-approved" data-round-id="${message.id}">审稿通过</button>` : ""}
+    ${isReview ? `<button type="button" data-command="mark-roundtable-revision" data-round-id="${message.id}">需修改</button>` : ""}
     ${isWriter ? `<button type="button" data-command="undo-writer-sync" data-round-id="${message.id}">撤回正文</button>` : ""}
     ${isWriter ? `<button type="button" data-command="rewrite-writer-sync" data-round-id="${message.id}">重写并替换</button>` : ""}
     ${canRegenerate ? `<button type="button" data-command="regen-roundtable-message" data-round-id="${message.id}">重新回答</button>` : ""}
@@ -1812,6 +1830,19 @@ function copyRoundtableMessage(id) {
   copyText(message.content || "");
 }
 
+function markRoundtableDecision(id, status) {
+  const message = getRoundtableMessage(id);
+  if (!message || message.speakerId === "user") return;
+  message.decisionStatus = message.decisionStatus === status ? "" : status;
+  message.decidedAt = message.decisionStatus ? Date.now() : null;
+  activeRoundtableMessageId = null;
+  touchSession(activeSession());
+  render();
+  persistState(state);
+  const labels = { adopted: "已标记采纳", ignored: "已标记忽略", approved: "已标记通过", revision: "已标记需修改" };
+  showToast(labels[status] || "已更新标记");
+}
+
 function createWriterSyncSegment(previousBody, text) {
   const previous = clean(previousBody);
   const content = clean(text);
@@ -1930,6 +1961,18 @@ async function adoptRoundtableMessage(id) {
   if (!message) return;
   activeRoundtableMessageId = null;
   await generateRoundtableWriter(`请采纳这条圆桌意见并续写正文：\n${message.speakerName}：${message.content}`);
+}
+
+async function writeFromAdoptedRoundtableMessages() {
+  const adopted = roundtableState().messages
+    .filter((message) => message.decisionStatus === "adopted" && clean(message.content))
+    .slice(-12);
+  if (!adopted.length) return showToast("还没有标记采纳的圆桌意见");
+  const instruction = [
+    "请只采纳以下已标记采纳的圆桌意见来续写正文。未列出的意见不要主动混入。",
+    adopted.map((message) => `${message.speakerName}：${message.content}`).join("\n"),
+  ].join("\n\n");
+  await generateRoundtableWriter(instruction);
 }
 
 async function rewriteWriterManuscriptSync(id) {
@@ -2181,6 +2224,11 @@ const handleCommand = createCommandRegistry({
   "copy-roundtable-message": (target) => copyRoundtableMessage(target.dataset.roundId),
   "delete-roundtable-message": (target) => deleteRoundtableMessage(target.dataset.roundId),
   "adopt-roundtable-message": (target) => adoptRoundtableMessage(target.dataset.roundId),
+  "mark-roundtable-adopted": (target) => markRoundtableDecision(target.dataset.roundId, "adopted"),
+  "mark-roundtable-ignored": (target) => markRoundtableDecision(target.dataset.roundId, "ignored"),
+  "mark-roundtable-approved": (target) => markRoundtableDecision(target.dataset.roundId, "approved"),
+  "mark-roundtable-revision": (target) => markRoundtableDecision(target.dataset.roundId, "revision"),
+  "roundtable-write-adopted": () => writeFromAdoptedRoundtableMessages(),
   "undo-writer-sync": (target) => undoWriterManuscriptSync(target.dataset.roundId),
   "rewrite-writer-sync": (target) => rewriteWriterManuscriptSync(target.dataset.roundId),
   "regen-roundtable-message": (target) => regenerateRoundtableMessage(target.dataset.roundId),

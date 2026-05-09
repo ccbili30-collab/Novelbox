@@ -192,6 +192,30 @@ Not yet fully done:
 
 ## Recommended Next Steps
 
+### Feature Line Update: Roundtable Approval Flow
+
+Functional branch: `codex/roundtable-features`
+
+Implemented in the feature line:
+
+- non-writer assistant messages can be marked as `采纳` or `忽略`
+- review messages can also be marked as `通过` or `需修改`
+- decision badges render directly on roundtable messages
+- the roundtable header has `采纳续写`, which asks the writer to continue using only messages marked `采纳`
+- existing single-message `让写手采纳` remains available for quick one-off adoption
+
+Important code locations:
+
+- `index.html`
+  - `data-command="roundtable-write-adopted"`
+- `src/main.js`
+  - `renderRoundtableDecisionBadge()`
+  - `markRoundtableDecision()`
+  - `writeFromAdoptedRoundtableMessages()`
+  - `renderRoundtableMenu()`
+- `src/styles/components.css`
+  - `.roundtable-decision`
+
 ### Feature Line Update: Manuscript Version History
 
 Functional branch: `codex/roundtable-features`

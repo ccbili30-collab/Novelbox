@@ -918,6 +918,32 @@ body.paper-dragging .paper-grip {
   background: rgba(186, 156, 104, 0.2);
 }
 
+.roundtable-decision {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.roundtable-decision.adopted,
+.roundtable-decision.approved {
+  color: #21614c;
+  background: rgba(73, 168, 127, 0.16);
+}
+
+.roundtable-decision.ignored {
+  color: #7b715f;
+  background: rgba(140, 130, 112, 0.16);
+}
+
+.roundtable-decision.revision {
+  color: #9a5b1c;
+  background: rgba(214, 145, 60, 0.18);
+}
+
 @media (max-width: 420px) {
   .roundtable-mode-head {
     display: grid;
