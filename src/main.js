@@ -136,6 +136,7 @@ const els = {
 
 let state = loadState();
 let activeMenuNodeId = null;
+let activeRoundtableMessageId = null;
 let editTarget = null;
 let assistantConfigTargetId = null;
 let isGenerating = false;
@@ -530,7 +531,7 @@ function renderRoundtableMessage(message) {
   if (isWriter) {
     return `
       <article class="roundtable-writer-block ${profile.tone}">
-        <div class="roundtable-writer-card">
+        <div class="roundtable-writer-card" data-command="toggle-roundtable-menu" data-round-id="${message.id}">
           <div class="roundtable-writer-head">
             <div class="roundtable-avatar ${profile.tone}">${profile.avatar}</div>
             <div class="roundtable-writer-meta">
@@ -556,7 +557,7 @@ function renderRoundtableMessage(message) {
           <span class="roundtable-role-badge ${profile.tone}">${escapeHtml(profile.badge)}</span>
           <time>${escapeHtml(time)}</time>
         </div>
-        <div class="roundtable-speech">${escapeHtml(message.content || "")}</div>
+        <div class="roundtable-speech" data-command="toggle-roundtable-menu" data-round-id="${message.id}">${escapeHtml(message.content || "")}</div>
       </div>
     </article>
   `;
@@ -724,6 +725,10 @@ function renderBranchSwitcher(node) {
 }
 
 function renderMenu() {
+  if (activeRoundtableMessageId) {
+    renderRoundtableMenu();
+    return;
+  }
   const node = activeMenuNodeId ? getNode(activeMenuNodeId) : null;
   if (!node) {
     els.menu.hidden = true;
@@ -744,6 +749,24 @@ function renderMenu() {
     <button type="button" data-command="delete-message" data-node-id="${node.id}">删除</button>
   `;
   els.menu.innerHTML = node.role === "user" ? userActions : assistantActions;
+  els.menu.hidden = false;
+}
+
+function renderRoundtableMenu() {
+  const message = getRoundtableMessage(activeRoundtableMessageId);
+  if (!message) {
+    activeRoundtableMessageId = null;
+    els.menu.hidden = true;
+    els.menu.innerHTML = "";
+    return;
+  }
+  const canRegenerate = message.speakerId !== "user";
+  els.menu.innerHTML = `
+    <button type="button" data-command="copy-roundtable-message" data-round-id="${message.id}">复制</button>
+    <button type="button" data-command="adopt-roundtable-message" data-round-id="${message.id}">让写手采纳</button>
+    ${canRegenerate ? `<button type="button" data-command="regen-roundtable-message" data-round-id="${message.id}">重新回答</button>` : ""}
+    <button type="button" data-command="delete-roundtable-message" data-round-id="${message.id}">删除</button>
+  `;
   els.menu.hidden = false;
 }
 
@@ -1180,6 +1203,7 @@ function newSession() {
   state.sessions.unshift(session);
   state.activeSessionId = session.id;
   activeMenuNodeId = null;
+  activeRoundtableMessageId = null;
   closePanels();
   render();
 }
@@ -1189,6 +1213,7 @@ function switchSession(sessionId) {
   if (!state.sessions.some((session) => session.id === sessionId)) return;
   state.activeSessionId = sessionId;
   activeMenuNodeId = null;
+  activeRoundtableMessageId = null;
   closePanels();
   render();
   scrollBottom();
@@ -1346,6 +1371,7 @@ function toggleRoundtable() {
   rt.enabled = !rt.enabled;
   rt.membersOpen = false;
   activeMenuNodeId = null;
+  activeRoundtableMessageId = null;
   closePanels();
   render();
   resizeInput();
@@ -1440,6 +1466,73 @@ function addRoundtableMessage(speakerId, speakerName, content) {
     scrollRoundtablePaperBottom();
   }
   scrollRoundtableBottom();
+}
+
+function getRoundtableMessage(id) {
+  return roundtableState().messages.find((message) => message.id === id) || null;
+}
+
+function toggleRoundtableMenu(id) {
+  activeMenuNodeId = null;
+  activeRoundtableMessageId = activeRoundtableMessageId === id ? null : id;
+  renderMenu();
+}
+
+function deleteRoundtableMessage(id) {
+  if (roundtableGenerating || isGenerating) return showToast("生成中不能删除圆桌消息");
+  const rt = roundtableState();
+  const before = rt.messages.length;
+  rt.messages = rt.messages.filter((message) => message.id !== id);
+  if (rt.messages.length === before) return;
+  activeRoundtableMessageId = null;
+  touchSession(activeSession());
+  render();
+  persistState(state);
+  showToast("已删除圆桌消息");
+}
+
+function copyRoundtableMessage(id) {
+  const message = getRoundtableMessage(id);
+  if (!message) return;
+  copyText(message.content || "");
+}
+
+async function adoptRoundtableMessage(id) {
+  const message = getRoundtableMessage(id);
+  if (!message) return;
+  activeRoundtableMessageId = null;
+  await generateRoundtableWriter(`请采纳这条圆桌意见并续写正文：\n${message.speakerName}：${message.content}`);
+}
+
+async function regenerateRoundtableMessage(id) {
+  const message = getRoundtableMessage(id);
+  if (!message || message.speakerId === "user") return;
+  if (message.speakerId === "writer") {
+    activeRoundtableMessageId = null;
+    await generateRoundtableWriter(`请重新写这一段正文，保留圆桌讨论意图但换一种更好的表达：\n${message.content}`);
+    return;
+  }
+  if (roundtableGenerating || isGenerating || materialGenerating) return showToast("已有生成任务进行中");
+  const assistant = getRoundAssistant(message.speakerId);
+  if (!assistant) return showToast("找不到这个助手");
+  roundtableGenerating = true;
+  activeRoundtableMessageId = null;
+  render();
+  try {
+    validateApi();
+    const text = await callRoundtableAssistant(assistant, `请重新回答你上一条圆桌发言。上一条内容是：\n${message.content}`);
+    message.content = clean(text);
+    message.createdAt = Date.now();
+    message.speakerName = assistant.name;
+    touchSession(activeSession());
+    showToast(`${assistant.name}已重新回答`);
+  } catch (error) {
+    showToast(humanizeError(error, "重新回答失败"));
+  } finally {
+    roundtableGenerating = false;
+    render();
+    persistState(state);
+  }
 }
 
 function scrollRoundtableBottom() {
@@ -1595,8 +1688,14 @@ const handleCommand = createCommandRegistry({
   "delete-layout-preset": (target) => deleteLayoutPreset(target.dataset.presetId),
   "copy-layout": () => copyLayoutParams(),
   "reset-layout": () => resetLayoutParams(),
+  "toggle-roundtable-menu": (target) => toggleRoundtableMenu(target.dataset.roundId),
+  "copy-roundtable-message": (target) => copyRoundtableMessage(target.dataset.roundId),
+  "delete-roundtable-message": (target) => deleteRoundtableMessage(target.dataset.roundId),
+  "adopt-roundtable-message": (target) => adoptRoundtableMessage(target.dataset.roundId),
+  "regen-roundtable-message": (target) => regenerateRoundtableMessage(target.dataset.roundId),
   "toggle-menu": (target) => {
     const nodeId = target.dataset.nodeId;
+    activeRoundtableMessageId = null;
     activeMenuNodeId = activeMenuNodeId === nodeId ? null : nodeId;
     return render();
   },
@@ -1665,8 +1764,9 @@ function copyLayoutParams() {
   copyText(JSON.stringify(sessionSettings().layout, null, 2));
 }
 
-bindCommandDelegation(document, renderMenu, () => activeMenuNodeId, (value) => {
+bindCommandDelegation(document, renderMenu, () => activeMenuNodeId || activeRoundtableMessageId, (value) => {
   activeMenuNodeId = value;
+  if (value === null) activeRoundtableMessageId = null;
 }, (command, target) => handleCommand(command, target));
 
 els.composer.addEventListener("submit", async (event) => {

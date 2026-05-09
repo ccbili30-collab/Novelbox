@@ -209,6 +209,9 @@ Implemented in the feature line:
 - custom assistant display names are also accepted as mention aliases
 - `@写手` still generates manuscript prose and appends it to the manuscript body
 - ordinary assistant mentions generate only the named assistant reply, not a full round
+- roundtable messages now open a bottom action menu when tapped
+- roundtable menu supports copy, delete, regenerate assistant reply, and ask writer to adopt the message
+- writer-message regenerate creates a new writer continuation rather than editing old manuscript history in place
 
 Important code locations:
 
@@ -222,6 +225,10 @@ Important code locations:
   - `getRoundAssistant()`
   - `parseRoundtableMentions()`
   - `generateMentionedRoundtableAssistants()`
+  - `renderRoundtableMenu()`
+  - `deleteRoundtableMessage()`
+  - `adoptRoundtableMessage()`
+  - `regenerateRoundtableMessage()`
   - `openAssistantConfig()`
   - `saveAssistantConfig()`
   - `resetAssistantConfig()`
