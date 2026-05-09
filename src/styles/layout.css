@@ -70,6 +70,32 @@
   scroll-behavior: smooth;
 }
 
+.roundtable-workspace {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 12px calc(var(--composer-height) + 14px);
+  background:
+    linear-gradient(180deg, rgba(255, 253, 247, 0.96), rgba(247, 243, 234, 0.94)),
+    radial-gradient(circle at 50% 120px, rgba(180, 151, 92, 0.12), transparent 260px);
+  scroll-behavior: smooth;
+}
+
+.roundtable-mode .topbar {
+  border-bottom-color: #e5d8bf;
+  background: rgba(255, 250, 239, 0.96);
+}
+
+.roundtable-mode .roundtable-entry {
+  border-color: #8d6b31;
+  color: #fff;
+  background: #2f281e;
+}
+
+.roundtable-mode .composer {
+  border-color: #ddd0b9;
+  background: #fffaf0;
+}
+
 .message-row {
   display: flex;
   flex-direction: column;

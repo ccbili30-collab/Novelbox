@@ -18,13 +18,38 @@
         <div class="top-actions">
         <button class="icon-button" type="button" data-command="open-search" aria-label="搜索">⌕</button>
         <button class="icon-button" type="button" data-command="open-history" aria-label="历史">◴</button>
-        <button class="icon-button roundtable-entry" type="button" data-command="open-roundtable" aria-label="圆桌共创 Beta">圆</button>
+        <button class="icon-button roundtable-entry" type="button" data-command="toggle-roundtable" aria-label="圆桌共创模式">圆</button>
         <button class="icon-button" type="button" data-command="open-novel" aria-label="小说资料">文</button>
         <button class="icon-button" type="button" data-command="open-settings" aria-label="设置">⋯</button>
       </div>
       </header>
 
       <main id="messageList" class="messages" aria-live="polite"></main>
+
+      <section id="roundtableWorkspace" class="roundtable-workspace" hidden aria-label="圆桌共创模式">
+        <div class="roundtable-mode-head">
+          <div>
+            <span class="mode-kicker">Roundtable Mode</span>
+            <strong>圆桌共创</strong>
+          </div>
+          <div class="mode-actions">
+            <button type="button" data-command="toggle-roundtable-members">成员</button>
+            <button type="button" data-command="roundtable-start">开始本轮</button>
+            <button type="button" data-command="toggle-roundtable">退出</button>
+          </div>
+        </div>
+        <div id="roundtableMembersPanel" class="roundtable-member-panel" hidden></div>
+        <section class="manuscript-desk" aria-label="写手正文小窗">
+          <div class="manuscript-paper">
+            <div class="paper-meta">
+              <span>正文小窗 · 写手</span>
+              <button type="button" data-command="open-novel">正文库</button>
+            </div>
+            <p id="roundtableManuscript"></p>
+          </div>
+        </section>
+        <div id="roundtableDiscussion" class="roundtable-discussion" aria-live="polite"></div>
+      </section>
 
       <div id="messageMenu" class="message-menu" hidden></div>
 
@@ -218,7 +243,7 @@
         </div>
       </div>
       <div class="roundtable-actions">
-        <button type="button" class="primary-button" data-command="roundtable-preview">进入圆桌预览</button>
+        <button type="button" class="primary-button" data-command="toggle-roundtable">进入圆桌模式</button>
         <button type="button" data-command="open-novel">查看正文库</button>
       </div>
     </aside>

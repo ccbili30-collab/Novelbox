@@ -1,4 +1,4 @@
-import { uid } from "./utils/id.js";
+﻿import { uid } from "./utils/id.js";
 import { clean, escapeHtml } from "./utils/text.js";
 import { formatTime } from "./utils/time.js";
 import { estimateTokens, formatK } from "./utils/tokens.js";
@@ -35,6 +35,38 @@ import { renderSessions as drawSessions } from "./ui/renderers/session-renderer.
 
 const CONTINUE_PROMPT = "继续完成上一条请求，直接输出正文，不要重复确认。";
 const BRIDGE_TIMEOUT = 160000;
+const ROUND_ASSISTANTS = [
+  {
+    id: "setting",
+    name: "设定师",
+    role: "普通助手",
+    prompt: "你是小说设定师。只讨论规则、世界观、设定一致性和伏笔可回收性。可以反驳别人，但要给出具体修改建议。",
+  },
+  {
+    id: "plot",
+    name: "剧情师",
+    role: "普通助手",
+    prompt: "你是小说剧情师。关注冲突推进、转折、节奏和章节目标。你可以指出剧情无力或转折太硬的地方。",
+  },
+  {
+    id: "review",
+    name: "审稿",
+    role: "普通助手",
+    prompt: "你是审稿助手。关注读者体验、逻辑漏洞、铺垫不足和情绪落点。请直接、具体、中文回答。",
+  },
+  {
+    id: "style",
+    name: "文风师",
+    role: "普通助手",
+    prompt: "你是文风师。关注语言质感、句式、画面、语气稳定性。不要重写大段正文，优先给修改方向。",
+  },
+  {
+    id: "writer",
+    name: "写手",
+    role: "写手",
+    prompt: "你是写手。根据用户和圆桌讨论继续写小说正文。只输出正文，不要解释，不要列提纲。",
+  },
+];
 
 const $ = (selector) => document.querySelector(selector);
 const els = {
@@ -53,6 +85,10 @@ const els = {
   novelPanel: $("#novelPanel"),
   contextPanel: $("#contextPanel"),
   roundtablePanel: $("#roundtablePanel"),
+  roundtableWorkspace: $("#roundtableWorkspace"),
+  roundtableMembersPanel: $("#roundtableMembersPanel"),
+  roundtableManuscript: $("#roundtableManuscript"),
+  roundtableDiscussion: $("#roundtableDiscussion"),
   novelFields: Array.from(document.querySelectorAll("[data-novel-key]")),
   novelStats: $("#novelStats"),
   bodyImportFile: $("#bodyImportFile"),
@@ -92,6 +128,7 @@ let abortController = null;
 let streamRequestId = null;
 let generatingNodeId = null;
 let materialGenerating = false;
+let roundtableGenerating = false;
 let streamShouldFollow = true;
 let toastTimer = null;
 const bridgeCallbacks = new Map();
@@ -166,6 +203,22 @@ function sessionSettings(session = activeSession()) {
 function sessionNovel(session = activeSession()) {
   session.novel = { ...createDefaultNovel(), ...(session.novel || {}) };
   return session.novel;
+}
+
+function roundtableState(session = activeSession()) {
+  session.roundtable ||= {};
+  const rt = session.roundtable;
+  rt.enabled = Boolean(rt.enabled);
+  rt.membersOpen = Boolean(rt.membersOpen);
+  rt.selectedIds = Array.isArray(rt.selectedIds) && rt.selectedIds.length
+    ? rt.selectedIds.filter((id) => ROUND_ASSISTANTS.some((assistant) => assistant.id === id && id !== "writer"))
+    : ["setting", "plot", "review"];
+  rt.messages = Array.isArray(rt.messages) ? rt.messages : [];
+  return rt;
+}
+
+function getRoundAssistant(id) {
+  return ROUND_ASSISTANTS.find((assistant) => assistant.id === id);
 }
 
 function getNode(id, session = activeSession()) {
@@ -277,6 +330,7 @@ function render() {
   const session = activeSession();
   applyLayout();
   els.title.textContent = titleForSession(session);
+  renderRoundtable();
   renderMessages();
   renderSessions();
   renderSettings();
@@ -286,8 +340,87 @@ function render() {
   renderContextBadge();
   renderMenu();
   els.body.classList.toggle("is-generating", isGenerating);
+  els.body.classList.toggle("roundtable-mode", roundtableState(session).enabled);
+  els.body.classList.toggle("roundtable-busy", roundtableGenerating);
   els.body.classList.toggle("is-ready", Boolean(clean(els.input.value)));
   persistState(state);
+}
+
+function renderRoundtable() {
+  if (!els.roundtableWorkspace) return;
+  const rt = roundtableState();
+  els.roundtableWorkspace.hidden = !rt.enabled;
+  els.messages.hidden = rt.enabled;
+  if (rt.enabled) {
+    els.input.placeholder = "在圆桌里发言；输入 @写手 可把讨论转成正文...";
+  } else {
+    els.input.placeholder = "在这里输入你的问题...";
+  }
+  if (els.roundtableMembersPanel) {
+    els.roundtableMembersPanel.hidden = !rt.membersOpen;
+    els.roundtableMembersPanel.innerHTML = renderRoundtableMembers(rt);
+  }
+  if (els.roundtableManuscript) {
+    els.roundtableManuscript.textContent = getRoundtableManuscript();
+  }
+  if (els.roundtableDiscussion) {
+    els.roundtableDiscussion.innerHTML = rt.messages.length
+      ? rt.messages.map(renderRoundtableMessage).join("")
+      : renderRoundtableEmpty();
+  }
+}
+
+function renderRoundtableMembers(rt) {
+  const order = new Map(rt.selectedIds.map((id, index) => [id, index + 1]));
+  return ROUND_ASSISTANTS
+    .filter((assistant) => assistant.id !== "writer")
+    .map((assistant) => {
+      const selected = order.get(assistant.id);
+      return `
+        <button class="roundtable-member-option ${selected ? "selected" : ""}" type="button" data-command="roundtable-toggle-member" data-member-id="${assistant.id}">
+          <span>${selected || ""}</span>
+          <b>${assistant.name}</b>
+          <small>${assistant.role}</small>
+        </button>
+      `;
+    })
+    .join("");
+}
+
+function renderRoundtableEmpty() {
+  return `
+    <div class="roundtable-empty">
+      <strong>把正文放到桌上，开始讨论。</strong>
+      <span>先说你的想法，或点“开始本轮”让成员按顺序审视当前正文。</span>
+    </div>
+  `;
+}
+
+function renderRoundtableMessage(message) {
+  const isUser = message.speakerId === "user";
+  const isWriter = message.speakerId === "writer";
+  return `
+    <article class="roundtable-line ${isUser ? "user" : ""} ${isWriter ? "writer" : ""}">
+      <div class="roundtable-speaker">${escapeHtml(message.speakerName || "成员")}</div>
+      <div class="roundtable-speech">${escapeHtml(message.content || "")}</div>
+    </article>
+  `;
+}
+
+function getRoundtableManuscript() {
+  const rt = roundtableState();
+  const lastWriter = [...rt.messages].reverse().find((message) => message.speakerId === "writer" && clean(message.content));
+  if (lastWriter) return trimForPaper(lastWriter.content);
+  const body = clean(sessionNovel().body);
+  if (body) return trimForPaper(body);
+  const lastAssistant = [...activePath()].reverse().find((node) => node.role === "assistant" && clean(getMessageContent(node)));
+  if (lastAssistant) return trimForPaper(getMessageContent(lastAssistant));
+  return "正文还没有放上桌。先在普通模式写一段，或在这里 @写手 开始。";
+}
+
+function trimForPaper(text) {
+  const value = clean(text).replace(/\n{3,}/g, "\n\n");
+  return value.length > 260 ? `...${value.slice(-260)}` : value;
 }
 
 function renderMessages() {
@@ -489,7 +622,7 @@ async function saveEditor(sendAfterSave = false) {
     version.usage = null;
     version.createdAt = Date.now();
     closeEditor();
-    touchSession();
+    touchSession(activeSession());
     render();
     if (sendAfterSave) await continueFromAssistant(node.id);
     else showToast("已直接修改 AI 输出");
@@ -503,7 +636,7 @@ async function saveEditor(sendAfterSave = false) {
   node.content = text;
   node.createdAt = Date.now();
   closeEditor();
-  touchSession();
+  touchSession(activeSession());
   render();
   showToast("已修改用户内容");
 }
@@ -533,7 +666,7 @@ async function editUserBranch(nodeId, text) {
   const assistant = createNode("assistant", user.id, "");
   assistant.activeVersionId = assistant.versions[0].id;
   appendChild(activeSession(), user, assistant);
-  touchSession();
+  touchSession(activeSession());
   activeMenuNodeId = null;
   render();
   await generateIntoAssistant(assistant.id, text, assistant.versions[0].id);
@@ -573,7 +706,7 @@ async function continueFromAssistant(nodeId) {
   const next = createNode("assistant", assistant.id, "");
   next.activeVersionId = next.versions[0].id;
   appendChild(activeSession(), assistant, next);
-  touchSession();
+  touchSession(activeSession());
   activeMenuNodeId = null;
   render();
   await generateIntoAssistant(next.id, "", next.versions[0].id, true);
@@ -609,7 +742,7 @@ async function generateIntoAssistant(nodeId, userText, versionId, continueMode =
     setAssistantVersionContent(node, version, result.content);
     version.usage = result.usage || null;
     version.createdAt = Date.now();
-    touchSession();
+    touchSession(activeSession());
   } catch (error) {
     if (error.name !== "AbortError") {
       const message = humanizeError(error, "生成失败");
@@ -943,12 +1076,141 @@ async function generateNovelMaterial(target) {
   }
 }
 
+function toggleRoundtable() {
+  const rt = roundtableState();
+  rt.enabled = !rt.enabled;
+  rt.membersOpen = false;
+  activeMenuNodeId = null;
+  closePanels();
+  render();
+  resizeInput();
+  if (rt.enabled) showToast("已进入圆桌共创模式");
+}
+
+function toggleRoundtableMembers() {
+  const rt = roundtableState();
+  rt.membersOpen = !rt.membersOpen;
+  render();
+}
+
+function toggleRoundtableMember(id) {
+  const rt = roundtableState();
+  if (!getRoundAssistant(id) || id === "writer") return;
+  const index = rt.selectedIds.indexOf(id);
+  if (index >= 0) rt.selectedIds.splice(index, 1);
+  else rt.selectedIds.push(id);
+  render();
+}
+
+function addRoundtableMessage(speakerId, speakerName, content) {
+  const rt = roundtableState();
+  rt.messages.push({
+    id: uid("round"),
+    speakerId,
+    speakerName,
+    content: clean(content),
+    createdAt: Date.now(),
+  });
+  rt.messages = rt.messages.slice(-80);
+  touchSession(activeSession());
+  render();
+  scrollRoundtableBottom();
+}
+
+function scrollRoundtableBottom() {
+  requestAnimationFrame(() => {
+    if (els.roundtableWorkspace) {
+      els.roundtableWorkspace.scrollTop = els.roundtableWorkspace.scrollHeight;
+    }
+  });
+}
+
+async function handleRoundtableUser(text) {
+  addRoundtableMessage("user", "我", text);
+  if (/@写手|@writer/i.test(text)) {
+    await generateRoundtableWriter(text);
+  }
+}
+
+async function startRoundtableRound() {
+  const rt = roundtableState();
+  if (roundtableGenerating || isGenerating || materialGenerating) return showToast("已有生成任务进行中");
+  if (!rt.selectedIds.length) return showToast("先在成员里选择至少一个参与者");
+  roundtableGenerating = true;
+  render();
+  try {
+    validateApi();
+    for (const id of rt.selectedIds) {
+      const assistant = getRoundAssistant(id);
+      if (!assistant) continue;
+      showToast(`${assistant.name}正在发言`);
+      const text = await callRoundtableAssistant(assistant, "请根据当前正文和以上圆桌讨论发表你的意见。");
+      addRoundtableMessage(assistant.id, assistant.name, text);
+    }
+  } catch (error) {
+    showToast(humanizeError(error, "圆桌发言失败"));
+  } finally {
+    roundtableGenerating = false;
+    render();
+  }
+}
+
+async function generateRoundtableWriter(userText) {
+  if (roundtableGenerating || isGenerating || materialGenerating) return showToast("已有生成任务进行中");
+  roundtableGenerating = true;
+  render();
+  try {
+    validateApi();
+    const writer = getRoundAssistant("writer");
+    const text = await callRoundtableAssistant(writer, userText || "请根据圆桌讨论继续写正文。");
+    addRoundtableMessage("writer", "写手", text);
+    const novel = sessionNovel();
+    novel.body = [clean(novel.body), clean(text)].filter(Boolean).join("\n\n");
+    persistState(state);
+    showToast("写手已更新正文，并同步到正文库");
+  } catch (error) {
+    showToast(humanizeError(error, "写手续写失败"));
+  } finally {
+    roundtableGenerating = false;
+    render();
+  }
+}
+
+async function callRoundtableAssistant(assistant, instruction) {
+  const messages = buildRoundtableMessages(assistant, instruction);
+  return callOpenAIText(messages);
+}
+
+function buildRoundtableMessages(assistant, instruction) {
+  const rt = roundtableState();
+  const participants = ROUND_ASSISTANTS.map((item) => `${item.name}：${item.role}`).join("；");
+  const discussion = rt.messages
+    .slice(-24)
+    .map((message) => `${message.speakerName}：${message.content}`)
+    .join("\n");
+  const source = [
+    `【当前模式】圆桌小说共创。参与者包括：${participants}`,
+    "【发言规则】必须知道是谁说的话，不要把不同成员的意见串成同一个人。可自然赞同或反驳其他成员。",
+    `【你的身份】${assistant.name}。${assistant.prompt}`,
+    `【当前正文小窗】\n${getRoundtableManuscript()}`,
+    `【小说资料】\n${buildNovelMemory() || "暂无小说资料。"}`,
+    `【最近主线对话】\n${getNovelSourceText() || "暂无主线对话。"}`,
+    `【圆桌讨论记录】\n${discussion || "暂无讨论。"}`,
+    `【本轮任务】${instruction}`,
+  ].join("\n\n");
+  return [{ role: "user", content: source }];
+}
+
 const handleCommand = createCommandRegistry({
   "open-history": () => showPanel("history"),
   "open-settings": () => showPanel("settings"),
   "open-novel": () => showPanel("novel"),
   "open-context": () => showPanel("context"),
-  "open-roundtable": () => showPanel("roundtable"),
+  "open-roundtable": () => toggleRoundtable(),
+  "toggle-roundtable": () => toggleRoundtable(),
+  "toggle-roundtable-members": () => toggleRoundtableMembers(),
+  "roundtable-toggle-member": (target) => toggleRoundtableMember(target.dataset.memberId),
+  "roundtable-start": () => startRoundtableRound(),
   "open-search": () => showPanel("history"),
   "roundtable-preview": () => showToast("圆桌共创仍是 Beta 预览，完整群聊发言正在开发中"),
   "close-panels": () => closePanels(),
@@ -1050,6 +1312,13 @@ els.composer.addEventListener("submit", async (event) => {
   }
   const text = clean(els.input.value);
   if (!text) return;
+  if (roundtableState().enabled) {
+    els.input.value = "";
+    resizeInput();
+    renderContextBadge();
+    await handleRoundtableUser(text);
+    return;
+  }
   try {
     validateApi();
     els.input.value = "";
