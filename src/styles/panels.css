@@ -442,6 +442,24 @@
   line-height: 1.55;
 }
 
+.assistant-config-dialog input[type="text"] {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  outline: 0;
+  padding: 10px 12px;
+  color: var(--text);
+  background: #fff;
+}
+
+.assistant-config-dialog input[type="range"] {
+  width: 100%;
+}
+
+.assistant-config-dialog textarea {
+  min-height: 210px;
+}
+
 .dialog-actions {
   display: flex;
   justify-content: flex-end;

@@ -192,6 +192,47 @@ Not yet fully done:
 
 ## Recommended Next Steps
 
+### Feature Line Update: Assistant Configuration
+
+Functional branch: `codex/roundtable-features`
+
+Implemented in the feature line:
+
+- per-session assistant configuration for roundtable members
+- editable assistant display name, prompt, model, and temperature
+- writer can be configured from the member panel, but is not part of the ordinary discussion order
+- roundtable calls use the assistant-specific model and temperature when provided
+- empty assistant model falls back to the current session model
+- assistant configuration is stored under `session.roundtable.assistantConfigs`
+
+Important code locations:
+
+- `index.html`
+  - `#assistantConfigDialog`
+  - `#assistantNameInput`
+  - `#assistantModelInput`
+  - `#assistantTemperatureInput`
+  - `#assistantPromptInput`
+- `src/main.js`
+  - `getRoundAssistant()`
+  - `openAssistantConfig()`
+  - `saveAssistantConfig()`
+  - `resetAssistantConfig()`
+  - `callRoundtableAssistant()`
+- `src/services/api/request-builder.js`
+  - minimal text calls now preserve temperature and max token settings
+
+Validation:
+
+- `node --check src/main.js`
+- `node --check dev-server.mjs`
+- `git diff --check`
+- `android-app\gradlew.bat assembleDebug --offline --no-daemon`
+
+Note for additional worktrees:
+
+- Android builds need ignored `android-app/local.properties` in each worktree, or `ANDROID_HOME` / `ANDROID_SDK_ROOT`.
+
 ### Priority 1: Real device tuning
 
 Test in Android/WebView-like sizes and tune:

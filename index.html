@@ -280,6 +280,39 @@
       </form>
     </dialog>
 
+    <dialog id="assistantConfigDialog" class="edit-dialog assistant-config-dialog">
+      <form method="dialog">
+        <div class="panel-head">
+          <div>
+            <strong id="assistantConfigTitle">助手设置</strong>
+            <span class="muted">仅影响当前会话的圆桌成员</span>
+          </div>
+          <button class="icon-button" value="cancel" type="submit">×</button>
+        </div>
+        <label class="field">
+          <span>显示名</span>
+          <input id="assistantNameInput" type="text" />
+        </label>
+        <label class="field">
+          <span>模型</span>
+          <input id="assistantModelInput" type="text" list="modelDatalist" placeholder="留空则使用当前会话模型" />
+        </label>
+        <label class="field">
+          <span>温度 <b id="assistantTemperatureLabel">0.80</b></span>
+          <input id="assistantTemperatureInput" type="range" min="0" max="2" step="0.05" />
+        </label>
+        <label class="field">
+          <span>角色提示词</span>
+          <textarea id="assistantPromptInput" rows="8"></textarea>
+        </label>
+        <div class="dialog-actions">
+          <button value="cancel" type="submit">取消</button>
+          <button id="resetAssistantConfigButton" value="default" type="button">恢复默认</button>
+          <button id="saveAssistantConfigButton" class="primary-button" value="default" type="button">保存</button>
+        </div>
+      </form>
+    </dialog>
+
     <div id="toast" class="toast" hidden></div>
     <script type="module" src="./src/main.js"></script>
   </body>

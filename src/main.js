@@ -122,12 +122,22 @@ const els = {
   editText: $("#editText"),
   saveEdit: $("#saveEditButton"),
   saveSendEdit: $("#saveSendEditButton"),
+  assistantConfigDialog: $("#assistantConfigDialog"),
+  assistantConfigTitle: $("#assistantConfigTitle"),
+  assistantNameInput: $("#assistantNameInput"),
+  assistantModelInput: $("#assistantModelInput"),
+  assistantTemperatureInput: $("#assistantTemperatureInput"),
+  assistantTemperatureLabel: $("#assistantTemperatureLabel"),
+  assistantPromptInput: $("#assistantPromptInput"),
+  resetAssistantConfig: $("#resetAssistantConfigButton"),
+  saveAssistantConfig: $("#saveAssistantConfigButton"),
   toast: $("#toast"),
 };
 
 let state = loadState();
 let activeMenuNodeId = null;
 let editTarget = null;
+let assistantConfigTargetId = null;
 let isGenerating = false;
 let abortController = null;
 let streamRequestId = null;
@@ -226,6 +236,7 @@ function roundtableState(session = activeSession()) {
     ? rt.selectedIds.filter((id) => ROUND_ASSISTANTS.some((assistant) => assistant.id === id && id !== "writer"))
     : ["setting", "plot", "review"];
   rt.messages = Array.isArray(rt.messages) ? rt.messages : [];
+  rt.assistantConfigs = rt.assistantConfigs && typeof rt.assistantConfigs === "object" ? rt.assistantConfigs : {};
   rt.paperReveal = clamp(Number.isFinite(Number(rt.paperReveal)) ? Number(rt.paperReveal) : 0.68, 0, 1);
   return rt;
 }
@@ -235,7 +246,34 @@ function clamp(value, min, max) {
 }
 
 function getRoundAssistant(id) {
+  const base = ROUND_ASSISTANTS.find((assistant) => assistant.id === id);
+  if (!base) return null;
+  const config = roundtableState().assistantConfigs[id] || {};
+  return {
+    ...base,
+    ...config,
+    id: base.id,
+    role: base.role,
+    name: clean(config.name) || base.name,
+    prompt: clean(config.prompt) || base.prompt,
+    model: clean(config.model),
+    temperature: Number.isFinite(Number(config.temperature)) ? Number(config.temperature) : sessionSettings().temperature,
+  };
+}
+
+function getRoundAssistantBase(id) {
   return ROUND_ASSISTANTS.find((assistant) => assistant.id === id);
+}
+
+function getRoundAssistantConfig(id) {
+  const assistant = getRoundAssistant(id);
+  if (!assistant) return null;
+  return {
+    name: assistant.name,
+    prompt: assistant.prompt,
+    model: assistant.model || "",
+    temperature: Number.isFinite(Number(assistant.temperature)) ? Number(assistant.temperature) : sessionSettings().temperature,
+  };
 }
 
 function getNode(id, session = activeSession()) {
@@ -392,15 +430,20 @@ function renderRoundtable() {
 function renderRoundtableMembers(rt) {
   const order = new Map(rt.selectedIds.map((id, index) => [id, index + 1]));
   return ROUND_ASSISTANTS
-    .filter((assistant) => assistant.id !== "writer")
-    .map((assistant) => {
-      const selected = order.get(assistant.id);
+    .map((base) => {
+      const assistant = getRoundAssistant(base.id);
+      const isWriter = assistant.id === "writer";
+      const selected = isWriter ? "写" : order.get(assistant.id);
+      const model = assistant.model || sessionSettings().model || "未选模型";
       return `
-        <button class="roundtable-member-option ${selected ? "selected" : ""}" type="button" data-command="roundtable-toggle-member" data-member-id="${assistant.id}">
-          <span>${selected || ""}</span>
-          <b>${assistant.name}</b>
-          <small>${assistant.role}</small>
-        </button>
+        <div class="roundtable-member-option ${selected ? "selected" : ""} ${isWriter ? "writer" : ""}">
+          <button class="roundtable-member-main" type="button" data-command="${isWriter ? "roundtable-edit-assistant" : "roundtable-toggle-member"}" data-member-id="${assistant.id}">
+            <span>${selected || ""}</span>
+            <b>${escapeHtml(assistant.name)}</b>
+            <small>${escapeHtml(assistant.role)} · ${escapeHtml(model)}</small>
+          </button>
+          <button class="roundtable-member-edit" type="button" data-command="roundtable-edit-assistant" data-member-id="${assistant.id}">改</button>
+        </div>
       `;
     })
     .join("");
@@ -888,9 +931,9 @@ async function continueFromAssistant(nodeId) {
   await generateIntoAssistant(next.id, "", next.versions[0].id, true);
 }
 
-function validateApi() {
+function validateApi(settings = sessionSettings()) {
   if (!clean(apiSettings().apiKey)) throw new Error("请先在设置里填写 API Key");
-  if (!clean(sessionSettings().model)) throw new Error("请先选择或填写模型");
+  if (!clean(settings.model)) throw new Error("请先选择或填写模型");
 }
 
 async function generateIntoAssistant(nodeId, userText, versionId, continueMode = false) {
@@ -988,6 +1031,20 @@ async function callOpenAIText(messages) {
     return await aiClient.generateText({
       api: apiSettings(),
       settings: sessionSettings(),
+      messages,
+    });
+  } finally {
+    abortController = null;
+  }
+}
+
+async function callOpenAITextWithSettings(messages, settingsOverride) {
+  validateApi(settingsOverride || sessionSettings());
+  abortController = new AbortController();
+  try {
+    return await aiClient.generateText({
+      api: apiSettings(),
+      settings: settingsOverride || sessionSettings(),
       messages,
     });
   } finally {
@@ -1271,11 +1328,65 @@ function toggleRoundtableMembers() {
 
 function toggleRoundtableMember(id) {
   const rt = roundtableState();
-  if (!getRoundAssistant(id) || id === "writer") return;
+  if (!getRoundAssistantBase(id) || id === "writer") return;
   const index = rt.selectedIds.indexOf(id);
   if (index >= 0) rt.selectedIds.splice(index, 1);
   else rt.selectedIds.push(id);
   render();
+}
+
+function openAssistantConfig(id) {
+  const assistant = getRoundAssistant(id);
+  const config = getRoundAssistantConfig(id);
+  if (!assistant || !config) return;
+  assistantConfigTargetId = id;
+  els.assistantConfigTitle.textContent = `${assistant.name}设置`;
+  els.assistantNameInput.value = config.name;
+  els.assistantModelInput.value = config.model;
+  els.assistantTemperatureInput.value = config.temperature;
+  els.assistantTemperatureLabel.textContent = Number(config.temperature).toFixed(2);
+  els.assistantPromptInput.value = config.prompt;
+  els.assistantConfigDialog.showModal();
+  requestAnimationFrame(() => els.assistantPromptInput.focus());
+}
+
+function closeAssistantConfig() {
+  assistantConfigTargetId = null;
+  if (els.assistantConfigDialog?.open) els.assistantConfigDialog.close();
+}
+
+function saveAssistantConfig() {
+  const id = assistantConfigTargetId;
+  const base = getRoundAssistantBase(id);
+  if (!base) return;
+  const rt = roundtableState();
+  const model = clean(els.assistantModelInput.value);
+  rt.assistantConfigs[id] = {
+    name: clean(els.assistantNameInput.value) || base.name,
+    model,
+    temperature: Number(els.assistantTemperatureInput.value),
+    prompt: clean(els.assistantPromptInput.value) || base.prompt,
+  };
+  if (model) {
+    const api = apiSettings();
+    api.models = Array.from(new Set([model, ...api.models]));
+  }
+  closeAssistantConfig();
+  touchSession(activeSession());
+  render();
+  persistState(state);
+  showToast("助手设置已保存");
+}
+
+function resetAssistantConfig() {
+  const id = assistantConfigTargetId;
+  if (!getRoundAssistantBase(id)) return;
+  delete roundtableState().assistantConfigs[id];
+  closeAssistantConfig();
+  touchSession(activeSession());
+  render();
+  persistState(state);
+  showToast("已恢复默认助手设置");
 }
 
 function addRoundtableMessage(speakerId, speakerName, content) {
@@ -1368,12 +1479,20 @@ async function generateRoundtableWriter(userText) {
 
 async function callRoundtableAssistant(assistant, instruction) {
   const messages = buildRoundtableMessages(assistant, instruction);
-  return callOpenAIText(messages);
+  const settings = {
+    ...sessionSettings(),
+    model: assistant.model || sessionSettings().model,
+    temperature: Number.isFinite(Number(assistant.temperature)) ? Number(assistant.temperature) : sessionSettings().temperature,
+  };
+  return callOpenAITextWithSettings(messages, settings);
 }
 
 function buildRoundtableMessages(assistant, instruction) {
   const rt = roundtableState();
-  const participants = ROUND_ASSISTANTS.map((item) => `${item.name}：${item.role}`).join("；");
+  const participants = ROUND_ASSISTANTS.map((item) => {
+    const current = getRoundAssistant(item.id) || item;
+    return `${current.name}：${current.role}`;
+  }).join("；");
   const discussion = rt.messages
     .slice(-24)
     .map((message) => `${message.speakerName}：${message.content}`)
@@ -1400,6 +1519,7 @@ const handleCommand = createCommandRegistry({
   "toggle-roundtable": () => toggleRoundtable(),
   "toggle-roundtable-members": () => toggleRoundtableMembers(),
   "roundtable-toggle-member": (target) => toggleRoundtableMember(target.dataset.memberId),
+  "roundtable-edit-assistant": (target) => openAssistantConfig(target.dataset.memberId),
   "roundtable-start": () => startRoundtableRound(),
   "open-search": () => showPanel("history"),
   "roundtable-preview": () => showToast("圆桌共创仍是 Beta 预览，完整群聊发言正在开发中"),
@@ -1659,6 +1779,11 @@ els.bodyImportFile?.addEventListener("change", handleBodyFileSelected);
 
 els.saveEdit.addEventListener("click", () => saveEditor(false));
 els.saveSendEdit.addEventListener("click", () => saveEditor(true));
+els.assistantTemperatureInput?.addEventListener("input", () => {
+  els.assistantTemperatureLabel.textContent = Number(els.assistantTemperatureInput.value).toFixed(2);
+});
+els.saveAssistantConfig?.addEventListener("click", saveAssistantConfig);
+els.resetAssistantConfig?.addEventListener("click", resetAssistantConfig);
 
 els.roundtablePaperGrip?.addEventListener("pointerdown", handleRoundtablePaperPointerDown);
 els.roundtablePaperGrip?.addEventListener("pointermove", handleRoundtablePaperPointerMove);
