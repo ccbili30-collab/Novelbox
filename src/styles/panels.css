@@ -2,7 +2,7 @@
   position: fixed;
   inset: 0;
   z-index: 35;
-  background: rgba(0, 0, 0, 0.18);
+  background: rgba(24, 22, 19, 0.12);
 }
 
 .side-panel,
@@ -36,7 +36,8 @@
   max-height: 76dvh;
   padding: 14px;
   overflow: auto;
-  border-radius: 18px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
 }
 
 .panel-head {
@@ -48,7 +49,8 @@
 }
 
 .panel-head strong {
-  font-size: 20px;
+  color: var(--text);
+  font-size: 19px;
   font-weight: 600;
 }
 
@@ -64,7 +66,7 @@
   display: grid;
   gap: 7px;
   margin: 13px 0;
-  color: #555;
+  color: var(--text-soft);
   font-size: 15px;
 }
 
@@ -73,18 +75,18 @@
 .plain-input {
   width: 100%;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 12px;
   outline: 0;
   padding: 10px 12px;
   color: var(--text);
-  background: #fff;
+  background: rgba(255, 255, 255, 0.96);
 }
 
 .check-field {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #555;
+  color: var(--text-soft);
   font-size: 15px;
 }
 
@@ -106,7 +108,7 @@
   display: grid;
   gap: 5px;
   margin: 10px 0;
-  color: #555;
+  color: var(--text-soft);
   font-size: 14px;
 }
 
@@ -117,7 +119,7 @@
 }
 
 .range-field b {
-  color: #222;
+  color: var(--text);
   font-weight: 500;
 }
 
@@ -135,8 +137,8 @@
 .preset-row button {
   padding: 8px 9px;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #f7f7f7;
+  border-radius: 10px;
+  background: var(--surface-soft);
   font-size: 13px;
 }
 
@@ -160,7 +162,7 @@
   min-width: 0;
   padding: 7px 8px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 10px;
   overflow: hidden;
   background: #fff;
   text-overflow: ellipsis;
@@ -178,9 +180,9 @@
 .novel-actions button {
   padding: 7px 9px;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #f7f7f7;
-  color: #333;
+  border-radius: 10px;
+  background: var(--surface-soft);
+  color: var(--text-soft);
   font-size: 13px;
 }
 
@@ -189,18 +191,18 @@
 .dialog-actions button {
   padding: 9px 12px;
   border: 1px solid var(--line);
-  border-radius: 9px;
-  background: #f7f7f7;
+  border-radius: 10px;
+  background: var(--surface-soft);
 }
 
 .primary-button {
   color: #fff;
-  border-color: #222;
-  background: #222;
+  border-color: var(--accent);
+  background: var(--accent);
 }
 
 .primary-button.ghost {
-  color: #222;
+  color: var(--text);
   background: #fff;
 }
 
@@ -217,7 +219,7 @@
   align-items: center;
   padding: 11px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 14px;
   background: #fff;
 }
 
@@ -247,8 +249,8 @@
 
 .session-actions button {
   padding: 6px 7px;
-  border-radius: 7px;
-  color: #666;
+  border-radius: 8px;
+  color: var(--muted);
   font-size: 13px;
 }
 
@@ -262,8 +264,8 @@
 .context-stats span {
   padding: 6px 9px;
   border-radius: 99px;
-  background: #f3f3f3;
-  color: #555;
+  background: var(--surface-soft);
+  color: var(--text-soft);
   font-size: 13px;
 }
 
@@ -273,8 +275,8 @@
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
-  color: #333;
-  font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+  color: var(--text);
+  font-family: "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   font-size: 14px;
   line-height: 1.55;
 }
@@ -458,7 +460,7 @@
   padding: 9px 13px;
   border-radius: 999px;
   color: #fff;
-  background: rgba(0, 0, 0, 0.8);
+  background: rgba(24, 22, 19, 0.88);
   transform: translateX(-50%);
 }
 

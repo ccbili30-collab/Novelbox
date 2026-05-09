@@ -3,16 +3,16 @@
   place-items: center;
   width: 34px;
   height: 34px;
-  border-radius: 50%;
+  border-radius: 12px;
   overflow: hidden;
   color: #fff;
-  background: #2f77c7;
+  background: #61758c;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .user .avatar {
-  background: #7b3db7;
+  background: #7d868f;
 }
 
 .avatar img {
@@ -25,7 +25,8 @@
   position: relative;
   max-width: min(74ch, calc(100vw - 58px));
   padding: 0;
-  border-radius: 18px;
+  border-radius: 16px;
+  color: var(--text);
   font-size: var(--font-size);
   line-height: var(--line-height);
   letter-spacing: 0;
@@ -36,8 +37,10 @@
 .user .message-card {
   width: fit-content;
   max-width: min(64ch, calc(100vw - 58px));
-  padding: var(--user-bubble-padding-y) var(--user-bubble-padding-x);
-  background: var(--user);
+  padding: max(9px, var(--user-bubble-padding-y) + 7px) max(11px, var(--user-bubble-padding-x) + 8px);
+  border: 1px solid rgba(210, 217, 225, 0.95);
+  background: var(--surface-user);
+  box-shadow: 0 6px 18px rgba(44, 56, 71, 0.04);
 }
 
 .assistant .message-card {
@@ -46,7 +49,7 @@
 }
 
 .message-meta {
-  margin-top: 4px;
+  margin-top: 6px;
   color: var(--muted);
   font-size: var(--meta-font-size);
   line-height: 1.4;
@@ -117,11 +120,11 @@
   left: max(7px, calc((100vw - 820px) / 2 + 7px));
   z-index: 20;
   min-height: var(--composer-min-height);
-  padding: 6px 8px 6px;
-  border: 1px solid #dedede;
-  border-radius: 16px;
-  background: #f4f5f6;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  padding: 8px 10px 8px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 16px 34px rgba(35, 31, 25, 0.08);
 }
 
 .composer textarea {
@@ -133,13 +136,13 @@
   border: 0;
   outline: 0;
   background: transparent;
-  color: #2a2a2a;
+  color: var(--text);
   font-size: var(--composer-font-size);
-  line-height: 1.32;
+  line-height: 1.4;
 }
 
 .composer textarea::placeholder {
-  color: #8a8a8a;
+  color: var(--muted);
 }
 
 .composer-bottom {
@@ -153,12 +156,12 @@
 .context-badge,
 .composer select {
   min-width: 0;
-  height: 24px;
-  padding: 0 4px;
+  height: 28px;
+  padding: 0 8px;
   border: 0;
-  border-radius: 17px;
-  background: transparent;
-  color: #333;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--text-soft);
   font-size: 12px;
 }
 
@@ -182,19 +185,19 @@
   flex: 0 0 auto;
   width: var(--send-button-size);
   height: var(--send-button-size);
-  border-radius: 50%;
+  border-radius: 12px;
   color: #ffffff;
-  background: #d7d7d7;
+  background: #d9d5cd;
   font-size: 18px;
   font-weight: 700;
 }
 
 body.is-ready .send-button {
-  background: #222;
+  background: var(--accent);
 }
 
 body.is-generating .send-button {
-  background: #222;
+  background: var(--accent);
 }
 
 .roundtable-mode-head {
@@ -203,7 +206,7 @@ body.is-generating .send-button {
   justify-content: space-between;
   gap: 10px;
   max-width: 680px;
-  margin: 0 auto 10px;
+  margin: 0 auto 12px;
 }
 
 .roundtable-mode-head > div:first-child {
@@ -212,15 +215,16 @@ body.is-generating .send-button {
 }
 
 .mode-kicker {
-  color: #92784d;
-  font-size: 11px;
+  color: var(--muted);
+  font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
+  letter-spacing: 0.9px;
 }
 
 .roundtable-mode-head strong {
-  color: #201b14;
-  font-size: 19px;
+  color: var(--text);
+  font-size: 18px;
   font-weight: 700;
 }
 
@@ -232,19 +236,20 @@ body.is-generating .send-button {
 }
 
 .mode-actions button {
-  min-height: 30px;
-  padding: 0 10px;
-  border: 1px solid #dfd1b8;
-  border-radius: 8px;
-  color: #3a3124;
-  background: rgba(255, 255, 255, 0.78);
-  font-size: 13px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text-soft);
+  background: rgba(255, 255, 255, 0.86);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .roundtable-busy .mode-actions button[data-command="roundtable-start"] {
   color: #fff;
-  border-color: #2f281e;
-  background: #2f281e;
+  border-color: var(--accent);
+  background: var(--accent);
 }
 
 .roundtable-member-panel {
@@ -254,8 +259,10 @@ body.is-generating .send-button {
   max-width: 680px;
   margin: 0 auto 12px;
   padding: 10px;
-  border: 1px solid #e5dac5;
-  background: rgba(255, 255, 255, 0.74);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 12px 32px rgba(39, 35, 28, 0.05);
 }
 
 .roundtable-member-option {
@@ -266,9 +273,9 @@ body.is-generating .send-button {
   align-items: center;
   min-height: 48px;
   padding: 8px;
-  border: 1px solid #e2d8c5;
-  border-radius: 8px;
-  background: #fffdf8;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
   text-align: left;
 }
 
@@ -278,32 +285,32 @@ body.is-generating .send-button {
   place-items: center;
   width: 24px;
   height: 24px;
-  border: 1px solid #d2c4ab;
-  border-radius: 6px;
-  color: #7a6b53;
-  font-size: 13px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 12px;
   font-weight: 700;
 }
 
 .roundtable-member-option b {
-  color: #28231b;
+  color: var(--text);
   font-size: 14px;
 }
 
 .roundtable-member-option small {
-  color: #887963;
+  color: var(--muted);
   font-size: 11px;
 }
 
 .roundtable-member-option.selected {
-  border-color: #b7924d;
-  background: #fff4d9;
+  border-color: var(--text);
+  background: var(--surface-selected);
 }
 
 .roundtable-member-option.selected span {
   color: #fff;
-  border-color: #8d6b31;
-  background: #8d6b31;
+  border-color: var(--text);
+  background: var(--text);
 }
 
 .roundtable-section-label {
@@ -313,18 +320,18 @@ body.is-generating .send-button {
   gap: 10px;
   max-width: 680px;
   margin: 0 auto 10px;
-  color: #7f6e53;
+  color: var(--muted);
   font-size: 12px;
 }
 
 .roundtable-section-label span {
-  color: #30281f;
-  font-size: 14px;
+  color: var(--text);
+  font-size: 13px;
   font-weight: 700;
 }
 
 .roundtable-section-label small {
-  color: #8f8067;
+  color: var(--muted);
   font-size: 11px;
   text-align: right;
 }
@@ -349,15 +356,15 @@ body.is-generating .send-button {
   min-height: 168px;
   padding: 18px 18px 42px;
   border-radius: 0 0 18px 18px;
-  border: 1px solid #dfd4bd;
+  border: 1px solid var(--surface-paper-edge);
   background:
-    linear-gradient(90deg, rgba(172, 148, 101, 0.09) 1px, transparent 1px) 34px 0 / 1px 100% no-repeat,
-    linear-gradient(180deg, #fffef9 0%, #fff9ec 100%);
+    linear-gradient(90deg, rgba(173, 166, 151, 0.18) 1px, transparent 1px) 34px 0 / 1px 100% no-repeat,
+    linear-gradient(180deg, #fffefd 0%, var(--surface-paper) 100%);
   box-shadow:
-    0 30px 46px rgba(67, 51, 25, 0.18),
-    0 8px 18px rgba(101, 79, 38, 0.08),
-    0 2px 0 rgba(255, 255, 255, 0.95) inset;
-  transform: rotate(-0.35deg);
+    var(--paper-shadow),
+    0 6px 18px rgba(59, 52, 43, 0.05),
+    0 1px 0 rgba(255, 255, 255, 0.95) inset;
+  transform: rotate(-0.2deg);
 }
 
 .paper-scroll-viewport {
@@ -367,8 +374,8 @@ body.is-generating .send-button {
   overscroll-behavior: contain;
   scrollbar-width: none;
   transition: max-height 180ms ease, mask-image 180ms ease, opacity 180ms ease;
-  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 78%, rgba(0, 0, 0, 0.15) 100%);
-  mask-image: linear-gradient(180deg, #000 0%, #000 78%, rgba(0, 0, 0, 0.15) 100%);
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 84%, rgba(0, 0, 0, 0.15) 100%);
+  mask-image: linear-gradient(180deg, #000 0%, #000 84%, rgba(0, 0, 0, 0.15) 100%);
 }
 
 .paper-scroll-viewport::-webkit-scrollbar {
@@ -386,7 +393,7 @@ body.is-generating .send-button {
   height: 48px;
   margin-top: -48px;
   pointer-events: none;
-  background: linear-gradient(180deg, rgba(255, 249, 236, 0), rgba(255, 249, 236, 0.96));
+  background: linear-gradient(180deg, rgba(255, 253, 250, 0), rgba(255, 253, 250, 0.97));
 }
 
 .paper-grip {
@@ -396,17 +403,14 @@ body.is-generating .send-button {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  min-width: 186px;
+  min-width: 178px;
   max-width: calc(100% - 36px);
   padding: 10px 14px;
-  border: 1px solid rgba(176, 152, 110, 0.42);
+  border: 1px solid rgba(193, 187, 176, 0.88);
   border-radius: 999px;
-  color: #5f4d31;
-  background:
-    linear-gradient(180deg, rgba(255, 248, 228, 0.98), rgba(245, 229, 188, 0.96));
-  box-shadow:
-    0 14px 24px rgba(100, 79, 40, 0.2),
-    0 1px 0 rgba(255, 255, 255, 0.8) inset;
+  color: var(--text-soft);
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 14px 24px rgba(53, 48, 39, 0.1);
   transform: translateX(-50%);
   touch-action: none;
   user-select: none;
@@ -418,16 +422,12 @@ body.is-generating .send-button {
 .paper-grip:hover,
 .paper-grip:focus-visible {
   transform: translateX(-50%) translateY(-1px);
-  box-shadow:
-    0 18px 28px rgba(100, 79, 40, 0.24),
-    0 1px 0 rgba(255, 255, 255, 0.84) inset;
+  box-shadow: 0 18px 30px rgba(53, 48, 39, 0.12);
 }
 
 body.paper-dragging .paper-grip {
   transform: translateX(-50%) translateY(-2px) scale(1.01);
-  box-shadow:
-    0 20px 32px rgba(91, 71, 34, 0.28),
-    0 1px 0 rgba(255, 255, 255, 0.92) inset;
+  box-shadow: 0 20px 34px rgba(53, 48, 39, 0.14);
 }
 
 .paper-grip-ribs {
@@ -441,7 +441,7 @@ body.paper-dragging .paper-grip {
   width: 18px;
   height: 2px;
   border-radius: 999px;
-  background: rgba(109, 85, 47, 0.42);
+  background: rgba(128, 122, 112, 0.7);
 }
 
 .paper-grip-copy {
@@ -459,9 +459,8 @@ body.paper-dragging .paper-grip {
   min-width: 44px;
   padding: 4px 8px;
   border-radius: 999px;
-  color: #fffaf0;
-  background: linear-gradient(135deg, #72562a, #453113);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  color: #fff;
+  background: var(--accent);
   font-size: 11px;
   font-weight: 800;
   text-align: center;
@@ -484,10 +483,10 @@ body.paper-dragging .paper-grip {
   position: absolute;
   top: -10px;
   left: 50%;
-  width: 82px;
-  height: 20px;
-  border: 1px solid rgba(178, 162, 132, 0.36);
-  background: rgba(244, 231, 196, 0.68);
+  width: 78px;
+  height: 16px;
+  border: 1px solid rgba(210, 208, 201, 0.65);
+  background: rgba(245, 244, 240, 0.86);
   transform: translateX(-50%) rotate(1deg);
 }
 
@@ -497,25 +496,26 @@ body.paper-dragging .paper-grip {
   justify-content: space-between;
   gap: 10px;
   margin-bottom: 12px;
-  color: #8a7551;
+  color: var(--muted);
   font-size: 12px;
   font-weight: 700;
 }
 
 .paper-meta button {
-  padding: 4px 7px;
-  border: 1px solid #e3d7bf;
-  border-radius: 7px;
-  color: #6e5b39;
-  background: #fffaf0;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text-soft);
+  background: rgba(255, 255, 255, 0.86);
   font-size: 12px;
 }
 
 .manuscript-paper p {
   margin: 0;
-  color: #28231c;
+  color: #24211d;
+  font-family: "Iowan Old Style", "Palatino Linotype", "Songti SC", "STSong", serif;
   font-size: 16px;
-  line-height: 1.78;
+  line-height: 1.84;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -536,13 +536,10 @@ body.paper-dragging .paper-grip {
   left: 6px;
   right: 6px;
   bottom: 0;
-  border-radius: 26px 26px 0 0;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(250, 248, 243, 0.96)),
-    linear-gradient(180deg, rgba(210, 223, 238, 0.12), rgba(255, 255, 255, 0));
-  box-shadow:
-    0 -1px 0 rgba(255, 255, 255, 0.6) inset,
-    0 12px 30px rgba(74, 82, 96, 0.08);
+  border-radius: 28px 28px 0 0;
+  border: 1px solid rgba(230, 228, 221, 0.85);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 18px 36px rgba(39, 35, 28, 0.05);
   z-index: -1;
 }
 
@@ -577,8 +574,8 @@ body.paper-dragging .paper-grip {
 .roundtable-divider span {
   padding: 4px 10px;
   border-radius: 999px;
-  color: #8c8a84;
-  background: rgba(237, 239, 242, 0.96);
+  color: var(--muted);
+  background: rgba(240, 238, 233, 0.98);
   font-size: 12px;
 }
 
@@ -610,9 +607,9 @@ body.paper-dragging .paper-grip {
 }
 
 .roundtable-line.user .roundtable-speech {
-  color: #fff;
-  border-color: rgba(71, 141, 217, 0.22);
-  background: linear-gradient(180deg, #6db7ff 0%, #5ba8f7 100%);
+  color: var(--text);
+  border-color: rgba(211, 218, 225, 0.96);
+  background: var(--surface-user);
   border-top-right-radius: 10px;
 }
 
@@ -635,16 +632,16 @@ body.paper-dragging .paper-grip {
   place-items: center;
   width: 42px;
   height: 42px;
-  border-radius: 14px;
+  border-radius: 12px;
   color: #fff;
-  box-shadow: 0 10px 16px rgba(25, 36, 54, 0.12);
-  font-size: 15px;
+  box-shadow: 0 8px 14px rgba(38, 34, 28, 0.08);
+  font-size: 14px;
   font-weight: 800;
-  letter-spacing: 0.5px;
+  letter-spacing: 0;
 }
 
 .roundtable-speaker {
-  color: #665847;
+  color: var(--text-soft);
   font-size: 13px;
   font-weight: 700;
 }
@@ -661,7 +658,7 @@ body.paper-dragging .paper-grip {
 
 .roundtable-bubble-meta time,
 .roundtable-writer-meta time {
-  color: #99948c;
+  color: var(--muted-soft);
   font-size: 11px;
 }
 
@@ -669,11 +666,11 @@ body.paper-dragging .paper-grip {
   min-width: 0;
   max-width: min(76vw, 430px);
   padding: 12px 14px;
-  border: 1px solid rgba(219, 223, 230, 0.9);
-  border-radius: 10px 18px 18px 18px;
-  color: #28231e;
+  border: 1px solid rgba(228, 224, 217, 0.95);
+  border-radius: 14px 18px 18px 18px;
+  color: var(--text);
   background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 8px 18px rgba(54, 66, 81, 0.06);
+  box-shadow: 0 8px 18px rgba(44, 39, 33, 0.04);
   font-size: 15px;
   line-height: 1.62;
   white-space: pre-wrap;
@@ -686,14 +683,12 @@ body.paper-dragging .paper-grip {
 
 .roundtable-writer-card {
   padding: 14px;
-  border: 1px solid #dfd4bd;
-  border-radius: 18px;
+  border: 1px solid var(--surface-paper-edge);
+  border-radius: 16px;
   background:
-    linear-gradient(180deg, rgba(255, 253, 246, 0.98), rgba(255, 249, 236, 0.94)),
-    linear-gradient(90deg, rgba(172, 148, 101, 0.07) 1px, transparent 1px) 34px 0 / 1px 100% no-repeat;
-  box-shadow:
-    0 12px 28px rgba(88, 73, 40, 0.1),
-    0 1px 0 rgba(255, 255, 255, 0.92) inset;
+    linear-gradient(180deg, rgba(255, 254, 250, 0.98), rgba(252, 249, 243, 0.95)),
+    linear-gradient(90deg, rgba(173, 166, 151, 0.14) 1px, transparent 1px) 34px 0 / 1px 100% no-repeat;
+  box-shadow: 0 12px 26px rgba(54, 46, 36, 0.06);
 }
 
 .roundtable-writer-head {
@@ -716,77 +711,78 @@ body.paper-dragging .paper-grip {
 }
 
 .roundtable-writer-title strong {
-  color: #3a2d1f;
+  color: var(--text);
   font-size: 14px;
 }
 
 .roundtable-writer-tip {
   margin-bottom: 8px;
-  color: #8c7652;
+  color: var(--muted);
   font-size: 12px;
   font-weight: 700;
 }
 
 .roundtable-writer-snippet {
-  color: #2d261e;
+  color: #24211d;
+  font-family: "Iowan Old Style", "Palatino Linotype", "Songti SC", "STSong", serif;
   font-size: 15px;
-  line-height: 1.78;
+  line-height: 1.84;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .roundtable-avatar.tone-user {
-  background: linear-gradient(135deg, #60b7ff, #4e8fe8);
+  background: #8c97a3;
 }
 
 .roundtable-avatar.tone-setting {
-  background: linear-gradient(135deg, #e4b65f, #a87625);
+  background: #a28058;
 }
 
 .roundtable-avatar.tone-plot {
-  background: linear-gradient(135deg, #8d8aff, #5f63d9);
+  background: #6d768f;
 }
 
 .roundtable-avatar.tone-review {
-  background: linear-gradient(135deg, #7ac7be, #3b958c);
+  background: #7f8f89;
 }
 
 .roundtable-avatar.tone-style {
-  background: linear-gradient(135deg, #f38ab7, #d85f93);
+  background: #987683;
 }
 
 .roundtable-avatar.tone-writer {
-  background: linear-gradient(135deg, #5a4a35, #251b11);
+  background: #3b352d;
 }
 
 .roundtable-role-badge.tone-user {
-  color: #2671c5;
-  background: rgba(104, 182, 255, 0.16);
+  color: #566576;
+  background: rgba(140, 151, 163, 0.16);
 }
 
 .roundtable-role-badge.tone-setting {
-  color: #8e6120;
-  background: rgba(228, 182, 95, 0.18);
+  color: #876642;
+  background: rgba(162, 128, 88, 0.16);
 }
 
 .roundtable-role-badge.tone-plot {
-  color: #585fc7;
-  background: rgba(141, 138, 255, 0.16);
+  color: #5a6279;
+  background: rgba(109, 118, 143, 0.14);
 }
 
 .roundtable-role-badge.tone-review {
-  color: #2d837a;
-  background: rgba(122, 199, 190, 0.18);
+  color: #61736e;
+  background: rgba(127, 143, 137, 0.15);
 }
 
 .roundtable-role-badge.tone-style {
-  color: #ba4c82;
-  background: rgba(243, 138, 183, 0.16);
+  color: #7d626d;
+  background: rgba(152, 118, 131, 0.14);
 }
 
 .roundtable-role-badge.tone-writer {
-  color: #5d4526;
-  background: rgba(186, 156, 104, 0.2);
+  color: #584f43;
+  background: rgba(90, 74, 53, 0.12);
 }
 
 @media (max-width: 420px) {
