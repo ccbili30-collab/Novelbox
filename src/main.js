@@ -1,0 +1,1674 @@
+﻿import { uid } from "./utils/id.js";
+import { clean, escapeHtml } from "./utils/text.js";
+import { formatTime } from "./utils/time.js";
+import { estimateTokens, formatK } from "./utils/tokens.js";
+import { humanizeError } from "./utils/errors.js";
+import { createCommandRegistry } from "./app/command-registry.js";
+import { createDefaultLayout, hydrateLayout } from "./domain/layout/layout-model.js";
+import { createDefaultNovel } from "./domain/novel/novel-model.js";
+import {
+  buildNovelMemory as buildNovelMemoryFromSession,
+  buildNovelSourceText,
+} from "./domain/novel/novel-context-builder.js";
+import { buildNovelStats } from "./domain/novel/novel-stats.js";
+import { hydrateSessionSettings } from "./domain/settings/settings-model.js";
+import { hydrateApiSettings } from "./domain/settings/api-settings.js";
+import { createSession } from "./domain/session/session-model.js";
+import {
+  getNode as getSessionNode,
+  activePath as getActivePath,
+  getAssistantVersion,
+  getAssistantVersionById,
+  setAssistantVersionContent,
+  createNode,
+  addChild as appendChild,
+  titleForSession,
+  touchSession,
+} from "./domain/session/session-tree.js";
+import { createAiClient } from "./services/api/ai-client.js";
+import { createBridgeClient, registerBridgeHooks } from "./services/bridge/bridge-client.js";
+import { loadState, saveState as persistState } from "./state/persistence.js";
+import { bindCommandDelegation } from "./ui/bindings/event-binding.js";
+import { createPanelManager } from "./ui/panels/panel-manager.js";
+import { renderContextBadge as drawContextBadge, renderContextPanel as drawContextPanel } from "./ui/renderers/context-renderer.js";
+import { renderSessions as drawSessions } from "./ui/renderers/session-renderer.js";
+
+const CONTINUE_PROMPT = "继续完成上一条请求，直接输出正文，不要重复确认。";
+const BRIDGE_TIMEOUT = 160000;
+const ROUND_ASSISTANTS = [
+  {
+    id: "setting",
+    name: "设定师",
+    role: "普通助手",
+    prompt: "你是小说设定师。只讨论规则、世界观、设定一致性和伏笔可回收性。可以反驳别人，但要给出具体修改建议。",
+  },
+  {
+    id: "plot",
+    name: "剧情师",
+    role: "普通助手",
+    prompt: "你是小说剧情师。关注冲突推进、转折、节奏和章节目标。你可以指出剧情无力或转折太硬的地方。",
+  },
+  {
+    id: "review",
+    name: "审稿",
+    role: "普通助手",
+    prompt: "你是审稿助手。关注读者体验、逻辑漏洞、铺垫不足和情绪落点。请直接、具体、中文回答。",
+  },
+  {
+    id: "style",
+    name: "文风师",
+    role: "普通助手",
+    prompt: "你是文风师。关注语言质感、句式、画面、语气稳定性。不要重写大段正文，优先给修改方向。",
+  },
+  {
+    id: "writer",
+    name: "写手",
+    role: "写手",
+    prompt: "你是写手。根据用户和圆桌讨论继续写小说正文。只输出正文，不要解释，不要列提纲。",
+  },
+];
+
+const $ = (selector) => document.querySelector(selector);
+const els = {
+  body: document.body,
+  title: $("#sessionTitle"),
+  messages: $("#messageList"),
+  menu: $("#messageMenu"),
+  composer: $("#composer"),
+  input: $("#chatInput"),
+  send: $("#sendButton"),
+  contextBadge: $("#contextBadge"),
+  modelSelect: $("#modelSelect"),
+  backdrop: $("#backdrop"),
+  historyPanel: $("#historyPanel"),
+  settingsPanel: $("#settingsPanel"),
+  novelPanel: $("#novelPanel"),
+  contextPanel: $("#contextPanel"),
+  roundtablePanel: $("#roundtablePanel"),
+  roundtableWorkspace: $("#roundtableWorkspace"),
+  roundtableMembersPanel: $("#roundtableMembersPanel"),
+  roundtablePaper: $("#roundtablePaper"),
+  roundtablePaperViewport: $("#roundtablePaperViewport"),
+  roundtablePaperGrip: $("#roundtablePaperGrip"),
+  roundtablePaperGripLabel: $("#roundtablePaperGripLabel"),
+  roundtableManuscript: $("#roundtableManuscript"),
+  roundtablePaperStatus: $("#roundtablePaperStatus"),
+  roundtableDiscussion: $("#roundtableDiscussion"),
+  novelFields: Array.from(document.querySelectorAll("[data-novel-key]")),
+  novelStats: $("#novelStats"),
+  bodyImportFile: $("#bodyImportFile"),
+  sessionList: $("#sessionList"),
+  historySearch: $("#historySearch"),
+  systemPrompt: $("#systemPromptInput"),
+  baseUrl: $("#baseUrlInput"),
+  apiKey: $("#apiKeyInput"),
+  modelInput: $("#modelInput"),
+  modelDatalist: $("#modelDatalist"),
+  modelStatus: $("#modelStatus"),
+  temperature: $("#temperatureInput"),
+  temperatureLabel: $("#temperatureLabel"),
+  contextCount: $("#contextCountInput"),
+  unlimitedContext: $("#unlimitedContextInput"),
+  maxTokens: $("#maxTokensInput"),
+  stream: $("#streamInput"),
+  layoutInputs: Array.from(document.querySelectorAll("[data-layout-key]")),
+  layoutValues: Array.from(document.querySelectorAll("[data-layout-value]")),
+  contextStats: $("#contextStats"),
+  contextPreview: $("#contextPreview"),
+  layoutPresetName: $("#layoutPresetName"),
+  customLayoutPresets: $("#customLayoutPresets"),
+  editDialog: $("#editDialog"),
+  editTitle: $("#editTitle"),
+  editText: $("#editText"),
+  saveEdit: $("#saveEditButton"),
+  saveSendEdit: $("#saveSendEditButton"),
+  toast: $("#toast"),
+};
+
+let state = loadState();
+let activeMenuNodeId = null;
+let editTarget = null;
+let isGenerating = false;
+let abortController = null;
+let streamRequestId = null;
+let generatingNodeId = null;
+let materialGenerating = false;
+let roundtableGenerating = false;
+let streamShouldFollow = true;
+let toastTimer = null;
+const paperDrag = {
+  active: false,
+  moved: false,
+  pointerId: null,
+  startY: 0,
+  startReveal: 0.68,
+};
+const bridgeCallbacks = new Map();
+const bridgeStreamCallbacks = new Map();
+const panelManager = createPanelManager(els, {
+  onShow: (name) => {
+    if (name === "context") renderContextPanel();
+    if (name === "novel") renderNovelPanel();
+  },
+});
+const bridgeClient = createBridgeClient({
+  timeoutMs: BRIDGE_TIMEOUT,
+  callbacks: bridgeCallbacks,
+  streamCallbacks: bridgeStreamCallbacks,
+  setActiveStreamRequestId: (requestId) => {
+    streamRequestId = requestId;
+  },
+});
+const aiClient = createAiClient({
+  bridgeClient,
+  getAbortSignal: () => abortController?.signal,
+});
+registerBridgeHooks(bridgeCallbacks, bridgeStreamCallbacks);
+
+const layoutPresets = {
+  compact: {
+    composerMinHeight: 56,
+    composerFontSize: 15,
+    sendButtonSize: 30,
+    toolButtonSize: 24,
+    messageFontSize: 16,
+    messageLineHeight: 145,
+    assistantLeft: 18,
+    messageSidePadding: 14,
+    messageGap: 10,
+    userBubblePadding: 2,
+    metaFontSize: 11,
+    footerGap: 6,
+    moreButtonSize: 24,
+  },
+  comfortable: {
+    composerMinHeight: 86,
+    composerFontSize: 18,
+    sendButtonSize: 40,
+    toolButtonSize: 32,
+    messageFontSize: 19,
+    messageLineHeight: 165,
+    assistantLeft: 22,
+    messageSidePadding: 20,
+    messageGap: 18,
+    userBubblePadding: 4,
+    metaFontSize: 13,
+    footerGap: 10,
+    moreButtonSize: 32,
+  },
+};
+
+function activeSession() {
+  return state.sessions.find((session) => session.id === state.activeSessionId) || state.sessions[0];
+}
+
+function apiSettings() {
+  state.api = hydrateApiSettings(state.api);
+  return state.api;
+}
+
+function sessionSettings(session = activeSession()) {
+  session.settings = hydrateSessionSettings(session.settings);
+  return session.settings;
+}
+
+function sessionNovel(session = activeSession()) {
+  session.novel = { ...createDefaultNovel(), ...(session.novel || {}) };
+  return session.novel;
+}
+
+function roundtableState(session = activeSession()) {
+  session.roundtable ||= {};
+  const rt = session.roundtable;
+  rt.enabled = Boolean(rt.enabled);
+  rt.membersOpen = Boolean(rt.membersOpen);
+  rt.selectedIds = Array.isArray(rt.selectedIds) && rt.selectedIds.length
+    ? rt.selectedIds.filter((id) => ROUND_ASSISTANTS.some((assistant) => assistant.id === id && id !== "writer"))
+    : ["setting", "plot", "review"];
+  rt.messages = Array.isArray(rt.messages) ? rt.messages : [];
+  rt.paperReveal = clamp(Number.isFinite(Number(rt.paperReveal)) ? Number(rt.paperReveal) : 0.68, 0, 1);
+  return rt;
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function getRoundAssistant(id) {
+  return ROUND_ASSISTANTS.find((assistant) => assistant.id === id);
+}
+
+function getNode(id, session = activeSession()) {
+  return getSessionNode(session, id);
+}
+
+function activePath(session = activeSession()) {
+  return getActivePath(session);
+}
+
+function getMessageContent(node) {
+  if (!node) return "";
+  if (node.role === "assistant") return getAssistantVersion(node)?.content || "";
+  return node.content || "";
+}
+
+function contextMessages(extraUserText = "", includeDraftAssistantId = null) {
+  const path = activePath();
+  const settings = sessionSettings();
+  const limit = settings.unlimitedContext ? Infinity : Math.max(0, Number(settings.contextCount) || 0);
+  let selected = Number.isFinite(limit) ? path.slice(-limit) : path.slice();
+  if (includeDraftAssistantId) selected = selected.filter((node) => node.id !== includeDraftAssistantId);
+  const messages = [];
+  if (clean(settings.systemPrompt)) {
+    messages.push({ role: "system", content: settings.systemPrompt });
+  }
+  const novelMemory = buildNovelMemory();
+  if (novelMemory) {
+    messages.push({ role: "system", content: novelMemory });
+  }
+  selected.forEach((node) => {
+    if (node.role === "user") messages.push({ role: "user", content: node.content });
+    if (node.role === "assistant") messages.push({ role: "assistant", content: getAssistantVersion(node)?.content || "" });
+  });
+  if (clean(extraUserText)) messages.push({ role: "user", content: extraUserText });
+  return messages.filter((message) => clean(message.content));
+}
+
+function buildNovelMemory() {
+  return buildNovelMemoryFromSession(sessionNovel());
+}
+
+function getNovelSourceText() {
+  const novel = sessionNovel();
+  const chat = activePath()
+    .slice(-12)
+    .map((node) => `${node.role === "user" ? "用户" : "AI"}：${getMessageContent(node)}`)
+    .join("\n\n");
+  return buildNovelSourceText(novel, chat);
+}
+
+function contextInfo(extraUserText = "") {
+  const messages = contextMessages(extraUserText);
+  const text = messages.map((message) => `${message.role}: ${message.content}`).join("\n\n");
+  const nonSystem = messages.filter((message) => message.role !== "system").length;
+  const settings = sessionSettings();
+  const limit = settings.unlimitedContext ? "∞" : settings.contextCount;
+  return { messages, text, nonSystem, limit, tokens: estimateTokens(text) };
+}
+
+function shouldFollowBottom() {
+  return els.messages.scrollHeight - els.messages.scrollTop - els.messages.clientHeight < 90;
+}
+
+function scrollBottom() {
+  requestAnimationFrame(() => {
+    els.messages.scrollTop = els.messages.scrollHeight;
+  });
+}
+
+function showToast(message) {
+  window.clearTimeout(toastTimer);
+  els.toast.textContent = message;
+  els.toast.hidden = false;
+  toastTimer = window.setTimeout(() => {
+    els.toast.hidden = true;
+  }, 1800);
+}
+
+function showPanel(name) {
+  panelManager.showPanel(name);
+}
+
+function closePanels() {
+  panelManager.closePanels();
+}
+
+function applyLayout() {
+  const layout = sessionSettings().layout;
+  const root = document.documentElement.style;
+  root.setProperty("--composer-min-height", `${layout.composerMinHeight}px`);
+  root.setProperty("--composer-font-size", `${layout.composerFontSize}px`);
+  root.setProperty("--send-button-size", `${layout.sendButtonSize}px`);
+  root.setProperty("--tool-button-size", `${layout.toolButtonSize}px`);
+  root.setProperty("--font-size", `${layout.messageFontSize}px`);
+  root.setProperty("--line-height", `${layout.messageLineHeight / 100}`);
+  root.setProperty("--assistant-left", `${layout.assistantLeft}px`);
+  root.setProperty("--message-side-padding", `${layout.messageSidePadding}px`);
+  root.setProperty("--message-gap", `${layout.messageGap}px`);
+  root.setProperty("--user-bubble-padding-y", `${layout.userBubblePadding}px`);
+  root.setProperty("--user-bubble-padding-x", `${Math.round(layout.userBubblePadding * 1.3)}px`);
+  root.setProperty("--meta-font-size", `${layout.metaFontSize}px`);
+  root.setProperty("--footer-gap", `${layout.footerGap}px`);
+  root.setProperty("--more-button-size", `${layout.moreButtonSize}px`);
+  root.setProperty("--composer-max-textarea", `${Math.max(44, layout.composerMinHeight + 8)}px`);
+}
+
+function render() {
+  const session = activeSession();
+  applyLayout();
+  els.title.textContent = titleForSession(session);
+  renderRoundtable();
+  renderMessages();
+  renderSessions();
+  renderSettings();
+  renderCustomLayoutPresets();
+  renderNovelPanel();
+  renderModelPicker();
+  renderContextBadge();
+  renderMenu();
+  els.body.classList.toggle("is-generating", isGenerating);
+  els.body.classList.toggle("roundtable-mode", roundtableState(session).enabled);
+  els.body.classList.toggle("roundtable-busy", roundtableGenerating);
+  els.body.classList.toggle("is-ready", Boolean(clean(els.input.value)));
+  persistState(state);
+}
+
+function renderRoundtable() {
+  if (!els.roundtableWorkspace) return;
+  const rt = roundtableState();
+  els.roundtableWorkspace.hidden = !rt.enabled;
+  els.messages.hidden = rt.enabled;
+  if (rt.enabled) {
+    els.input.placeholder = "在圆桌里发言；输入 @写手 可把讨论转成正文...";
+  } else {
+    els.input.placeholder = "在这里输入你的问题...";
+  }
+  if (els.roundtableMembersPanel) {
+    els.roundtableMembersPanel.hidden = !rt.membersOpen;
+    els.roundtableMembersPanel.innerHTML = renderRoundtableMembers(rt);
+  }
+  if (els.roundtableManuscript) {
+    els.roundtableManuscript.textContent = getRoundtableManuscript();
+  }
+  if (els.roundtablePaperStatus) {
+    els.roundtablePaperStatus.textContent = getRoundtablePaperStatus();
+  }
+  syncRoundtablePaper();
+  if (els.roundtableDiscussion) {
+    els.roundtableDiscussion.innerHTML = renderRoundtableDiscussion(rt.messages);
+  }
+}
+
+function renderRoundtableMembers(rt) {
+  const order = new Map(rt.selectedIds.map((id, index) => [id, index + 1]));
+  return ROUND_ASSISTANTS
+    .filter((assistant) => assistant.id !== "writer")
+    .map((assistant) => {
+      const selected = order.get(assistant.id);
+      return `
+        <button class="roundtable-member-option ${selected ? "selected" : ""}" type="button" data-command="roundtable-toggle-member" data-member-id="${assistant.id}">
+          <span>${selected || ""}</span>
+          <b>${assistant.name}</b>
+          <small>${assistant.role}</small>
+        </button>
+      `;
+    })
+    .join("");
+}
+
+function renderRoundtableEmpty() {
+  return `
+    <div class="roundtable-empty">
+      <strong>把正文放到桌上，再让群里开始聊。</strong>
+      <span>你可以先说一句需求，或点“开始本轮”让设定师、剧情师、审稿依次发言。</span>
+    </div>
+  `;
+}
+
+function renderRoundtableDiscussion(messages) {
+  if (!messages.length) return renderRoundtableEmpty();
+  let lastDateKey = "";
+  return messages
+    .map((message, index) => {
+      const dateKey = roundtableDateKey(message.createdAt);
+      const divider = index === 0 || dateKey !== lastDateKey
+        ? `<div class="roundtable-divider"><span>${escapeHtml(formatTime(message.createdAt))}</span></div>`
+        : "";
+      lastDateKey = dateKey;
+      return `${divider}${renderRoundtableMessage(message)}`;
+    })
+    .join("");
+}
+
+function getRoundtableSpeakerProfile(message) {
+  const profiles = {
+    user: { avatar: "我", badge: "发起人", tone: "tone-user", name: "你" },
+    setting: { avatar: "设", badge: "设定", tone: "tone-setting", name: "设定师" },
+    plot: { avatar: "剧", badge: "剧情", tone: "tone-plot", name: "剧情师" },
+    review: { avatar: "审", badge: "审稿", tone: "tone-review", name: "审稿" },
+    style: { avatar: "风", badge: "文风", tone: "tone-style", name: "文风师" },
+    writer: { avatar: "写", badge: "写手", tone: "tone-writer", name: "写手" },
+  };
+  const profile = profiles[message.speakerId];
+  const fallbackName = clean(message.speakerName) || profile?.name || "成员";
+  return {
+    ...(profile || { avatar: fallbackName.slice(0, 1) || "聊", badge: "讨论", tone: "tone-review", name: fallbackName }),
+    name: fallbackName,
+  };
+}
+
+function renderRoundtableMessage(message) {
+  const isUser = message.speakerId === "user";
+  const isWriter = message.speakerId === "writer";
+  const profile = getRoundtableSpeakerProfile(message);
+  const time = formatTime(message.createdAt);
+  if (isWriter) {
+    return `
+      <article class="roundtable-writer-block ${profile.tone}">
+        <div class="roundtable-writer-card">
+          <div class="roundtable-writer-head">
+            <div class="roundtable-avatar ${profile.tone}">${profile.avatar}</div>
+            <div class="roundtable-writer-meta">
+              <div class="roundtable-writer-title">
+                <strong>${escapeHtml(profile.name)}</strong>
+                <span class="roundtable-role-badge ${profile.tone}">${escapeHtml(profile.badge)}</span>
+              </div>
+              <time>${escapeHtml(time)}</time>
+            </div>
+          </div>
+          <div class="roundtable-writer-tip">已将这一段同步到上方正文区</div>
+          <div class="roundtable-writer-snippet">${escapeHtml(message.content || "")}</div>
+        </div>
+      </article>
+    `;
+  }
+  return `
+    <article class="roundtable-line ${isUser ? "user" : ""} ${profile.tone}">
+      <div class="roundtable-avatar ${profile.tone}">${profile.avatar}</div>
+      <div class="roundtable-bubble-stack">
+        <div class="roundtable-bubble-meta">
+          <span class="roundtable-speaker">${escapeHtml(profile.name)}</span>
+          <span class="roundtable-role-badge ${profile.tone}">${escapeHtml(profile.badge)}</span>
+          <time>${escapeHtml(time)}</time>
+        </div>
+        <div class="roundtable-speech">${escapeHtml(message.content || "")}</div>
+      </div>
+    </article>
+  `;
+}
+
+function getRoundtablePaperSource() {
+  const body = clean(sessionNovel().body);
+  if (body) {
+    return {
+      text: body,
+      source: "正文历史稿",
+      updatedAt: activeSession()?.updatedAt || Date.now(),
+    };
+  }
+  const rt = roundtableState();
+  const lastWriter = [...rt.messages].reverse().find((message) => message.speakerId === "writer" && clean(message.content));
+  if (lastWriter) {
+    return {
+      text: lastWriter.content,
+      source: "写手最新正文",
+      updatedAt: lastWriter.createdAt,
+    };
+  }
+  const lastAssistant = [...activePath()].reverse().find((node) => node.role === "assistant" && clean(getMessageContent(node)));
+  if (lastAssistant) {
+    return {
+      text: getMessageContent(lastAssistant),
+      source: "主线对话摘录",
+      updatedAt: lastAssistant.createdAt || Date.now(),
+    };
+  }
+  return {
+    text: "正文还没有放上桌。先在普通模式写一段，或在这里 @写手 开始。",
+    source: "待开始",
+    updatedAt: Date.now(),
+  };
+}
+
+function normalizePaperText(text) {
+  return clean(text).replace(/\n{3,}/g, "\n\n");
+}
+
+function getRoundtableManuscript() {
+  return normalizePaperText(getRoundtablePaperSource().text);
+}
+
+function getRoundtablePaperStatus() {
+  const source = getRoundtablePaperSource();
+  const length = clean(source.text).length;
+  return `${source.source} · ${length} 字 · ${getRoundtableRevealLabel()} · ${formatTime(source.updatedAt)}`;
+}
+
+function getRoundtablePromptExcerpt(max = 520) {
+  const value = normalizePaperText(getRoundtablePaperSource().text);
+  return value.length > max ? `...${value.slice(-max)}` : value;
+}
+
+function roundtableDateKey(value) {
+  const date = new Date(value || Date.now());
+  return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+}
+
+function getViewportHeight() {
+  return Math.round(window.visualViewport?.height || window.innerHeight || 760);
+}
+
+function getRoundtablePaperMetrics() {
+  const viewportHeight = getViewportHeight();
+  const minHeight = clamp(Math.round(viewportHeight * 0.16), 108, 148);
+  const maxHeight = clamp(Math.round(viewportHeight * 0.46), 228, 430);
+  const reveal = roundtableState().paperReveal;
+  const currentHeight = Math.round(minHeight + (maxHeight - minHeight) * reveal);
+  return {
+    minHeight,
+    maxHeight,
+    currentHeight,
+    reveal,
+  };
+}
+
+function getRoundtableRevealLabel() {
+  return `展开 ${Math.round(getRoundtablePaperMetrics().reveal * 100)}%`;
+}
+
+function syncRoundtablePaper() {
+  if (!els.roundtablePaper) return;
+  const metrics = getRoundtablePaperMetrics();
+  els.roundtablePaper.style.setProperty("--paper-body-height", `${metrics.currentHeight}px`);
+  els.roundtablePaper.style.setProperty("--paper-progress", `${metrics.reveal.toFixed(3)}`);
+  els.roundtablePaper.classList.toggle("paper-peek", metrics.reveal < 0.96);
+  els.roundtablePaper.classList.toggle("paper-deep-collapsed", metrics.reveal < 0.24);
+  if (els.roundtablePaperGripLabel) {
+    els.roundtablePaperGripLabel.textContent = `${Math.round(metrics.reveal * 100)}%`;
+  }
+  if (els.roundtablePaperGrip) {
+    els.roundtablePaperGrip.dataset.state = metrics.reveal < 0.32 ? "collapsed" : metrics.reveal > 0.8 ? "expanded" : "mid";
+  }
+}
+
+function setRoundtablePaperReveal(nextReveal, options = {}) {
+  const rt = roundtableState();
+  rt.paperReveal = clamp(nextReveal, 0, 1);
+  syncRoundtablePaper();
+  if (els.roundtablePaperStatus) {
+    els.roundtablePaperStatus.textContent = getRoundtablePaperStatus();
+  }
+  if (!options.silent) {
+    touchSession(activeSession());
+    persistState(state);
+  }
+}
+
+function toggleRoundtablePaperReveal() {
+  const reveal = roundtableState().paperReveal;
+  setRoundtablePaperReveal(reveal > 0.72 ? 0.24 : 0.88);
+}
+
+function renderMessages() {
+  const path = activePath();
+  if (!path.length) {
+    els.messages.innerHTML = "";
+    return;
+  }
+  els.messages.innerHTML = path.map(renderMessage).join("");
+}
+
+function renderAvatar(role) {
+  return `<div class="avatar">${role === "user" ? "我" : "AI"}</div>`;
+}
+
+function renderMessage(node) {
+  const content = getMessageContent(node);
+  const version = getAssistantVersion(node);
+  const usage = version?.usage?.total_tokens ? ` · ${formatK(version.usage.total_tokens)} tok` : "";
+  const versionIndex = node.role === "assistant" ? Math.max(0, node.versions.findIndex((item) => item.id === node.activeVersionId)) + 1 : 1;
+  const switcher = node.role === "assistant"
+    ? `<div class="switcher">
+        <button type="button" data-command="prev-version" data-node-id="${node.id}" ${node.versions.length < 2 ? "disabled" : ""}>‹</button>
+        <span>${versionIndex}/${node.versions.length}</span>
+        <button type="button" data-command="next-version" data-node-id="${node.id}" ${node.versions.length < 2 ? "disabled" : ""}>›</button>
+      </div>`
+    : renderBranchSwitcher(node);
+  return `
+    <article class="message-row ${node.role}" data-node-id="${node.id}">
+      ${renderAvatar(node.role)}
+      <div class="message-card" data-command="toggle-menu" data-node-id="${node.id}">
+        <span class="message-content">${escapeHtml(content)}</span>${isGenerating && generatingNodeId === node.id ? '<span class="stream-caret"></span>' : ""}
+        <div class="message-meta">word count: ${content.length}, time: ${formatTime(version?.createdAt || node.createdAt)}${usage}</div>
+        <button class="message-more" type="button" data-command="toggle-menu" data-node-id="${node.id}">⋯</button>
+      </div>
+      ${switcher}
+    </article>
+  `;
+}
+
+function renderBranchSwitcher(node) {
+  const parent = getNode(node.parentId);
+  if (!parent || parent.children.length < 2) return "";
+  const index = parent.children.indexOf(node.id) + 1;
+  return `<div class="switcher">
+    <button type="button" data-command="prev-branch" data-node-id="${node.id}">‹</button>
+    <span>${index}/${parent.children.length}</span>
+    <button type="button" data-command="next-branch" data-node-id="${node.id}">›</button>
+  </div>`;
+}
+
+function renderMenu() {
+  const node = activeMenuNodeId ? getNode(activeMenuNodeId) : null;
+  if (!node) {
+    els.menu.hidden = true;
+    els.menu.innerHTML = "";
+    return;
+  }
+  const userActions = `
+    <button type="button" data-command="edit-user" data-node-id="${node.id}">编辑内容</button>
+    <button type="button" data-command="resend-user" data-node-id="${node.id}">重新发送</button>
+    <button type="button" data-command="copy-message" data-node-id="${node.id}">复制</button>
+    <button type="button" data-command="delete-message" data-node-id="${node.id}">删除</button>
+  `;
+  const assistantActions = `
+    <button type="button" data-command="regen-ai" data-node-id="${node.id}">重新生成</button>
+    <button type="button" data-command="edit-ai" data-node-id="${node.id}">编辑AI输出</button>
+    <button type="button" data-command="continue-ai" data-node-id="${node.id}">继续</button>
+    <button type="button" data-command="copy-message" data-node-id="${node.id}">复制</button>
+    <button type="button" data-command="delete-message" data-node-id="${node.id}">删除</button>
+  `;
+  els.menu.innerHTML = node.role === "user" ? userActions : assistantActions;
+  els.menu.hidden = false;
+}
+
+function renderSessions() {
+  const query = clean(els.historySearch.value).toLowerCase();
+  drawSessions(els, state.sessions, state.activeSessionId, query, {
+    activePath,
+    titleForSession,
+    escapeHtml,
+    formatTime,
+  });
+}
+
+function renderSettings() {
+  const s = sessionSettings();
+  const api = apiSettings();
+  if (document.activeElement !== els.systemPrompt) els.systemPrompt.value = s.systemPrompt;
+  if (document.activeElement !== els.baseUrl) els.baseUrl.value = api.baseUrl;
+  if (document.activeElement !== els.apiKey) els.apiKey.value = api.apiKey;
+  if (document.activeElement !== els.modelInput) els.modelInput.value = s.model;
+  if (document.activeElement !== els.contextCount) els.contextCount.value = s.contextCount;
+  if (document.activeElement !== els.maxTokens) els.maxTokens.value = s.maxTokens;
+  els.temperature.value = s.temperature;
+  els.temperatureLabel.textContent = Number(s.temperature).toFixed(2);
+  els.unlimitedContext.checked = s.unlimitedContext;
+  els.stream.checked = s.stream;
+  els.layoutInputs.forEach((input) => {
+    const key = input.dataset.layoutKey;
+    if (document.activeElement !== input) input.value = s.layout[key];
+  });
+  els.layoutValues.forEach((value) => {
+    const key = value.dataset.layoutValue;
+    value.textContent = formatLayoutValue(key, s.layout[key]);
+  });
+}
+
+function renderCustomLayoutPresets() {
+  if (!els.customLayoutPresets) return;
+  const presets = sessionSettings().layoutPresets || [];
+  els.customLayoutPresets.innerHTML = presets.length
+    ? presets.map((preset) => `
+      <div class="custom-preset-item">
+        <button type="button" data-command="layout-custom-preset" data-preset-id="${escapeHtml(preset.id)}">${escapeHtml(preset.name)}</button>
+        <button type="button" data-command="delete-layout-preset" data-preset-id="${escapeHtml(preset.id)}">删除</button>
+      </div>
+    `).join("")
+    : `<p class="muted">还没有自定义排版预设。</p>`;
+}
+
+function renderNovelPanel() {
+  const novel = sessionNovel();
+  els.novelFields.forEach((field) => {
+    const key = field.dataset.novelKey;
+    if (document.activeElement !== field) field.value = novel[key] || "";
+  });
+  if (els.novelStats) {
+    const stats = buildNovelStats(novel);
+    const items = [
+      `正文 ${stats.bodyLength} 字`,
+      `剧情线 ${stats.plotlineLength} 字`,
+      `资料估算 ${formatK(stats.memoryTokens)} token`,
+    ];
+    els.novelStats.innerHTML = items.map((item) => `<span>${escapeHtml(item)}</span>`).join("");
+  }
+}
+
+function formatLayoutValue(key, value) {
+  if (key === "messageLineHeight") return `${value}%`;
+  return `${value}px`;
+}
+
+function renderModelPicker() {
+  const settings = sessionSettings();
+  const models = Array.from(new Set([settings.model, ...apiSettings().models].filter(Boolean)));
+  els.modelSelect.innerHTML = models.map((model) => `<option value="${escapeHtml(model)}">${escapeHtml(model)}</option>`).join("");
+  els.modelSelect.value = settings.model;
+  els.modelDatalist.innerHTML = models.map((model) => `<option value="${escapeHtml(model)}"></option>`).join("");
+}
+
+function renderContextBadge() {
+  const info = contextInfo(clean(els.input.value));
+  drawContextBadge(els, info, formatK);
+}
+
+function renderContextPanel() {
+  const info = contextInfo(clean(els.input.value));
+  drawContextPanel(els, info, sessionSettings(), escapeHtml, formatK);
+}
+
+function setActiveModel(model) {
+  const value = clean(model);
+  if (!value) return;
+  sessionSettings().model = value;
+  const api = apiSettings();
+  api.models = Array.from(new Set([value, ...api.models]));
+}
+
+function openEditor(nodeId) {
+  const node = getNode(nodeId);
+  if (!node) return;
+  const version = node.role === "assistant" ? getAssistantVersion(node) : null;
+  editTarget = { nodeId, role: node.role, versionId: version?.id || null };
+  els.editTitle.textContent = node.role === "assistant" ? "编辑 AI 输出" : "编辑内容";
+  els.editText.value = node.role === "assistant" ? version?.content || "" : getMessageContent(node);
+  els.saveEdit.textContent = "保存";
+  els.saveSendEdit.textContent = node.role === "assistant" ? "保存并继续" : "保存并重新发送";
+  els.saveSendEdit.style.display = "";
+  els.editDialog.showModal();
+  requestAnimationFrame(() => els.editText.focus());
+}
+
+function closeEditor() {
+  editTarget = null;
+  if (els.editDialog.open) els.editDialog.close();
+}
+
+async function saveEditor(sendAfterSave = false) {
+  if (!editTarget) return;
+  const text = clean(els.editText.value);
+  if (!text) return showToast("内容不能为空");
+  const node = getNode(editTarget.nodeId);
+  if (!node) return;
+  if (node.role === "assistant") {
+    const version = getAssistantVersionById(node, editTarget.versionId);
+    if (!version) return;
+    setAssistantVersionContent(node, version, text);
+    version.usage = null;
+    version.createdAt = Date.now();
+    closeEditor();
+    touchSession(activeSession());
+    render();
+    if (sendAfterSave) await continueFromAssistant(node.id);
+    else showToast("已直接修改 AI 输出");
+    return;
+  }
+  if (sendAfterSave) {
+    closeEditor();
+    await editUserBranch(node.id, text);
+    return;
+  }
+  node.content = text;
+  node.createdAt = Date.now();
+  closeEditor();
+  touchSession(activeSession());
+  render();
+  showToast("已修改用户内容");
+}
+
+async function appendUserMessage(text) {
+  const session = activeSession();
+  const path = activePath(session);
+  const parent = path[path.length - 1] || getNode(session.rootId, session);
+  const user = createNode("user", parent.id, text);
+  appendChild(session, parent, user);
+  const assistant = createNode("assistant", user.id, "");
+  assistant.activeVersionId = assistant.versions[0].id;
+  appendChild(session, user, assistant);
+  touchSession(session);
+  activeMenuNodeId = null;
+  render();
+  await generateIntoAssistant(assistant.id, text, assistant.versions[0].id);
+}
+
+async function editUserBranch(nodeId, text) {
+  if (isGenerating) return;
+  const old = getNode(nodeId);
+  const parent = getNode(old?.parentId);
+  if (!old || !parent) return;
+  const user = createNode("user", parent.id, text);
+  appendChild(activeSession(), parent, user);
+  const assistant = createNode("assistant", user.id, "");
+  assistant.activeVersionId = assistant.versions[0].id;
+  appendChild(activeSession(), user, assistant);
+  touchSession(activeSession());
+  activeMenuNodeId = null;
+  render();
+  await generateIntoAssistant(assistant.id, text, assistant.versions[0].id);
+}
+
+async function resendUser(nodeId) {
+  if (isGenerating) return;
+  const user = getNode(nodeId);
+  if (!user || user.role !== "user") return;
+  const assistant = getNode(user.activeChildId);
+  if (!assistant || assistant.role !== "assistant") return;
+  const version = createAssistantVersion("");
+  assistant.versions.push(version);
+  assistant.activeVersionId = version.id;
+  activeMenuNodeId = null;
+  render();
+  await generateIntoAssistant(assistant.id, user.content, version.id);
+}
+
+async function regenerateAssistant(nodeId) {
+  if (isGenerating) return;
+  const assistant = getNode(nodeId);
+  const user = getNode(assistant?.parentId);
+  if (!assistant || assistant.role !== "assistant" || !user) return;
+  const version = createAssistantVersion("");
+  assistant.versions.push(version);
+  assistant.activeVersionId = version.id;
+  activeMenuNodeId = null;
+  render();
+  await generateIntoAssistant(assistant.id, user.role === "user" ? user.content : "", version.id);
+}
+
+async function continueFromAssistant(nodeId) {
+  if (isGenerating) return;
+  const assistant = getNode(nodeId);
+  if (!assistant || assistant.role !== "assistant") return;
+  const next = createNode("assistant", assistant.id, "");
+  next.activeVersionId = next.versions[0].id;
+  appendChild(activeSession(), assistant, next);
+  touchSession(activeSession());
+  activeMenuNodeId = null;
+  render();
+  await generateIntoAssistant(next.id, "", next.versions[0].id, true);
+}
+
+function validateApi() {
+  if (!clean(apiSettings().apiKey)) throw new Error("请先在设置里填写 API Key");
+  if (!clean(sessionSettings().model)) throw new Error("请先选择或填写模型");
+}
+
+async function generateIntoAssistant(nodeId, userText, versionId, continueMode = false) {
+  validateApi();
+  const node = getNode(nodeId);
+  const version = node?.versions.find((item) => item.id === versionId);
+  if (!node || !version) return;
+  isGenerating = true;
+  abortController = new AbortController();
+  streamRequestId = null;
+  generatingNodeId = nodeId;
+  streamShouldFollow = shouldFollowBottom();
+  activeMenuNodeId = nodeId;
+  setAssistantVersionContent(node, version, "");
+  version.usage = null;
+  render();
+  scrollBottom();
+  try {
+    const result = sessionSettings().stream
+      ? await callOpenAIStream((partial) => {
+          setAssistantVersionContent(node, version, partial);
+          renderStreamingNode(nodeId, versionId);
+        }, nodeId, continueMode)
+      : await callOpenAI(nodeId, continueMode);
+    setAssistantVersionContent(node, version, result.content);
+    version.usage = result.usage || null;
+    version.createdAt = Date.now();
+    touchSession(activeSession());
+  } catch (error) {
+    if (error.name !== "AbortError") {
+      const message = humanizeError(error, "生成失败");
+      version.content = version.content || `请求失败：${message}`;
+      showToast(message);
+    }
+  } finally {
+    isGenerating = false;
+    abortController = null;
+    streamRequestId = null;
+    generatingNodeId = null;
+    streamShouldFollow = false;
+    render();
+    if (shouldFollowBottom()) scrollBottom();
+  }
+}
+
+function renderStreamingNode(nodeId, versionId) {
+  const node = getNode(nodeId);
+  const version = node?.versions.find((item) => item.id === versionId);
+  const card = els.messages.querySelector(`[data-node-id="${nodeId}"] .message-card`);
+  if (!card || !version) {
+    render();
+    return;
+  }
+  const contentElement = card.querySelector(".message-content");
+  if (!contentElement) return render();
+  contentElement.textContent = version.content || "";
+  if (!card.querySelector(".stream-caret")) {
+    contentElement.insertAdjacentHTML("afterend", '<span class="stream-caret"></span>');
+  }
+  if (streamShouldFollow && shouldFollowBottom()) scrollBottom();
+}
+
+function stopGeneration() {
+  if (!isGenerating) return;
+  abortController?.abort();
+  if (streamRequestId && bridgeStreamCallbacks.has(streamRequestId)) {
+    bridgeStreamCallbacks.get(streamRequestId).reject(new DOMException("Aborted", "AbortError"));
+    bridgeStreamCallbacks.delete(streamRequestId);
+  }
+  isGenerating = false;
+  generatingNodeId = null;
+  streamShouldFollow = false;
+  showToast("已停止生成");
+  render();
+}
+
+function requestMessages(assistantNodeId, continueMode = false) {
+  return contextMessages(continueMode ? CONTINUE_PROMPT : "", assistantNodeId);
+}
+
+async function callOpenAI(assistantNodeId, continueMode = false) {
+  return aiClient.generate({
+    api: apiSettings(),
+    settings: sessionSettings(),
+    messages: requestMessages(assistantNodeId),
+    continueMode,
+    continuePrompt: CONTINUE_PROMPT,
+  });
+}
+
+async function callOpenAIText(messages) {
+  validateApi();
+  abortController = new AbortController();
+  try {
+    return await aiClient.generateText({
+      api: apiSettings(),
+      settings: sessionSettings(),
+      messages,
+    });
+  } finally {
+    abortController = null;
+  }
+}
+
+async function callOpenAIStream(onChunk, assistantNodeId, continueMode = false) {
+  return aiClient.generateStream({
+    api: apiSettings(),
+    settings: sessionSettings(),
+    messages: requestMessages(assistantNodeId),
+    onChunk,
+    continueMode,
+    continuePrompt: CONTINUE_PROMPT,
+  });
+}
+
+async function fetchModels() {
+  try {
+    validateApi();
+    els.modelStatus.textContent = "正在拉取...";
+    const api = apiSettings();
+    const settings = sessionSettings();
+    const data = await aiClient.fetchModels({ api });
+    if (data.__bridgeStatus >= 400) throw new Error(data.error?.message || "模型拉取失败");
+    const models = (data.data || []).map((item) => item.id).filter(Boolean).sort();
+    if (!models.length) throw new Error("没有读取到模型");
+    api.models = Array.from(new Set([settings.model, ...models].filter(Boolean)));
+    if (!settings.model) settings.model = models[0];
+    els.modelStatus.textContent = `已拉取 ${models.length} 个`;
+    render();
+  } catch (error) {
+    const message = humanizeError(error, "模型拉取失败");
+    els.modelStatus.textContent = message;
+    showToast(message);
+  }
+}
+
+function switchSibling(nodeId, delta) {
+  const node = getNode(nodeId);
+  const parent = getNode(node?.parentId);
+  if (!node || !parent || parent.children.length < 2) return;
+  const index = parent.children.indexOf(node.id);
+  const next = (index + delta + parent.children.length) % parent.children.length;
+  parent.activeChildId = parent.children[next];
+  activeMenuNodeId = null;
+  render();
+}
+
+function switchVersion(nodeId, delta) {
+  const node = getNode(nodeId);
+  if (!node || node.role !== "assistant" || node.versions.length < 2) return;
+  const index = node.versions.findIndex((item) => item.id === node.activeVersionId);
+  const next = (index + delta + node.versions.length) % node.versions.length;
+  node.activeVersionId = node.versions[next].id;
+  activeMenuNodeId = null;
+  render();
+}
+
+function deleteMessage(nodeId) {
+  if (isGenerating) return showToast("生成中不能删除消息");
+  const session = activeSession();
+  const node = getNode(nodeId, session);
+  const parent = getNode(node?.parentId, session);
+  if (!node || !parent) return;
+  const index = parent.children.indexOf(node.id);
+  const childIds = node.children.filter((id) => getNode(id, session));
+  childIds.forEach((id) => {
+    session.nodes[id].parentId = parent.id;
+  });
+  if (index >= 0) parent.children.splice(index, 1, ...childIds);
+  delete session.nodes[node.id];
+  if (parent.activeChildId === node.id) {
+    parent.activeChildId = childIds.includes(node.activeChildId)
+      ? node.activeChildId
+      : parent.children[Math.max(0, Math.min(index, parent.children.length - 1))] || null;
+  }
+  activeMenuNodeId = null;
+  touchSession(session);
+  render();
+  showToast("已删除这条消息，分支已保留");
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    textarea.remove();
+  }
+  showToast("已复制");
+}
+
+function newSession() {
+  const session = createSession();
+  state.sessions.unshift(session);
+  state.activeSessionId = session.id;
+  activeMenuNodeId = null;
+  closePanels();
+  render();
+}
+
+function switchSession(sessionId) {
+  if (isGenerating) return showToast("生成中不能切换会话");
+  if (!state.sessions.some((session) => session.id === sessionId)) return;
+  state.activeSessionId = sessionId;
+  activeMenuNodeId = null;
+  closePanels();
+  render();
+  scrollBottom();
+}
+
+function copySession(sessionId) {
+  const source = state.sessions.find((session) => session.id === sessionId);
+  if (!source) return;
+  const copy = JSON.parse(JSON.stringify(source));
+  copy.id = uid("sess");
+  copy.title = `${titleForSession(source)} 副本`;
+  copy.createdAt = Date.now();
+  copy.updatedAt = Date.now();
+  state.sessions.unshift(copy);
+  state.activeSessionId = copy.id;
+  render();
+  showToast("已复制会话");
+}
+
+function deleteSession(sessionId) {
+  if (state.sessions.length <= 1) {
+    state.sessions = [createSession()];
+    state.activeSessionId = state.sessions[0].id;
+    render();
+    return;
+  }
+  state.sessions = state.sessions.filter((session) => session.id !== sessionId);
+  if (state.activeSessionId === sessionId) state.activeSessionId = state.sessions[0].id;
+  activeMenuNodeId = null;
+  render();
+}
+
+function syncNovelFromFields() {
+  const novel = sessionNovel();
+  els.novelFields.forEach((field) => {
+    novel[field.dataset.novelKey] = field.value;
+  });
+}
+
+function saveNovel() {
+  syncNovelFromFields();
+  renderNovelPanel();
+  renderContextBadge();
+  persistState(state);
+  showToast("小说资料已保存");
+}
+
+function importBodyFile() {
+  els.bodyImportFile?.click();
+}
+
+async function handleBodyFileSelected() {
+  const file = els.bodyImportFile?.files?.[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    sessionNovel().body = clean(text);
+    renderNovelPanel();
+    renderContextBadge();
+    persistState(state);
+    showToast("正文 TXT 已导入");
+  } catch (error) {
+    showToast(humanizeError(error, "正文导入失败"));
+  } finally {
+    if (els.bodyImportFile) els.bodyImportFile.value = "";
+  }
+}
+
+function exportBodyFile() {
+  const text = clean(sessionNovel().body);
+  if (!text) return showToast("正文库为空");
+  downloadText(`TBird-正文-${Date.now()}.txt`, text);
+  showToast("正文已导出为 TXT");
+}
+
+function syncBodyFromAssistant() {
+  const bodyText = activePath()
+    .filter((node) => node.role === "assistant")
+    .map((node) => clean(getAssistantVersion(node)?.content || ""))
+    .filter(Boolean)
+    .join("\n\n");
+  if (!bodyText) return showToast("当前会话还没有可同步的 AI 输出");
+  sessionNovel().body = bodyText;
+  renderNovelPanel();
+  renderContextBadge();
+  persistState(state);
+  showToast("已按顺序同步全部 AI 输出到正文库");
+}
+
+function downloadText(filename, text) {
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+function novelPromptFor(target) {
+  const labels = {
+    plotline: "剧情线",
+    characters: "角色卡",
+    world: "世界观",
+    outline: "大纲",
+    foreshadows: "伏笔线",
+  };
+  const instructions = {
+    plotline: "请根据正文库和最近对话，归纳当前剧情线。要求按时间顺序、保留关键因果、人物状态、冲突进展，不要续写新剧情。",
+    characters: "请整理角色卡。按角色分条，包含身份定位、目标动机、关系、性格/口癖、当前状态。不要编造正文没有支撑的设定。",
+    world: "请整理世界观。提取时代背景、阵营势力、规则制度、地点、技术/能力体系、禁忌与常识。不要另起设定。",
+    outline: "请整理大纲。根据已有正文和对话，输出已发生内容、下一阶段可能目标、章节推进建议。不要写正式正文。",
+    foreshadows: "请整理伏笔线。列出未回收伏笔、悬念、暗线、可能回收方式和相关人物。不要擅自回收。",
+  };
+  return {
+    label: labels[target] || target,
+    messages: [
+      {
+        role: "user",
+        content: [
+          "你是严谨的小说资料整理助手。只能整理、归纳、压缩用户提供的小说材料；除非明确要求，不要续写正文。",
+          instructions[target] || "请整理小说资料。",
+          getNovelSourceText() || "当前资料为空，请返回：暂无足够资料。",
+        ].join("\n\n"),
+      },
+    ],
+  };
+}
+
+async function generateNovelMaterial(target) {
+  if (materialGenerating || isGenerating) return showToast("已有生成任务进行中");
+  if (!["plotline", "characters", "world", "outline", "foreshadows"].includes(target)) return;
+  syncNovelFromFields();
+  materialGenerating = true;
+  const { label, messages } = novelPromptFor(target);
+  showToast(`正在生成${label}`);
+  try {
+    const text = await callOpenAIText(messages);
+    sessionNovel()[target] = text;
+    renderNovelPanel();
+    renderContextBadge();
+    persistState(state);
+    showToast(`${label}已填充`);
+  } catch (error) {
+    showToast(humanizeError(error, `${label}生成失败`));
+  } finally {
+    materialGenerating = false;
+  }
+}
+
+function toggleRoundtable() {
+  const rt = roundtableState();
+  rt.enabled = !rt.enabled;
+  rt.membersOpen = false;
+  activeMenuNodeId = null;
+  closePanels();
+  render();
+  resizeInput();
+  if (rt.enabled) showToast("已进入圆桌共创模式");
+}
+
+function toggleRoundtableMembers() {
+  const rt = roundtableState();
+  rt.membersOpen = !rt.membersOpen;
+  render();
+}
+
+function toggleRoundtableMember(id) {
+  const rt = roundtableState();
+  if (!getRoundAssistant(id) || id === "writer") return;
+  const index = rt.selectedIds.indexOf(id);
+  if (index >= 0) rt.selectedIds.splice(index, 1);
+  else rt.selectedIds.push(id);
+  render();
+}
+
+function addRoundtableMessage(speakerId, speakerName, content) {
+  const rt = roundtableState();
+  const shouldFollowPaper = speakerId === "writer" && els.roundtablePaperViewport
+    ? els.roundtablePaperViewport.scrollHeight - els.roundtablePaperViewport.scrollTop - els.roundtablePaperViewport.clientHeight < 72
+    : false;
+  rt.messages.push({
+    id: uid("round"),
+    speakerId,
+    speakerName,
+    content: clean(content),
+    createdAt: Date.now(),
+  });
+  rt.messages = rt.messages.slice(-80);
+  touchSession(activeSession());
+  render();
+  if (speakerId === "writer" && shouldFollowPaper) {
+    scrollRoundtablePaperBottom();
+  }
+  scrollRoundtableBottom();
+}
+
+function scrollRoundtableBottom() {
+  requestAnimationFrame(() => {
+    if (els.roundtableWorkspace) {
+      els.roundtableWorkspace.scrollTop = els.roundtableWorkspace.scrollHeight;
+    }
+  });
+}
+
+function scrollRoundtablePaperBottom() {
+  requestAnimationFrame(() => {
+    if (els.roundtablePaperViewport) {
+      els.roundtablePaperViewport.scrollTop = els.roundtablePaperViewport.scrollHeight;
+    }
+  });
+}
+
+async function handleRoundtableUser(text) {
+  addRoundtableMessage("user", "我", text);
+  if (/@写手|@writer/i.test(text)) {
+    await generateRoundtableWriter(text);
+  }
+}
+
+async function startRoundtableRound() {
+  const rt = roundtableState();
+  if (roundtableGenerating || isGenerating || materialGenerating) return showToast("已有生成任务进行中");
+  if (!rt.selectedIds.length) return showToast("先在成员里选择至少一个参与者");
+  roundtableGenerating = true;
+  render();
+  try {
+    validateApi();
+    for (const id of rt.selectedIds) {
+      const assistant = getRoundAssistant(id);
+      if (!assistant) continue;
+      showToast(`${assistant.name}正在发言`);
+      const text = await callRoundtableAssistant(assistant, "请根据当前正文和以上圆桌讨论发表你的意见。");
+      addRoundtableMessage(assistant.id, assistant.name, text);
+    }
+  } catch (error) {
+    showToast(humanizeError(error, "圆桌发言失败"));
+  } finally {
+    roundtableGenerating = false;
+    render();
+  }
+}
+
+async function generateRoundtableWriter(userText) {
+  if (roundtableGenerating || isGenerating || materialGenerating) return showToast("已有生成任务进行中");
+  roundtableGenerating = true;
+  render();
+  try {
+    validateApi();
+    const writer = getRoundAssistant("writer");
+    const text = await callRoundtableAssistant(writer, userText || "请根据圆桌讨论继续写正文。");
+    addRoundtableMessage("writer", "写手", text);
+    const novel = sessionNovel();
+    novel.body = [clean(novel.body), clean(text)].filter(Boolean).join("\n\n");
+    persistState(state);
+    showToast("写手已更新正文，并同步到正文库");
+  } catch (error) {
+    showToast(humanizeError(error, "写手续写失败"));
+  } finally {
+    roundtableGenerating = false;
+    render();
+  }
+}
+
+async function callRoundtableAssistant(assistant, instruction) {
+  const messages = buildRoundtableMessages(assistant, instruction);
+  return callOpenAIText(messages);
+}
+
+function buildRoundtableMessages(assistant, instruction) {
+  const rt = roundtableState();
+  const participants = ROUND_ASSISTANTS.map((item) => `${item.name}：${item.role}`).join("；");
+  const discussion = rt.messages
+    .slice(-24)
+    .map((message) => `${message.speakerName}：${message.content}`)
+    .join("\n");
+  const source = [
+    `【当前模式】圆桌小说共创。参与者包括：${participants}`,
+    "【发言规则】必须知道是谁说的话，不要把不同成员的意见串成同一个人。可自然赞同或反驳其他成员。",
+    `【你的身份】${assistant.name}。${assistant.prompt}`,
+    `【当前正文小窗】\n${getRoundtablePromptExcerpt()}`,
+    `【小说资料】\n${buildNovelMemory() || "暂无小说资料。"}`,
+    `【最近主线对话】\n${getNovelSourceText() || "暂无主线对话。"}`,
+    `【圆桌讨论记录】\n${discussion || "暂无讨论。"}`,
+    `【本轮任务】${instruction}`,
+  ].join("\n\n");
+  return [{ role: "user", content: source }];
+}
+
+const handleCommand = createCommandRegistry({
+  "open-history": () => showPanel("history"),
+  "open-settings": () => showPanel("settings"),
+  "open-novel": () => showPanel("novel"),
+  "open-context": () => showPanel("context"),
+  "open-roundtable": () => toggleRoundtable(),
+  "toggle-roundtable": () => toggleRoundtable(),
+  "toggle-roundtable-members": () => toggleRoundtableMembers(),
+  "roundtable-toggle-member": (target) => toggleRoundtableMember(target.dataset.memberId),
+  "roundtable-start": () => startRoundtableRound(),
+  "open-search": () => showPanel("history"),
+  "roundtable-preview": () => showToast("圆桌共创仍是 Beta 预览，完整群聊发言正在开发中"),
+  "close-panels": () => closePanels(),
+  "new-session": () => newSession(),
+  "switch-session": (target) => switchSession(target.dataset.sessionId),
+  "copy-session": (target) => copySession(target.dataset.sessionId),
+  "delete-session": (target) => deleteSession(target.dataset.sessionId),
+  "fetch-models": () => fetchModels(),
+  "save-novel": () => saveNovel(),
+  "import-body-file": () => importBodyFile(),
+  "export-body-file": () => exportBodyFile(),
+  "sync-body-from-ai": () => syncBodyFromAssistant(),
+  "generate-novel": (target) => generateNovelMaterial(target.dataset.novelTarget),
+  "layout-preset": (target) => applyLayoutPreset(target.dataset.preset),
+  "layout-custom-preset": (target) => applyCustomLayoutPreset(target.dataset.presetId),
+  "save-layout-preset": () => saveLayoutPreset(),
+  "delete-layout-preset": (target) => deleteLayoutPreset(target.dataset.presetId),
+  "copy-layout": () => copyLayoutParams(),
+  "reset-layout": () => resetLayoutParams(),
+  "toggle-menu": (target) => {
+    const nodeId = target.dataset.nodeId;
+    activeMenuNodeId = activeMenuNodeId === nodeId ? null : nodeId;
+    return render();
+  },
+  "edit-user": (target) => openEditor(target.dataset.nodeId),
+  "edit-ai": (target) => openEditor(target.dataset.nodeId),
+  "copy-message": (target) => copyText(getMessageContent(getNode(target.dataset.nodeId))),
+  "delete-message": (target) => deleteMessage(target.dataset.nodeId),
+  "resend-user": (target) => resendUser(target.dataset.nodeId),
+  "regen-ai": (target) => regenerateAssistant(target.dataset.nodeId),
+  "continue-ai": (target) => continueFromAssistant(target.dataset.nodeId),
+  "prev-version": (target) => switchVersion(target.dataset.nodeId, -1),
+  "next-version": (target) => switchVersion(target.dataset.nodeId, 1),
+  "prev-branch": (target) => switchSibling(target.dataset.nodeId, -1),
+  "next-branch": (target) => switchSibling(target.dataset.nodeId, 1),
+});
+
+function applyLayoutPreset(name) {
+  const preset = layoutPresets[name];
+  if (!preset) return;
+  sessionSettings().layout = hydrateLayout(preset);
+  render();
+  resizeInput();
+  showToast("排版预设已应用");
+}
+
+function applyCustomLayoutPreset(id) {
+  const settings = sessionSettings();
+  const preset = settings.layoutPresets.find((item) => item.id === id);
+  if (!preset) return;
+  settings.layout = hydrateLayout(preset.layout);
+  render();
+  resizeInput();
+  showToast("排版预设已应用");
+}
+
+function saveLayoutPreset() {
+  const settings = sessionSettings();
+  const name = clean(els.layoutPresetName?.value) || `排版 ${settings.layoutPresets.length + 1}`;
+  const record = {
+    id: uid("layout"),
+    name,
+    layout: hydrateLayout(settings.layout),
+    createdAt: Date.now(),
+  };
+  settings.layoutPresets = [record, ...settings.layoutPresets].slice(0, 12);
+  if (els.layoutPresetName) els.layoutPresetName.value = "";
+  render();
+  showToast("已保存排版预设");
+}
+
+function deleteLayoutPreset(id) {
+  const settings = sessionSettings();
+  settings.layoutPresets = settings.layoutPresets.filter((item) => item.id !== id);
+  render();
+  showToast("已删除排版预设");
+}
+
+function resetLayoutParams() {
+  sessionSettings().layout = createDefaultLayout();
+  render();
+  resizeInput();
+  showToast("已恢复默认排版");
+}
+
+function copyLayoutParams() {
+  copyText(JSON.stringify(sessionSettings().layout, null, 2));
+}
+
+bindCommandDelegation(document, renderMenu, () => activeMenuNodeId, (value) => {
+  activeMenuNodeId = value;
+}, (command, target) => handleCommand(command, target));
+
+els.composer.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (isGenerating) {
+    stopGeneration();
+    return;
+  }
+  const text = clean(els.input.value);
+  if (!text) return;
+  if (roundtableState().enabled) {
+    els.input.value = "";
+    resizeInput();
+    renderContextBadge();
+    await handleRoundtableUser(text);
+    return;
+  }
+  try {
+    validateApi();
+    els.input.value = "";
+    resizeInput();
+    renderContextBadge();
+    await appendUserMessage(text);
+  } catch (error) {
+    showToast(humanizeError(error, "发送失败"));
+  }
+});
+
+function resizeInput() {
+  els.input.style.height = "auto";
+  const maxHeight = Math.max(44, sessionSettings().layout.composerMinHeight + 8);
+  els.input.style.height = `${Math.min(maxHeight, els.input.scrollHeight)}px`;
+  const composerHeight = Math.ceil(els.composer.getBoundingClientRect().height);
+  document.documentElement.style.setProperty("--composer-height", `${composerHeight}px`);
+  syncRoundtablePaper();
+}
+
+function handleRoundtablePaperPointerDown(event) {
+  if (!roundtableState().enabled || !els.roundtablePaperGrip) return;
+  paperDrag.active = true;
+  paperDrag.moved = false;
+  paperDrag.pointerId = event.pointerId;
+  paperDrag.startY = event.clientY;
+  paperDrag.startReveal = roundtableState().paperReveal;
+  els.roundtablePaperGrip.setPointerCapture?.(event.pointerId);
+  els.body.classList.add("paper-dragging");
+  event.preventDefault();
+}
+
+function handleRoundtablePaperPointerMove(event) {
+  if (!paperDrag.active || event.pointerId !== paperDrag.pointerId) return;
+  const metrics = getRoundtablePaperMetrics();
+  const range = Math.max(1, metrics.maxHeight - metrics.minHeight);
+  const delta = paperDrag.startY - event.clientY;
+  if (Math.abs(delta) > 4) paperDrag.moved = true;
+  setRoundtablePaperReveal(paperDrag.startReveal + delta / range, { silent: true });
+  event.preventDefault();
+}
+
+function finishRoundtablePaperDrag(event) {
+  if (!paperDrag.active) return;
+  if (event && paperDrag.pointerId !== null && event.pointerId !== undefined && event.pointerId !== paperDrag.pointerId) return;
+  if (els.roundtablePaperGrip && paperDrag.pointerId !== null) {
+    try {
+      els.roundtablePaperGrip.releasePointerCapture?.(paperDrag.pointerId);
+    } catch {}
+  }
+  const wasMoved = paperDrag.moved;
+  paperDrag.active = false;
+  paperDrag.pointerId = null;
+  paperDrag.startY = 0;
+  paperDrag.startReveal = roundtableState().paperReveal;
+  paperDrag.moved = false;
+  els.body.classList.remove("paper-dragging");
+  touchSession(activeSession());
+  persistState(state);
+  if (!wasMoved) toggleRoundtablePaperReveal();
+}
+
+els.input.addEventListener("input", () => {
+  resizeInput();
+  renderContextBadge();
+  els.body.classList.toggle("is-ready", Boolean(clean(els.input.value)));
+});
+
+els.input.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+    els.composer.requestSubmit();
+  }
+});
+
+els.historySearch.addEventListener("input", renderSessions);
+
+[
+  ["input", els.systemPrompt, "systemPrompt"],
+  ["input", els.contextCount, "contextCount"],
+  ["input", els.maxTokens, "maxTokens"],
+].forEach(([, element, key]) => {
+  element.addEventListener("input", () => {
+    sessionSettings()[key] = key === "contextCount" || key === "maxTokens" ? Number(element.value) || 0 : element.value;
+    renderContextBadge();
+    persistState(state);
+  });
+});
+
+[
+  ["input", els.baseUrl, "baseUrl"],
+  ["input", els.apiKey, "apiKey"],
+].forEach(([, element, key]) => {
+  element.addEventListener("input", () => {
+    apiSettings()[key] = element.value;
+    persistState(state);
+  });
+});
+
+els.modelInput.addEventListener("input", () => {
+  setActiveModel(els.modelInput.value);
+  renderModelPicker();
+  renderContextBadge();
+  persistState(state);
+});
+
+els.modelSelect.addEventListener("change", () => {
+  setActiveModel(els.modelSelect.value);
+  render();
+});
+
+els.temperature.addEventListener("input", () => {
+  sessionSettings().temperature = Number(els.temperature.value);
+  els.temperatureLabel.textContent = sessionSettings().temperature.toFixed(2);
+  persistState(state);
+});
+
+els.unlimitedContext.addEventListener("change", () => {
+  sessionSettings().unlimitedContext = els.unlimitedContext.checked;
+  render();
+});
+
+els.stream.addEventListener("change", () => {
+  sessionSettings().stream = els.stream.checked;
+  persistState(state);
+});
+
+els.layoutInputs.forEach((input) => {
+  input.addEventListener("input", () => {
+    const key = input.dataset.layoutKey;
+    sessionSettings().layout[key] = Number(input.value);
+    applyLayout();
+    renderSettings();
+    resizeInput();
+    persistState(state);
+  });
+});
+
+els.novelFields.forEach((field) => {
+  field.addEventListener("input", () => {
+    sessionNovel()[field.dataset.novelKey] = field.value;
+    renderContextBadge();
+    renderNovelPanel();
+    persistState(state);
+  });
+});
+
+els.bodyImportFile?.addEventListener("change", handleBodyFileSelected);
+
+els.saveEdit.addEventListener("click", () => saveEditor(false));
+els.saveSendEdit.addEventListener("click", () => saveEditor(true));
+
+els.roundtablePaperGrip?.addEventListener("pointerdown", handleRoundtablePaperPointerDown);
+els.roundtablePaperGrip?.addEventListener("pointermove", handleRoundtablePaperPointerMove);
+els.roundtablePaperGrip?.addEventListener("pointerup", finishRoundtablePaperDrag);
+els.roundtablePaperGrip?.addEventListener("pointercancel", finishRoundtablePaperDrag);
+els.roundtablePaperGrip?.addEventListener("click", (event) => event.preventDefault());
+
+window.addEventListener("resize", resizeInput);
+window.visualViewport?.addEventListener("resize", resizeInput);
+
+render();
+resizeInput();
+scrollBottom();

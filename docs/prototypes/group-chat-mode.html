@@ -1,0 +1,896 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TBird 群聊共创模式视觉原型</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --desk: #e8ece8;
+        --desk-grid: rgba(43, 79, 82, 0.08);
+        --ink: #1f2423;
+        --muted: #68716d;
+        --line: #d6ddd6;
+        --paper: #fffdf5;
+        --paper-edge: #dfd1aa;
+        --paper-shadow: rgba(72, 59, 35, 0.24);
+        --blue: #285f8f;
+        --blue-soft: #e7f0f7;
+        --green: #3f7467;
+        --green-soft: #e8f2ee;
+        --writer: #fff8dc;
+        --writer-line: #c9aa42;
+        --black: #202523;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        min-height: 100%;
+        margin: 0;
+      }
+
+      body {
+        background:
+          linear-gradient(90deg, var(--desk-grid) 1px, transparent 1px),
+          linear-gradient(var(--desk-grid) 1px, transparent 1px),
+          var(--desk);
+        background-size: 28px 28px;
+        color: var(--ink);
+        font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif;
+      }
+
+      button,
+      textarea {
+        font: inherit;
+      }
+
+      button {
+        border: 0;
+        cursor: default;
+      }
+
+      .stage {
+        display: grid;
+        place-items: center;
+        min-height: 100vh;
+        padding: 24px 10px;
+      }
+
+      .phone {
+        position: relative;
+        display: grid;
+        grid-template-rows: auto auto 1fr auto;
+        width: min(100%, 392px);
+        height: min(860px, calc(100vh - 28px));
+        overflow: hidden;
+        border: 1px solid #26312e;
+        border-radius: 10px;
+        background:
+          linear-gradient(180deg, rgba(232, 236, 232, 0.92), rgba(250, 250, 246, 0.98) 210px),
+          #fafaf6;
+        box-shadow: 0 24px 58px rgba(26, 36, 34, 0.24);
+      }
+
+      .topbar {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 8px;
+        align-items: center;
+        min-height: 54px;
+        padding: 10px 10px 8px;
+        border-bottom: 1px solid rgba(38, 49, 46, 0.08);
+        background: rgba(250, 250, 246, 0.86);
+        backdrop-filter: blur(16px);
+      }
+
+      .mode-title {
+        min-width: 0;
+        text-align: center;
+      }
+
+      .mode-title strong {
+        display: block;
+        font-size: 17px;
+        line-height: 1.1;
+      }
+
+      .mode-title span {
+        display: block;
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 32px;
+        border-radius: 8px;
+        white-space: nowrap;
+      }
+
+      .btn.ghost {
+        padding: 0 10px;
+        border: 1px solid rgba(31, 36, 35, 0.12);
+        background: rgba(255, 255, 255, 0.62);
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .btn.dark {
+        padding: 0 12px;
+        background: var(--black);
+        color: #fff;
+        font-size: 13px;
+      }
+
+      .btn.icon {
+        width: 34px;
+        background: rgba(255, 255, 255, 0.7);
+        color: var(--ink);
+        font-size: 18px;
+      }
+
+      .paper-zone {
+        position: relative;
+        display: grid;
+        place-items: center;
+        padding: 20px 18px 14px;
+      }
+
+      .paper-zone::before {
+        content: "";
+        position: absolute;
+        inset: 14px 22px 20px;
+        border-radius: 50%;
+        background: rgba(34, 42, 40, 0.08);
+        filter: blur(14px);
+      }
+
+      .paper {
+        position: relative;
+        width: min(100%, 326px);
+        min-height: 166px;
+        padding: 15px 17px 14px;
+        border: 1px solid var(--paper-edge);
+        border-radius: 4px;
+        background:
+          linear-gradient(90deg, rgba(201, 170, 66, 0.12) 1px, transparent 1px) 38px 0 / 1px 100% no-repeat,
+          repeating-linear-gradient(0deg, transparent 0, transparent 27px, rgba(201, 170, 66, 0.23) 28px),
+          var(--paper);
+        box-shadow:
+          0 18px 28px var(--paper-shadow),
+          0 2px 0 rgba(255, 255, 255, 0.85) inset;
+        transform: rotate(-0.6deg);
+      }
+
+      .paper::before {
+        content: "";
+        position: absolute;
+        top: -10px;
+        left: 50%;
+        width: 84px;
+        height: 18px;
+        transform: translateX(-50%) rotate(0.8deg);
+        border: 1px solid rgba(168, 151, 111, 0.38);
+        border-radius: 3px;
+        background: rgba(243, 232, 193, 0.72);
+        box-shadow: 0 4px 10px rgba(72, 59, 35, 0.12);
+      }
+
+      .paper-head {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 10px;
+        align-items: start;
+        margin-bottom: 8px;
+      }
+
+      .paper-head strong {
+        display: block;
+        color: #6b561d;
+        font-size: 13px;
+      }
+
+      .paper-head span {
+        display: block;
+        margin-top: 3px;
+        color: #9a8440;
+        font-size: 10px;
+      }
+
+      .paper-buttons {
+        display: flex;
+        gap: 5px;
+      }
+
+      .paper-button {
+        min-height: 25px;
+        padding: 0 7px;
+        border: 1px solid rgba(107, 86, 29, 0.18);
+        border-radius: 7px;
+        background: rgba(255, 255, 255, 0.62);
+        color: #6b561d;
+        font-size: 11px;
+      }
+
+      .paper-text {
+        max-height: 88px;
+        overflow: hidden;
+        color: #2f291e;
+        font-family: "Songti SC", "SimSun", "Noto Serif CJK SC", serif;
+        font-size: 15px;
+        line-height: 1.86;
+      }
+
+      .paper.expanded .paper-text {
+        max-height: 210px;
+      }
+
+      .paper.collapsed {
+        min-height: 88px;
+      }
+
+      .paper.collapsed .paper-text,
+      .paper.collapsed .paper-toolbar {
+        display: none;
+      }
+
+      .paper-toolbar {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+        margin-top: 12px;
+        transform: rotate(0.6deg);
+      }
+
+      .paper-toolbar button {
+        min-height: 29px;
+        border-radius: 8px;
+        background: #f7edd0;
+        color: #725b1e;
+        font-size: 12px;
+      }
+
+      .conversation {
+        min-height: 0;
+        overflow-y: auto;
+        padding: 10px 13px 16px;
+      }
+
+      .thread-note {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 13px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .thread-note::before,
+      .thread-note::after {
+        content: "";
+        height: 1px;
+        flex: 1;
+        background: var(--line);
+      }
+
+      .msg {
+        margin: 0 0 13px;
+      }
+
+      .msg.user {
+        display: flex;
+        justify-content: flex-end;
+      }
+
+      .user-bubble {
+        max-width: 78%;
+        padding: 7px 10px;
+        border-radius: 8px;
+        background: var(--black);
+        color: #fff;
+        font-size: 14px;
+        line-height: 1.55;
+      }
+
+      .speaker {
+        margin: 0 0 4px 2px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .advisor {
+        max-width: 88%;
+        width: fit-content;
+        padding: 8px 10px;
+        border: 1px solid rgba(63, 116, 103, 0.16);
+        border-left: 3px solid var(--green);
+        border-radius: 8px;
+        background: var(--green-soft);
+        color: #24322f;
+        font-size: 14px;
+        line-height: 1.64;
+      }
+
+      .writer {
+        max-width: 96%;
+        padding: 11px 12px;
+        border: 1px solid var(--writer-line);
+        border-radius: 7px;
+        background:
+          repeating-linear-gradient(0deg, transparent 0, transparent 29px, rgba(201, 170, 66, 0.2) 30px),
+          var(--writer);
+      }
+
+      .writer p {
+        margin: 0;
+        font-family: "Songti SC", "SimSun", "Noto Serif CJK SC", serif;
+        font-size: 15px;
+        line-height: 1.9;
+      }
+
+      .writer-actions {
+        display: flex;
+        gap: 7px;
+        margin-top: 10px;
+      }
+
+      .writer-actions button {
+        min-height: 28px;
+        padding: 0 9px;
+        border: 1px solid rgba(40, 95, 143, 0.2);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.66);
+        color: var(--blue);
+        font-size: 12px;
+      }
+
+      .composer {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 8px;
+        align-items: end;
+        padding: 10px 11px 12px;
+        border-top: 1px solid var(--line);
+        background: rgba(250, 250, 246, 0.94);
+      }
+
+      .composer-tools {
+        display: grid;
+        gap: 6px;
+      }
+
+      .tool-button {
+        width: 34px;
+        height: 34px;
+        border: 1px solid rgba(31, 36, 35, 0.12);
+        border-radius: 50%;
+        background: #fff;
+        color: var(--ink);
+        font-size: 16px;
+      }
+
+      .composer textarea {
+        min-height: 46px;
+        max-height: 98px;
+        resize: none;
+        padding: 9px 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+        color: var(--ink);
+        font-size: 14px;
+        line-height: 1.45;
+      }
+
+      .send {
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        background: var(--blue);
+        color: #fff;
+        font-size: 18px;
+      }
+
+      .participant-sheet {
+        position: absolute;
+        right: 10px;
+        bottom: 76px;
+        left: 10px;
+        padding: 12px;
+        border: 1px solid rgba(31, 36, 35, 0.12);
+        border-radius: 9px;
+        background: rgba(255, 255, 255, 0.98);
+        box-shadow: 0 18px 42px rgba(31, 36, 35, 0.2);
+      }
+
+      .participant-sheet[hidden] {
+        display: none;
+      }
+
+      .sheet-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+
+      .sheet-top strong {
+        font-size: 15px;
+      }
+
+      .sheet-top button {
+        min-height: 28px;
+        padding: 0 8px;
+        border-radius: 8px;
+        background: var(--blue-soft);
+        color: var(--blue);
+        font-size: 12px;
+      }
+
+      .participant-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .participant {
+        display: grid;
+        grid-template-columns: 28px 1fr auto;
+        gap: 7px;
+        align-items: center;
+        min-height: 42px;
+        padding: 7px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #f7faf7;
+      }
+
+      .participant.active {
+        border-color: rgba(40, 95, 143, 0.28);
+        background: var(--blue-soft);
+      }
+
+      .rank {
+        display: grid;
+        place-items: center;
+        width: 26px;
+        height: 26px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: #fff;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .participant.active .rank {
+        border-color: var(--blue);
+        background: var(--blue);
+        color: #fff;
+      }
+
+      .participant-name {
+        min-width: 0;
+        font-size: 13px;
+      }
+
+      .edit-dot {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.7);
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .sheet-switches {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 7px;
+        margin-top: 11px;
+      }
+
+      .toggle {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        min-height: 32px;
+        padding: 6px 8px;
+        border-radius: 8px;
+        background: #f3f6f3;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .toggle i {
+        width: 18px;
+        height: 18px;
+        border-radius: 5px;
+        background: var(--green);
+      }
+
+      .toggle.off {
+        color: #9a7676;
+      }
+
+      .toggle.off i {
+        background: #c9c9c9;
+      }
+
+      .sheet-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-top: 12px;
+      }
+
+      .sheet-actions button {
+        min-height: 36px;
+        border-radius: 8px;
+        font-size: 13px;
+      }
+
+      .sheet-actions .secondary {
+        border: 1px solid var(--line);
+        background: #fff;
+        color: var(--muted);
+      }
+
+      .sheet-actions .primary {
+        background: var(--black);
+        color: #fff;
+      }
+
+      .toast {
+        position: absolute;
+        left: 50%;
+        bottom: 74px;
+        z-index: 5;
+        max-width: calc(100% - 42px);
+        transform: translateX(-50%);
+        padding: 9px 12px;
+        border-radius: 999px;
+        background: rgba(31, 36, 35, 0.92);
+        color: #fff;
+        font-size: 13px;
+        box-shadow: 0 10px 28px rgba(31, 36, 35, 0.22);
+      }
+
+      .toast[hidden] {
+        display: none;
+      }
+
+      @media (max-height: 760px) {
+        .phone {
+          height: calc(100vh - 18px);
+        }
+
+        .paper {
+          min-height: 138px;
+        }
+
+        .paper-text {
+          max-height: 58px;
+        }
+
+        .participant-sheet {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="stage">
+      <section class="phone" aria-label="TBird 群聊共创模式视觉原型">
+        <header class="topbar">
+          <button class="btn ghost" type="button" data-action="toast" data-message="返回普通创作模式">返回</button>
+          <div class="mode-title">
+            <strong>群聊共创</strong>
+            <span>围绕当前正文开会</span>
+          </div>
+          <button class="btn dark" type="button" data-action="toggle-sheet">成员</button>
+        </header>
+
+        <section class="paper-zone" aria-label="正文纸张小窗">
+          <article class="paper" id="paper">
+            <div class="paper-head">
+              <div>
+                <strong>正文 · 写手</strong>
+                <span>最近片段，点击展开全文</span>
+              </div>
+              <div class="paper-buttons">
+                <button class="paper-button" type="button" data-action="collapse-paper">折叠</button>
+                <button class="paper-button" type="button" data-action="expand-paper">全文</button>
+              </div>
+            </div>
+            <div class="paper-text">
+              夜雨贴着旧城墙往下淌。他停在审判庭门前，听见火盆里传来低低的爆响。门后有人念出契约神的名字，像把一枚冷针慢慢推入他的耳中。
+            </div>
+            <div class="paper-toolbar">
+              <button type="button" data-action="toast" data-message="已模拟采纳正文小窗">采纳</button>
+              <button type="button" data-action="toast" data-message="已模拟请求写手重写当前片段">重写</button>
+              <button type="button" data-action="add-writer">续写</button>
+            </div>
+          </article>
+        </section>
+
+        <section class="conversation" id="conversation" aria-label="群聊讨论">
+          <div class="thread-note">本轮讨论</div>
+
+          <article class="msg user">
+            <div class="user-bubble">这段是不是缺一个转折？</div>
+          </article>
+
+          <article class="msg">
+            <div class="speaker">设定师</div>
+            <div class="advisor">我觉得转折应该来自诅咒规则本身。不要只是外部审判升级，而是让规则第一次伤到主角真正珍视的东西。</div>
+          </article>
+
+          <article class="msg">
+            <div class="speaker">剧情师</div>
+            <div class="advisor">可以让妹妹的记忆第一次被夺走。这样冲突会从“他被审判”转向“他正在失去自己为什么反抗”。</div>
+          </article>
+
+          <article class="msg">
+            <div class="speaker">审稿</div>
+            <div class="advisor">这个转折有效，但要提前埋一个“声音”的伏笔，否则读者会觉得突然。</div>
+          </article>
+
+          <article class="msg user">
+            <div class="user-bubble">@写手 按这个继续写</div>
+          </article>
+
+          <article class="msg">
+            <div class="speaker">写手</div>
+            <div class="writer">
+              <p>他忽然发现，自己想不起妹妹的声音了。那个曾经在雨夜里喊他回家的声音，像被谁从脑中轻轻抽走，只剩一片没有回响的空白。</p>
+              <div class="writer-actions">
+                <button type="button" data-action="toast" data-message="已模拟采纳写手正文">采纳</button>
+                <button type="button" data-action="toast" data-message="已模拟重写这段正文">重写</button>
+                <button type="button" data-action="add-writer">继续</button>
+              </div>
+            </div>
+          </article>
+
+          <article class="msg">
+            <div class="speaker">审稿</div>
+            <div class="advisor">这一句好，但前面需要多铺半拍，让“想不起声音”的瞬间更刺。</div>
+          </article>
+        </section>
+
+        <footer class="composer">
+          <div class="composer-tools">
+            <button class="tool-button" type="button" data-action="toggle-sheet">...</button>
+          </div>
+          <textarea id="composerText">@审稿 看一下这一版能不能采纳</textarea>
+          <button class="send" type="button" data-action="send">↑</button>
+        </footer>
+
+        <aside class="participant-sheet" id="participantSheet" aria-label="参与者设置面板">
+          <div class="sheet-top">
+            <strong>参与者与顺序</strong>
+            <button type="button" data-action="toast" data-message="新增助手：这里会打开助手配置表单">新增助手</button>
+          </div>
+          <div class="participant-grid">
+            <div class="participant active" data-participant="设定师">
+              <span class="rank">1</span>
+              <span class="participant-name">设定师</span>
+              <button class="edit-dot" type="button" data-action="toast" data-message="编辑设定师：模型、温度、提示词">改</button>
+            </div>
+            <div class="participant active" data-participant="剧情师">
+              <span class="rank">2</span>
+              <span class="participant-name">剧情师</span>
+              <button class="edit-dot" type="button" data-action="toast" data-message="编辑剧情师：模型、温度、提示词">改</button>
+            </div>
+            <div class="participant" data-participant="审稿">
+              <span class="rank"></span>
+              <span class="participant-name">审稿</span>
+              <button class="edit-dot" type="button" data-action="toast" data-message="编辑审稿：模型、温度、提示词">改</button>
+            </div>
+            <div class="participant active" data-participant="文风师">
+              <span class="rank">3</span>
+              <span class="participant-name">文风师</span>
+              <button class="edit-dot" type="button" data-action="toast" data-message="编辑文风师：模型、温度、提示词">改</button>
+            </div>
+          </div>
+          <div class="sheet-switches">
+            <div class="toggle" data-action="toggle-switch"><i></i><span>讨论模式</span></div>
+            <div class="toggle" data-action="toggle-switch"><i></i><span>顺序发言</span></div>
+            <div class="toggle" data-action="toggle-switch"><i></i><span>允许反驳</span></div>
+            <div class="toggle" data-action="toggle-switch"><i></i><span>中文深思</span></div>
+          </div>
+          <div class="sheet-actions">
+            <button class="secondary" type="button" data-action="pause-round">暂停讨论</button>
+            <button class="primary" type="button" data-action="start-round">开始本轮</button>
+          </div>
+        </aside>
+        <div class="toast" id="toast" hidden></div>
+      </section>
+    </main>
+    <script>
+      const paper = document.querySelector("#paper");
+      const sheet = document.querySelector("#participantSheet");
+      const conversation = document.querySelector("#conversation");
+      const composerText = document.querySelector("#composerText");
+      const toast = document.querySelector("#toast");
+      let toastTimer = null;
+
+      const sampleReplies = {
+        "设定师": "我会把转折压回规则本身：诅咒不是惩罚他说谎，而是惩罚他试图绕开真相的瞬间。",
+        "剧情师": "我建议让冲突升级到私人损失。审判庭只是外壳，真正的刀应该落在他和妹妹的记忆上。",
+        "审稿": "这一轮方向成立，但需要提前给读者一个可抓住的意象，比如妹妹的声音、铃铛或旧门牌。",
+        "文风师": "这里可以写得更冷一点，不要解释太多，让读者先感到空，再明白他失去了什么。"
+      };
+
+      function showToast(message) {
+        toast.textContent = message;
+        toast.hidden = false;
+        window.clearTimeout(toastTimer);
+        toastTimer = window.setTimeout(() => {
+          toast.hidden = true;
+        }, 1600);
+      }
+
+      function scrollConversation() {
+        conversation.scrollTop = conversation.scrollHeight;
+      }
+
+      function addUserMessage(text) {
+        const article = document.createElement("article");
+        article.className = "msg user";
+        article.innerHTML = `<div class="user-bubble">${escapeHtml(text)}</div>`;
+        conversation.appendChild(article);
+        scrollConversation();
+      }
+
+      function addAdvisorMessage(name, text) {
+        const article = document.createElement("article");
+        article.className = "msg";
+        article.innerHTML = `
+          <div class="speaker">${escapeHtml(name)}</div>
+          <div class="advisor">${escapeHtml(text)}</div>
+        `;
+        conversation.appendChild(article);
+        scrollConversation();
+      }
+
+      function addWriterMessage() {
+        const article = document.createElement("article");
+        article.className = "msg";
+        article.innerHTML = `
+          <div class="speaker">写手</div>
+          <div class="writer">
+            <p>他在审判庭的火光里停了一瞬，像是终于听见某个声音从世界背面退走。那不是死亡，更像一扇门被轻轻关上，而门后站着他再也想不起名字的人。</p>
+            <div class="writer-actions">
+              <button type="button" data-action="toast" data-message="已模拟采纳写手正文">采纳</button>
+              <button type="button" data-action="toast" data-message="已模拟重写这段正文">重写</button>
+              <button type="button" data-action="add-writer">继续</button>
+            </div>
+          </div>
+        `;
+        conversation.appendChild(article);
+        scrollConversation();
+        showToast("写手已模拟续写一段正文");
+      }
+
+      function escapeHtml(text) {
+        return String(text)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function updateParticipantRanks() {
+        const active = [...document.querySelectorAll(".participant.active")];
+        document.querySelectorAll(".participant").forEach((item) => {
+          item.querySelector(".rank").textContent = "";
+        });
+        active.forEach((item, index) => {
+          item.querySelector(".rank").textContent = String(index + 1);
+        });
+      }
+
+      function selectedParticipants() {
+        return [...document.querySelectorAll(".participant.active")]
+          .sort((a, b) => Number(a.querySelector(".rank").textContent) - Number(b.querySelector(".rank").textContent))
+          .map((item) => item.dataset.participant);
+      }
+
+      function startRound() {
+        const names = selectedParticipants();
+        if (!names.length) {
+          showToast("先选择至少一位参与者");
+          return;
+        }
+        names.forEach((name, index) => {
+          window.setTimeout(() => {
+            addAdvisorMessage(name, sampleReplies[name] || "我会先读完上文，再给出自己的意见。");
+          }, index * 260);
+        });
+        showToast(`开始本轮：${names.join(" → ")}`);
+      }
+
+      document.addEventListener("click", (event) => {
+        const participant = event.target.closest(".participant");
+        if (participant && !event.target.closest(".edit-dot")) {
+          participant.classList.toggle("active");
+          updateParticipantRanks();
+          showToast(participant.classList.contains("active")
+            ? `${participant.dataset.participant} 已加入讨论`
+            : `${participant.dataset.participant} 已移出讨论`);
+          return;
+        }
+
+        const target = event.target.closest("[data-action]");
+        if (!target) return;
+        const action = target.dataset.action;
+
+        if (action === "toggle-sheet") {
+          sheet.hidden = !sheet.hidden;
+          showToast(sheet.hidden ? "已收起成员设置" : "已打开成员设置");
+        }
+
+        if (action === "collapse-paper") {
+          paper.classList.add("collapsed");
+          paper.classList.remove("expanded");
+          showToast("正文纸张已折叠");
+        }
+
+        if (action === "expand-paper") {
+          paper.classList.add("expanded");
+          paper.classList.remove("collapsed");
+          showToast("正文纸张已展开");
+        }
+
+        if (action === "toast") {
+          showToast(target.dataset.message || "已点击");
+        }
+
+        if (action === "toggle-switch") {
+          target.classList.toggle("off");
+          showToast(target.classList.contains("off")
+            ? `${target.textContent.trim()} 已关闭`
+            : `${target.textContent.trim()} 已开启`);
+        }
+
+        if (action === "pause-round") {
+          document.querySelectorAll(".toggle")[0]?.classList.add("off");
+          showToast("讨论已暂停，正在说话的助手会被截断");
+        }
+
+        if (action === "start-round") {
+          document.querySelectorAll(".toggle")[0]?.classList.remove("off");
+          startRound();
+        }
+
+        if (action === "send") {
+          const text = composerText.value.trim();
+          if (!text) {
+            showToast("先输入一句话");
+            return;
+          }
+          addUserMessage(text);
+          composerText.value = "";
+          showToast(text.includes("@写手") ? "已模拟发送给写手" : "已模拟发送到群聊");
+          if (text.includes("@写手")) {
+            window.setTimeout(addWriterMessage, 280);
+          }
+        }
+
+        if (action === "add-writer") {
+          addWriterMessage();
+        }
+      });
+
+      updateParticipantRanks();
+    </script>
+  </body>
+</html>

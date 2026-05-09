@@ -1,0 +1,27 @@
+:root {
+  color-scheme: light;
+  --bg: #fffdfa;
+  --panel: #ffffff;
+  --line: #e9e5dd;
+  --text: #202124;
+  --muted: #858585;
+  --user: #f0f1f2;
+  --accent: #222222;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+  --composer-height: 76px;
+  --composer-min-height: 66px;
+  --composer-font-size: 16px;
+  --composer-max-textarea: 74px;
+  --send-button-size: 32px;
+  --tool-button-size: 26px;
+  --font-size: 17px;
+  --line-height: 1.5;
+  --assistant-left: 12px;
+  --message-side-padding: 18px;
+  --message-gap: 12px;
+  --user-bubble-padding-y: 2px;
+  --user-bubble-padding-x: 3px;
+  --meta-font-size: 12px;
+  --footer-gap: 8px;
+  --more-button-size: 28px;
+}
