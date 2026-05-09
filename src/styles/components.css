@@ -23,6 +23,7 @@
 
 .message-card {
   position: relative;
+  overflow: hidden;
   max-width: min(74ch, calc(100vw - 58px));
   padding: 0;
   border-radius: 18px;
@@ -31,6 +32,15 @@
   letter-spacing: 0;
   white-space: pre-wrap;
   word-break: break-word;
+  transition:
+    background-color var(--motion-fast),
+    box-shadow var(--motion-fast),
+    scale var(--motion-fast);
+}
+
+.message-card:hover,
+.message-card:focus-visible {
+  box-shadow: 0 7px 18px rgba(31, 28, 23, 0.05);
 }
 
 .user .message-card {
@@ -95,6 +105,8 @@
   background: rgba(255, 255, 255, 0.98);
   box-shadow: var(--shadow);
   transform: translateX(-50%);
+  transform-origin: 50% 100%;
+  animation: menu-float-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
 .message-menu button {
@@ -103,6 +115,10 @@
   border-radius: 6px;
   color: #2d68a8;
   font-size: 15px;
+  transition:
+    background-color var(--motion-fast),
+    color var(--motion-fast),
+    scale var(--motion-fast);
 }
 
 .message-menu button:active,
@@ -122,6 +138,11 @@
   border-radius: 16px;
   background: #f4f5f6;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  transition:
+    border-color var(--motion-soft),
+    background-color var(--motion-soft),
+    box-shadow var(--motion-soft),
+    transform var(--motion-soft);
 }
 
 .composer textarea {
@@ -136,6 +157,9 @@
   color: #2a2a2a;
   font-size: var(--composer-font-size);
   line-height: 1.32;
+  transition:
+    color var(--motion-fast),
+    opacity var(--motion-fast);
 }
 
 .composer textarea::placeholder {
@@ -148,6 +172,7 @@
   align-items: center;
   gap: 4px;
   margin-top: 4px;
+  transition: grid-template-columns var(--motion-soft), gap var(--motion-soft);
 }
 
 .roundtable-mode .composer-bottom {
@@ -243,14 +268,28 @@
   background: #d7d7d7;
   font-size: 18px;
   font-weight: 700;
+  transform-origin: center;
+  transition:
+    background-color var(--motion-fast),
+    color var(--motion-fast),
+    box-shadow var(--motion-fast),
+    scale var(--motion-fast);
 }
 
 body.is-ready .send-button {
   background: #222;
+  box-shadow: 0 10px 24px rgba(32, 32, 32, 0.16);
+  animation: send-ready 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 body.is-generating .send-button {
   background: #222;
+  animation: breathing-stop 1200ms ease-in-out infinite;
+}
+
+body.roundtable-busy .roundtable-cycle-button,
+body.roundtable-busy .send-button {
+  animation: breathing-stop 1200ms ease-in-out infinite;
 }
 
 .roundtable-mode-head {
@@ -312,9 +351,13 @@ body.is-generating .send-button {
   padding: 10px;
   border: 1px solid #e5dac5;
   background: rgba(255, 255, 255, 0.74);
+  transform-origin: 50% 0;
+  animation: member-panel-open 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .roundtable-member-option {
+  position: relative;
+  overflow: hidden;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 36px;
   gap: 1px 8px;
@@ -325,6 +368,18 @@ body.is-generating .send-button {
   border-radius: 8px;
   background: #fffdf8;
   text-align: left;
+  transition:
+    border-color var(--motion-fast),
+    background-color var(--motion-fast),
+    box-shadow var(--motion-fast),
+    scale var(--motion-fast),
+    transform var(--motion-fast);
+}
+
+.roundtable-member-option:hover,
+.roundtable-member-option:focus-within {
+  box-shadow: 0 10px 24px rgba(55, 48, 39, 0.07);
+  transform: translateY(-1px);
 }
 
 .roundtable-member-main {
@@ -387,6 +442,22 @@ body.is-generating .send-button {
 .roundtable-member-option.selected {
   border-color: #b7924d;
   background: #fff4d9;
+  animation: member-select 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.roundtable-member-option.speaking {
+  border-color: rgba(34, 34, 34, 0.42);
+  background: rgba(255, 250, 238, 0.98);
+  box-shadow:
+    0 12px 28px rgba(55, 48, 39, 0.08),
+    0 0 0 4px rgba(34, 34, 34, 0.035);
+}
+
+.roundtable-member-option.speaking .roundtable-member-main span {
+  color: #fff;
+  border-color: var(--accent);
+  background: var(--accent);
+  animation: speaker-pulse 1200ms ease-in-out infinite;
 }
 
 .roundtable-member-option.writer {
@@ -412,6 +483,7 @@ body.is-generating .send-button {
   border: 1px solid #e5dac5;
   border-radius: 8px;
   background: rgba(255, 253, 248, 0.78);
+  animation: soft-unfold 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .roundtable-context-head {
@@ -783,6 +855,7 @@ body.paper-dragging .paper-grip {
   gap: 10px;
   align-items: start;
   padding: 0 12px;
+  animation: roundtable-line-in 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
 .roundtable-line.user {
@@ -873,6 +946,8 @@ body.paper-dragging .paper-grip {
 }
 
 .roundtable-speech {
+  position: relative;
+  overflow: hidden;
   min-width: 0;
   max-width: min(76vw, 430px);
   padding: 12px 14px;
@@ -885,6 +960,19 @@ body.paper-dragging .paper-grip {
   line-height: 1.62;
   white-space: pre-wrap;
   word-break: break-word;
+  transition:
+    border-color var(--motion-fast),
+    background-color var(--motion-fast),
+    box-shadow var(--motion-fast),
+    transform var(--motion-fast);
+}
+
+.roundtable-speech:hover,
+.roundtable-speech:focus-visible {
+  box-shadow:
+    0 10px 24px rgba(55, 48, 39, 0.06),
+    0 1px 0 rgba(255, 255, 255, 0.76) inset;
+  transform: translateY(-1px);
 }
 
 .roundtable-mention {
@@ -892,6 +980,7 @@ body.paper-dragging .paper-grip {
   padding: 0 5px;
   border-radius: 8px;
   font-weight: 700;
+  animation: mention-glow 680ms ease-out both;
 }
 
 .roundtable-mention.unknown {
@@ -934,6 +1023,8 @@ body.paper-dragging .paper-grip {
 }
 
 .roundtable-writer-card {
+  position: relative;
+  overflow: hidden;
   padding: 14px;
   border: 1px solid #dfd4bd;
   border-radius: 18px;
@@ -943,6 +1034,16 @@ body.paper-dragging .paper-grip {
   box-shadow:
     0 12px 28px rgba(88, 73, 40, 0.1),
     0 1px 0 rgba(255, 255, 255, 0.92) inset;
+  animation: writer-card-land 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  transition:
+    box-shadow var(--motion-fast),
+    transform var(--motion-fast);
+}
+
+.roundtable-writer-card:hover,
+.roundtable-writer-card:focus-visible {
+  box-shadow: 0 20px 42px rgba(52, 44, 33, 0.11);
+  transform: translateY(-1px);
 }
 
 .roundtable-writer-head {
@@ -1592,6 +1693,130 @@ body.paper-dragging .paper-grip {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes menu-float-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+@keyframes send-ready {
+  0% {
+    scale: 0.88;
+  }
+
+  62% {
+    scale: 1.08;
+  }
+
+  100% {
+    scale: 1;
+  }
+}
+
+@keyframes breathing-stop {
+  0%,
+  100% {
+    box-shadow: 0 8px 18px rgba(157, 75, 75, 0.16);
+  }
+
+  50% {
+    box-shadow: 0 10px 28px rgba(157, 75, 75, 0.32);
+  }
+}
+
+@keyframes member-panel-open {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scaleY(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+}
+
+@keyframes member-select {
+  0% {
+    scale: 0.98;
+  }
+
+  60% {
+    scale: 1.025;
+  }
+
+  100% {
+    scale: 1;
+  }
+}
+
+@keyframes speaker-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(34, 34, 34, 0.18);
+  }
+
+  50% {
+    box-shadow: 0 0 0 7px rgba(34, 34, 34, 0);
+  }
+}
+
+@keyframes soft-unfold {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes roundtable-line-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes mention-glow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(141, 107, 49, 0.22);
+  }
+
+  72% {
+    box-shadow: 0 0 0 8px rgba(141, 107, 49, 0);
+  }
+
+  100% {
+    box-shadow: none;
+  }
+}
+
+@keyframes writer-card-land {
+  from {
+    opacity: 0;
+    transform: translateY(10px) rotate(-0.18deg);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) rotate(0deg);
   }
 }
 

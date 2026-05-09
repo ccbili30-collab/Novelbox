@@ -9,6 +9,6 @@ export function bindCommandDelegation(doc, renderMenu, getActiveMenuNodeId, setA
       return;
     }
     event.preventDefault();
-    handleCommand(target.dataset.command, target);
+    handleCommand(target.dataset.command, target, event);
   });
 }
