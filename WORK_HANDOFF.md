@@ -192,6 +192,31 @@ Not yet fully done:
 
 ## Recommended Next Steps
 
+### Feature Line Update: Writer Manuscript Sync Control
+
+Functional branch: `codex/roundtable-features`
+
+Implemented in the feature line:
+
+- new writer outputs now store manuscript sync metadata on the writer roundtable message
+- writer message menu includes `撤回正文`
+- `撤回正文` removes only the prose segment that this writer message synced into `sessionNovel().body`
+- old writer messages without sync metadata can still be reverted if their text is still the exact tail of the manuscript body
+- writer message menu includes `重写并替换`
+- `重写并替换` asks the writer to rewrite that prose card and replaces the corresponding manuscript segment instead of appending another copy
+- if the manuscript was edited and the original segment can no longer be matched, the app refuses automatic rollback/replacement instead of corrupting the body
+
+Important code locations:
+
+- `src/main.js`
+  - `syncWriterMessageToNovel()`
+  - `replaceSyncedWriterSegment()`
+  - `removeSyncedWriterSegment()`
+  - `undoWriterManuscriptSync()`
+  - `rewriteWriterManuscriptSync()`
+  - `generateRoundtableWriter()`
+  - `renderRoundtableMenu()`
+
 ### Feature Line Update: Custom Roundtable Assistants
 
 Functional branch: `codex/roundtable-features`

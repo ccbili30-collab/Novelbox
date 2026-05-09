@@ -796,9 +796,12 @@ function renderRoundtableMenu() {
     return;
   }
   const canRegenerate = message.speakerId !== "user";
+  const isWriter = message.speakerId === "writer";
   els.menu.innerHTML = `
     <button type="button" data-command="copy-roundtable-message" data-round-id="${message.id}">复制</button>
     <button type="button" data-command="adopt-roundtable-message" data-round-id="${message.id}">让写手采纳</button>
+    ${isWriter ? `<button type="button" data-command="undo-writer-sync" data-round-id="${message.id}">撤回正文</button>` : ""}
+    ${isWriter ? `<button type="button" data-command="rewrite-writer-sync" data-round-id="${message.id}">重写并替换</button>` : ""}
     ${canRegenerate ? `<button type="button" data-command="regen-roundtable-message" data-round-id="${message.id}">重新回答</button>` : ""}
     <button type="button" data-command="delete-roundtable-message" data-round-id="${message.id}">删除</button>
   `;
@@ -1527,18 +1530,20 @@ function deleteCustomRoundAssistant() {
   showToast("已删除自定义助手");
 }
 
-function addRoundtableMessage(speakerId, speakerName, content) {
+function addRoundtableMessage(speakerId, speakerName, content, extra = {}) {
   const rt = roundtableState();
   const shouldFollowPaper = speakerId === "writer" && els.roundtablePaperViewport
     ? els.roundtablePaperViewport.scrollHeight - els.roundtablePaperViewport.scrollTop - els.roundtablePaperViewport.clientHeight < 72
     : false;
-  rt.messages.push({
+  const message = {
     id: uid("round"),
     speakerId,
     speakerName,
     content: clean(content),
     createdAt: Date.now(),
-  });
+    ...extra,
+  };
+  rt.messages.push(message);
   rt.messages = rt.messages.slice(-80);
   touchSession(activeSession());
   render();
@@ -1546,6 +1551,7 @@ function addRoundtableMessage(speakerId, speakerName, content) {
     scrollRoundtablePaperBottom();
   }
   scrollRoundtableBottom();
+  return message;
 }
 
 function getRoundtableMessage(id) {
@@ -1577,11 +1583,155 @@ function copyRoundtableMessage(id) {
   copyText(message.content || "");
 }
 
+function createWriterSyncSegment(previousBody, text) {
+  const previous = clean(previousBody);
+  const content = clean(text);
+  const separator = previous ? "\n\n" : "";
+  const segment = `${separator}${content}`;
+  return {
+    body: `${previous}${segment}`,
+    segment,
+    start: previous.length,
+    end: previous.length + segment.length,
+    content,
+  };
+}
+
+function syncWriterMessageToNovel(message, text) {
+  const segment = createWriterSyncSegment(sessionNovel().body, text);
+  sessionNovel().body = segment.body;
+  message.manuscriptSync = {
+    active: true,
+    start: segment.start,
+    end: segment.end,
+    segment: segment.segment,
+    content: segment.content,
+    updatedAt: Date.now(),
+  };
+}
+
+function replaceSyncedWriterSegment(message, nextText) {
+  const novel = sessionNovel();
+  const body = novel.body || "";
+  const sync = message?.manuscriptSync;
+  const content = clean(nextText);
+  if (!content) return false;
+  if (sync?.active && Number.isFinite(sync.start) && Number.isFinite(sync.end)) {
+    const currentSegment = body.slice(sync.start, sync.end);
+    if (currentSegment === sync.segment) {
+      const replacement = `${sync.start > 0 ? "\n\n" : ""}${content}`;
+      novel.body = `${body.slice(0, sync.start)}${replacement}${body.slice(sync.end)}`;
+      message.manuscriptSync = {
+        active: true,
+        start: sync.start,
+        end: sync.start + replacement.length,
+        segment: replacement,
+        content,
+        updatedAt: Date.now(),
+      };
+      return true;
+    }
+  }
+  const oldContent = clean(sync?.content || message?.content);
+  const trimmedBody = clean(body);
+  if (!oldContent || !trimmedBody.endsWith(oldContent)) return false;
+  const previousBody = clean(trimmedBody.slice(0, -oldContent.length));
+  const fallback = createWriterSyncSegment(previousBody, content);
+  novel.body = fallback.body;
+  message.manuscriptSync = {
+    active: true,
+    start: fallback.start,
+    end: fallback.end,
+    segment: fallback.segment,
+    content: fallback.content,
+    updatedAt: Date.now(),
+  };
+  return true;
+}
+
+function removeSyncedWriterSegment(message) {
+  const novel = sessionNovel();
+  const body = novel.body || "";
+  const sync = message?.manuscriptSync;
+  if (sync?.active && Number.isFinite(sync.start) && Number.isFinite(sync.end)) {
+    const currentSegment = body.slice(sync.start, sync.end);
+    if (currentSegment === sync.segment) {
+      novel.body = clean(`${body.slice(0, sync.start)}${body.slice(sync.end)}`);
+      message.manuscriptSync = { ...sync, active: false, removedAt: Date.now() };
+      return true;
+    }
+  }
+  const content = clean(sync?.content || message?.content);
+  const trimmedBody = clean(body);
+  if (content && trimmedBody.endsWith(content)) {
+    novel.body = clean(trimmedBody.slice(0, -content.length));
+    message.manuscriptSync = {
+      ...(sync || {}),
+      active: false,
+      content,
+      removedAt: Date.now(),
+    };
+    return true;
+  }
+  return false;
+}
+
+function undoWriterManuscriptSync(id) {
+  if (roundtableGenerating || isGenerating) return showToast("生成中不能撤回正文");
+  const message = getRoundtableMessage(id);
+  if (!message || message.speakerId !== "writer") return;
+  activeRoundtableMessageId = null;
+  if (!removeSyncedWriterSegment(message)) {
+    render();
+    return showToast("正文已被修改，无法自动撤回这一段");
+  }
+  touchSession(activeSession());
+  render();
+  persistState(state);
+  showToast("已撤回这段写手正文");
+}
+
 async function adoptRoundtableMessage(id) {
   const message = getRoundtableMessage(id);
   if (!message) return;
   activeRoundtableMessageId = null;
   await generateRoundtableWriter(`请采纳这条圆桌意见并续写正文：\n${message.speakerName}：${message.content}`);
+}
+
+async function rewriteWriterManuscriptSync(id) {
+  const message = getRoundtableMessage(id);
+  if (!message || message.speakerId !== "writer") return;
+  if (roundtableGenerating || isGenerating || materialGenerating) return showToast("已有生成任务进行中");
+  roundtableShouldStop = false;
+  roundtableGenerating = true;
+  activeRoundtableMessageId = null;
+  render();
+  try {
+    validateApi();
+    const writer = getRoundAssistant("writer");
+    const text = await callRoundtableAssistant(writer, `请重写下面这段正文。保留创作意图，但改善表达、节奏和画面。只输出重写后的正文：\n${message.content}`);
+    if (roundtableShouldStop) return;
+    const next = clean(text);
+    if (!next) return showToast("写手没有返回可替换正文");
+    if (!replaceSyncedWriterSegment(message, next)) {
+      return showToast("正文已被修改，无法自动替换这一段");
+    }
+    message.content = next;
+    message.speakerName = writer.name;
+    message.createdAt = Date.now();
+    touchSession(activeSession());
+    showToast("已重写并替换正文");
+  } catch (error) {
+    if (!roundtableShouldStop && error.name !== "AbortError") {
+      showToast(humanizeError(error, "重写替换失败"));
+    }
+  } finally {
+    roundtableGenerating = false;
+    abortController = null;
+    roundtableShouldStop = false;
+    render();
+    persistState(state);
+  }
 }
 
 async function regenerateRoundtableMessage(id) {
@@ -1708,9 +1858,8 @@ async function generateRoundtableWriter(userText) {
     const writer = getRoundAssistant("writer");
     const text = await callRoundtableAssistant(writer, userText || "请根据圆桌讨论继续写正文。");
     if (roundtableShouldStop) return;
-    addRoundtableMessage("writer", "写手", text);
-    const novel = sessionNovel();
-    novel.body = [clean(novel.body), clean(text)].filter(Boolean).join("\n\n");
+    const message = addRoundtableMessage("writer", writer.name || "写手", text);
+    syncWriterMessageToNovel(message, text);
     persistState(state);
     showToast("写手已更新正文，并同步到正文库");
   } catch (error) {
@@ -1793,6 +1942,8 @@ const handleCommand = createCommandRegistry({
   "copy-roundtable-message": (target) => copyRoundtableMessage(target.dataset.roundId),
   "delete-roundtable-message": (target) => deleteRoundtableMessage(target.dataset.roundId),
   "adopt-roundtable-message": (target) => adoptRoundtableMessage(target.dataset.roundId),
+  "undo-writer-sync": (target) => undoWriterManuscriptSync(target.dataset.roundId),
+  "rewrite-writer-sync": (target) => rewriteWriterManuscriptSync(target.dataset.roundId),
   "regen-roundtable-message": (target) => regenerateRoundtableMessage(target.dataset.roundId),
   "toggle-menu": (target) => {
     const nodeId = target.dataset.nodeId;
