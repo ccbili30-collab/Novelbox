@@ -192,6 +192,34 @@ Not yet fully done:
 
 ## Recommended Next Steps
 
+### Feature Line Update: Manuscript Version History
+
+Functional branch: `codex/roundtable-features`
+
+Implemented in the feature line:
+
+- the novel panel now has a `保存版本` action for manually saving the current manuscript body
+- the novel panel shows the latest manuscript versions with restore/delete actions
+- up to 40 manuscript versions are stored per session under `session.novel.versions`
+- importing TXT and syncing all AI output into the body now records manuscript versions
+- writer continuation, writer replacement, and writer rollback now record manuscript versions automatically
+- restoring a version first saves a `恢复前备份` version of the current body, then replaces `sessionNovel().body`
+
+Important code locations:
+
+- `index.html`
+  - `#novelVersionList`
+  - `data-command="save-manuscript-version"`
+- `src/main.js`
+  - `recordManuscriptVersion()`
+  - `saveManuscriptVersion()`
+  - `restoreManuscriptVersion()`
+  - `deleteManuscriptVersion()`
+  - `renderNovelVersions()`
+- `src/styles/panels.css`
+  - `.novel-version-list`
+  - `.novel-version-item`
+
 ### Feature Line Update: Assistant Templates
 
 Functional branch: `codex/roundtable-features`

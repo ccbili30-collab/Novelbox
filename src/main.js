@@ -133,6 +133,7 @@ const els = {
   roundtableDiscussion: $("#roundtableDiscussion"),
   novelFields: Array.from(document.querySelectorAll("[data-novel-key]")),
   novelStats: $("#novelStats"),
+  novelVersionList: $("#novelVersionList"),
   bodyImportFile: $("#bodyImportFile"),
   sessionList: $("#sessionList"),
   historySearch: $("#historySearch"),
@@ -265,6 +266,9 @@ function sessionSettings(session = activeSession()) {
 
 function sessionNovel(session = activeSession()) {
   session.novel = { ...createDefaultNovel(), ...(session.novel || {}) };
+  session.novel.versions = Array.isArray(session.novel.versions)
+    ? session.novel.versions.filter((version) => version && typeof version === "object" && clean(version.body))
+    : [];
   return session.novel;
 }
 
@@ -965,6 +969,34 @@ function renderNovelPanel() {
     ];
     els.novelStats.innerHTML = items.map((item) => `<span>${escapeHtml(item)}</span>`).join("");
   }
+  renderNovelVersions();
+}
+
+function renderNovelVersions() {
+  if (!els.novelVersionList) return;
+  const versions = sessionNovel().versions || [];
+  if (!versions.length) {
+    els.novelVersionList.innerHTML = `<p class="muted">还没有正文版本。</p>`;
+    return;
+  }
+  els.novelVersionList.innerHTML = `
+    <div class="novel-version-head">
+      <strong>正文版本</strong>
+      <span>${versions.length}/40</span>
+    </div>
+    ${versions.slice(0, 8).map((version) => `
+      <article class="novel-version-item">
+        <div>
+          <b>${escapeHtml(version.name || "未命名版本")}</b>
+          <small>${escapeHtml(formatTime(version.createdAt))} · ${clean(version.body).length} 字</small>
+        </div>
+        <div class="novel-version-actions">
+          <button type="button" data-command="restore-manuscript-version" data-version-id="${escapeHtml(version.id)}">恢复</button>
+          <button type="button" data-command="delete-manuscript-version" data-version-id="${escapeHtml(version.id)}">删除</button>
+        </div>
+      </article>
+    `).join("")}
+  `;
 }
 
 function formatLayoutValue(key, value) {
@@ -1414,6 +1446,55 @@ function saveNovel() {
   showToast("小说资料已保存");
 }
 
+function saveManuscriptVersion(name = "手动保存") {
+  syncNovelFromFields();
+  const version = recordManuscriptVersion(name);
+  if (!version) return showToast("正文库为空，无法保存版本");
+  renderNovelPanel();
+  persistState(state);
+  showToast("正文版本已保存");
+}
+
+function recordManuscriptVersion(name = "正文版本", bodyOverride = null) {
+  const novel = sessionNovel();
+  const body = clean(bodyOverride ?? novel.body);
+  if (!body) return null;
+  const latest = novel.versions?.[0];
+  if (latest && clean(latest.body) === body && latest.name === name) return latest;
+  const version = {
+    id: uid("novel_version"),
+    name,
+    body,
+    createdAt: Date.now(),
+  };
+  novel.versions = [version, ...(novel.versions || [])].slice(0, 40);
+  return version;
+}
+
+function restoreManuscriptVersion(id) {
+  const novel = sessionNovel();
+  const version = novel.versions.find((item) => item.id === id);
+  if (!version) return;
+  recordManuscriptVersion("恢复前备份");
+  novel.body = clean(version.body);
+  touchSession(activeSession());
+  renderNovelPanel();
+  renderContextBadge();
+  render();
+  persistState(state);
+  showToast("已恢复正文版本");
+}
+
+function deleteManuscriptVersion(id) {
+  const novel = sessionNovel();
+  const before = novel.versions.length;
+  novel.versions = novel.versions.filter((item) => item.id !== id);
+  if (novel.versions.length === before) return;
+  renderNovelPanel();
+  persistState(state);
+  showToast("已删除正文版本");
+}
+
 function importBodyFile() {
   els.bodyImportFile?.click();
 }
@@ -1424,6 +1505,7 @@ async function handleBodyFileSelected() {
   try {
     const text = await file.text();
     sessionNovel().body = clean(text);
+    recordManuscriptVersion("TXT 导入");
     renderNovelPanel();
     renderContextBadge();
     persistState(state);
@@ -1450,6 +1532,7 @@ function syncBodyFromAssistant() {
     .join("\n\n");
   if (!bodyText) return showToast("当前会话还没有可同步的 AI 输出");
   sessionNovel().body = bodyText;
+  recordManuscriptVersion("同步 AI 输出");
   renderNovelPanel();
   renderContextBadge();
   persistState(state);
@@ -1746,6 +1829,7 @@ function createWriterSyncSegment(previousBody, text) {
 function syncWriterMessageToNovel(message, text) {
   const segment = createWriterSyncSegment(sessionNovel().body, text);
   sessionNovel().body = segment.body;
+  recordManuscriptVersion("写手续写");
   message.manuscriptSync = {
     active: true,
     start: segment.start,
@@ -1767,6 +1851,7 @@ function replaceSyncedWriterSegment(message, nextText) {
     if (currentSegment === sync.segment) {
       const replacement = `${sync.start > 0 ? "\n\n" : ""}${content}`;
       novel.body = `${body.slice(0, sync.start)}${replacement}${body.slice(sync.end)}`;
+      recordManuscriptVersion("写手替换");
       message.manuscriptSync = {
         active: true,
         start: sync.start,
@@ -1784,6 +1869,7 @@ function replaceSyncedWriterSegment(message, nextText) {
   const previousBody = clean(trimmedBody.slice(0, -oldContent.length));
   const fallback = createWriterSyncSegment(previousBody, content);
   novel.body = fallback.body;
+  recordManuscriptVersion("写手替换");
   message.manuscriptSync = {
     active: true,
     start: fallback.start,
@@ -1803,6 +1889,7 @@ function removeSyncedWriterSegment(message) {
     const currentSegment = body.slice(sync.start, sync.end);
     if (currentSegment === sync.segment) {
       novel.body = clean(`${body.slice(0, sync.start)}${body.slice(sync.end)}`);
+      recordManuscriptVersion("撤回写手正文");
       message.manuscriptSync = { ...sync, active: false, removedAt: Date.now() };
       return true;
     }
@@ -1811,6 +1898,7 @@ function removeSyncedWriterSegment(message) {
   const trimmedBody = clean(body);
   if (content && trimmedBody.endsWith(content)) {
     novel.body = clean(trimmedBody.slice(0, -content.length));
+    recordManuscriptVersion("撤回写手正文");
     message.manuscriptSync = {
       ...(sync || {}),
       active: false,
@@ -2076,6 +2164,9 @@ const handleCommand = createCommandRegistry({
   "delete-session": (target) => deleteSession(target.dataset.sessionId),
   "fetch-models": () => fetchModels(),
   "save-novel": () => saveNovel(),
+  "save-manuscript-version": () => saveManuscriptVersion(),
+  "restore-manuscript-version": (target) => restoreManuscriptVersion(target.dataset.versionId),
+  "delete-manuscript-version": (target) => deleteManuscriptVersion(target.dataset.versionId),
   "import-body-file": () => importBodyFile(),
   "export-body-file": () => exportBodyFile(),
   "sync-body-from-ai": () => syncBodyFromAssistant(),
