@@ -3,6 +3,8 @@
   inset: 0;
   z-index: 35;
   background: rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(2px);
+  animation: backdrop-soft-in 180ms ease-out both;
 }
 
 .side-panel,
@@ -11,6 +13,7 @@
   z-index: 40;
   background: var(--panel);
   box-shadow: var(--shadow);
+  will-change: transform, opacity;
 }
 
 .side-panel {
@@ -23,10 +26,12 @@
 
 .left-panel {
   left: 0;
+  animation: panel-left-in var(--motion-spring) both;
 }
 
 .right-panel {
   right: 0;
+  animation: panel-right-in var(--motion-spring) both;
 }
 
 .bottom-panel {
@@ -37,6 +42,8 @@
   padding: 14px;
   overflow: auto;
   border-radius: 18px;
+  transform-origin: 50% 100%;
+  animation: panel-bottom-in var(--motion-spring) both;
 }
 
 .panel-head {
@@ -264,10 +271,24 @@
 .primary-button,
 .panel-row button,
 .dialog-actions button {
+  position: relative;
+  overflow: hidden;
   padding: 9px 12px;
   border: 1px solid var(--line);
   border-radius: 9px;
   background: #f7f7f7;
+  transition:
+    background-color var(--motion-fast),
+    border-color var(--motion-fast),
+    color var(--motion-fast),
+    box-shadow var(--motion-fast),
+    scale var(--motion-fast);
+}
+
+.primary-button:hover,
+.panel-row button:hover,
+.dialog-actions button:hover {
+  box-shadow: var(--motion-press-shadow);
 }
 
 .primary-button {
@@ -501,10 +522,12 @@
   border-radius: 18px;
   padding: 14px;
   box-shadow: var(--shadow);
+  animation: dialog-rise var(--motion-spring) both;
 }
 
 .edit-dialog::backdrop {
   background: rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(2px);
 }
 
 .edit-dialog textarea {
@@ -648,6 +671,81 @@
   }
 }
 
+@keyframes backdrop-soft-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes panel-left-in {
+  from {
+    opacity: 0;
+    transform: translateX(-18px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes panel-right-in {
+  from {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes panel-bottom-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes dialog-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes toast-pop {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px) scale(0.96);
+  }
+
+  72% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(-1px) scale(1.02);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
 .toast {
   position: fixed;
   left: 50%;
@@ -659,6 +757,11 @@
   color: #fff;
   background: rgba(0, 0, 0, 0.8);
   transform: translateX(-50%);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.16);
+}
+
+.toast.toast-pop {
+  animation: toast-pop 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .stream-caret {

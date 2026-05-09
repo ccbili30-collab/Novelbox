@@ -38,6 +38,8 @@ const BRIDGE_TIMEOUT = 160000;
 const AUTO_CONTEXT_TOKEN_THRESHOLD = 18000;
 const COMPRESSED_CONTEXT_TAIL_COUNT = 6;
 const PAPER_DEEP_COLLAPSE_THRESHOLD = 0.035;
+const MOTION_PULSE_MS = 260;
+const MOTION_RIPPLE_MS = 520;
 const ROUNDTABLE_CONCISE_RULE = "默认发言要短，不要长篇大论；除非用户或其他议员明确要求展开，再详细说明。";
 const DEFAULT_ROUNDTABLE_CONTEXT = {
   includeManuscript: true,
@@ -219,8 +221,10 @@ let generatingNodeId = null;
 let materialGenerating = false;
 let roundtableGenerating = false;
 let roundtableShouldStop = false;
+let roundtableActiveSpeakerId = null;
 let streamShouldFollow = true;
 let toastTimer = null;
+let toastMotionTimer = null;
 let paperScrollPersistTimer = null;
 let paperGripSuppressClickUntil = 0;
 const paperDrag = {
@@ -234,8 +238,12 @@ const bridgeCallbacks = new Map();
 const bridgeStreamCallbacks = new Map();
 const panelManager = createPanelManager(els, {
   onShow: (name) => {
+    els.body.dataset.activePanel = name;
     if (name === "context") renderContextPanel();
     if (name === "novel") renderNovelPanel();
+  },
+  onClose: () => {
+    delete els.body.dataset.activePanel;
   },
 });
 const bridgeClient = createBridgeClient({
@@ -689,11 +697,66 @@ function scrollBottom() {
 
 function showToast(message) {
   window.clearTimeout(toastTimer);
+  window.clearTimeout(toastMotionTimer);
   els.toast.textContent = message;
   els.toast.hidden = false;
+  els.toast.classList.remove("toast-pop");
+  void els.toast.offsetWidth;
+  els.toast.classList.add("toast-pop");
+  toastMotionTimer = window.setTimeout(() => {
+    els.toast.classList.remove("toast-pop");
+  }, 420);
   toastTimer = window.setTimeout(() => {
     els.toast.hidden = true;
   }, 1800);
+}
+
+function prefersReducedMotion() {
+  return window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+}
+
+function vibrateLight(command = "") {
+  if (!navigator.vibrate || prefersReducedMotion()) return;
+  const heavier = /delete|stop|close|reset|undo/.test(command);
+  try {
+    navigator.vibrate(heavier ? 16 : 8);
+  } catch {}
+}
+
+function pulseElement(element) {
+  if (!element || prefersReducedMotion()) return;
+  element.classList.remove("motion-press");
+  void element.offsetWidth;
+  element.classList.add("motion-press");
+  window.setTimeout(() => element.classList.remove("motion-press"), MOTION_PULSE_MS);
+}
+
+function addMotionRipple(element, event) {
+  if (!element || !event || prefersReducedMotion()) return;
+  const rect = element.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  const ripple = document.createElement("span");
+  const size = Math.max(rect.width, rect.height) * 1.45;
+  ripple.className = "motion-ripple";
+  ripple.style.width = `${size}px`;
+  ripple.style.height = `${size}px`;
+  ripple.style.left = `${event.clientX - rect.left - size / 2}px`;
+  ripple.style.top = `${event.clientY - rect.top - size / 2}px`;
+  element.appendChild(ripple);
+  window.setTimeout(() => ripple.remove(), MOTION_RIPPLE_MS);
+}
+
+function showCommandFeedback(target, command, event) {
+  if (!target) return;
+  const feedbackTarget = target.closest("button, .message-card, .roundtable-speech, .roundtable-writer-card, .roundtable-member-option, [data-command]");
+  pulseElement(feedbackTarget);
+  addMotionRipple(feedbackTarget, event);
+  vibrateLight(command);
+}
+
+function setRoundtableActiveSpeaker(id) {
+  roundtableActiveSpeakerId = id || null;
+  if (roundtableState().enabled) renderRoundtable();
 }
 
 function showPanel(name) {
@@ -805,8 +868,9 @@ function renderRoundtableMembers(rt) {
       const isWriter = assistant.id === "writer";
       const selected = isWriter ? "写" : order.get(assistant.id);
       const model = assistant.model || sessionSettings().model || "未选模型";
+      const speaking = roundtableActiveSpeakerId === assistant.id;
       return `
-        <div class="roundtable-member-option ${selected ? "selected" : ""} ${isWriter ? "writer" : ""}">
+        <div class="roundtable-member-option ${selected ? "selected" : ""} ${isWriter ? "writer" : ""} ${speaking ? "speaking" : ""}">
           <button class="roundtable-member-main" type="button" data-command="${isWriter ? "roundtable-edit-assistant" : "roundtable-toggle-member"}" data-member-id="${assistant.id}">
             <span>${selected || ""}</span>
             <b>${escapeHtml(assistant.name)}</b>
@@ -2948,25 +3012,30 @@ async function runAssistantMentionFollowUps(originAssistant, originText, options
 }
 
 async function callRoundtableAssistant(assistant, instruction) {
+  setRoundtableActiveSpeaker(assistant.id);
   try {
-    await ensureAutoCompressNovelMemory(instruction);
-  } catch (error) {
-    if (error.name === "AbortError") throw error;
-    showToast(humanizeError(error, "圆桌自动压缩失败，已改用现有资料继续"));
+    try {
+      await ensureAutoCompressNovelMemory(instruction);
+    } catch (error) {
+      if (error.name === "AbortError") throw error;
+      showToast(humanizeError(error, "圆桌自动压缩失败，已改用现有资料继续"));
+    }
+    const messages = buildRoundtableMessages(assistant, instruction);
+    const settings = {
+      ...sessionSettings(),
+      model: assistant.model || sessionSettings().model,
+      maxTokens: Number(assistant.maxTokens) || sessionSettings().maxTokens,
+      temperature: Number.isFinite(Number(assistant.temperature)) ? Number(assistant.temperature) : sessionSettings().temperature,
+    };
+    const api = {
+      ...apiSettings(),
+      baseUrl: assistant.apiBaseUrl || apiSettings().baseUrl,
+      apiKey: assistant.apiKey || apiSettings().apiKey,
+    };
+    return await callOpenAITextWithSettings(messages, settings, api);
+  } finally {
+    if (roundtableActiveSpeakerId === assistant.id) setRoundtableActiveSpeaker(null);
   }
-  const messages = buildRoundtableMessages(assistant, instruction);
-  const settings = {
-    ...sessionSettings(),
-    model: assistant.model || sessionSettings().model,
-    maxTokens: Number(assistant.maxTokens) || sessionSettings().maxTokens,
-    temperature: Number.isFinite(Number(assistant.temperature)) ? Number(assistant.temperature) : sessionSettings().temperature,
-  };
-  const api = {
-    ...apiSettings(),
-    baseUrl: assistant.apiBaseUrl || apiSettings().baseUrl,
-    apiKey: assistant.apiKey || apiSettings().apiKey,
-  };
-  return callOpenAITextWithSettings(messages, settings, api);
 }
 
 function buildRoundtableMessages(assistant, instruction) {
@@ -3143,10 +3212,15 @@ function copyLayoutParams() {
 bindCommandDelegation(document, renderMenu, () => activeMenuNodeId || activeRoundtableMessageId, (value) => {
   activeMenuNodeId = value;
   if (value === null) activeRoundtableMessageId = null;
-}, (command, target) => handleCommand(command, target));
+}, (command, target, event) => {
+  showCommandFeedback(target, command, event);
+  handleCommand(command, target);
+});
 
 els.composer.addEventListener("submit", async (event) => {
   event.preventDefault();
+  pulseElement(els.send);
+  vibrateLight("send");
   if (isGenerating) {
     stopGeneration();
     return;
@@ -3235,6 +3309,8 @@ els.input.addEventListener("input", () => {
   renderContextBadge();
   els.body.classList.toggle("is-ready", Boolean(clean(els.input.value)));
 });
+els.input.addEventListener("focus", () => els.body.classList.add("composer-focused"));
+els.input.addEventListener("blur", () => els.body.classList.remove("composer-focused"));
 
 els.input.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
@@ -3331,6 +3407,13 @@ els.assistantImportFile?.addEventListener("change", handleAssistantImportSelecte
 els.saveAssistantConfig?.addEventListener("click", saveAssistantConfig);
 els.resetAssistantConfig?.addEventListener("click", resetAssistantConfig);
 els.deleteAssistant?.addEventListener("click", deleteCustomRoundAssistant);
+
+document.addEventListener("pointerdown", (event) => {
+  const target = event.target.closest("button:not([data-command]), summary, input[type='checkbox'], input[type='range']");
+  if (!target) return;
+  pulseElement(target);
+  if (target.tagName === "BUTTON" || target.tagName === "SUMMARY") addMotionRipple(target, event);
+}, { passive: true });
 
 els.roundtablePaperGrip?.addEventListener("pointerdown", handleRoundtablePaperPointerDown);
 els.roundtablePaperGrip?.addEventListener("pointermove", handleRoundtablePaperPointerMove);
