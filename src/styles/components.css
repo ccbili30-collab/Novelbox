@@ -235,12 +235,13 @@ body.is-generating .send-button {
 }
 
 .roundtable-mode-head {
-  display: flex;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
-  max-width: 680px;
-  margin: 0 auto 12px;
+  max-width: 640px;
+  margin: 0 auto 8px;
 }
 
 .roundtable-mode-head > div:first-child {
@@ -250,7 +251,7 @@ body.is-generating .send-button {
 
 .mode-kicker {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.9px;
@@ -258,7 +259,7 @@ body.is-generating .send-button {
 
 .roundtable-mode-head strong {
   color: var(--text);
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
 }
 
@@ -266,18 +267,25 @@ body.is-generating .send-button {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 5px;
 }
 
 .mode-actions button {
-  min-height: 30px;
-  padding: 0 10px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid rgba(218, 214, 205, 0.86);
+  border-radius: 9px;
   color: var(--text-soft);
-  background: rgba(255, 255, 255, 0.86);
-  font-size: 12px;
+  background: rgba(255, 255, 255, 0.58);
+  font-size: 11px;
   font-weight: 600;
+  white-space: nowrap;
+}
+
+.mode-actions button[data-command="roundtable-start"] {
+  color: #fff;
+  border-color: var(--accent);
+  background: var(--accent);
 }
 
 .roundtable-busy .mode-actions button[data-command="roundtable-start"] {
@@ -289,10 +297,10 @@ body.is-generating .send-button {
 .roundtable-member-panel {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  max-width: 680px;
-  margin: 0 auto 12px;
-  padding: 10px;
+  gap: 7px;
+  max-width: 640px;
+  margin: 0 auto 8px;
+  padding: 8px;
   border: 1px solid var(--line);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.78);
@@ -352,8 +360,8 @@ body.is-generating .send-button {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  max-width: 680px;
-  margin: 0 auto 10px;
+  max-width: 640px;
+  margin: 0 auto 6px;
   color: var(--muted);
   font-size: 12px;
 }
@@ -368,37 +376,50 @@ body.is-generating .send-button {
   color: var(--muted);
   font-size: 11px;
   text-align: right;
+  opacity: 0.72;
+  display: none;
 }
 
 .roundtable-section-label-chat {
-  margin-top: 22px;
+  display: none;
 }
 
 .manuscript-desk {
   display: grid;
   justify-items: center;
-  max-width: 680px;
-  margin: 0 auto -34px;
-  padding: 4px 0 0;
+  max-width: 640px;
+  margin: 0 auto -20px;
+  padding: 0;
   position: relative;
   z-index: 2;
 }
 
 .manuscript-paper {
   position: relative;
-  width: min(calc(100vw - 34px), 430px);
-  min-height: 168px;
-  padding: 18px 18px 42px;
-  border-radius: 0 0 18px 18px;
+  width: min(calc(100vw - 28px), 408px);
+  min-height: 118px;
+  padding: 14px 16px 34px;
+  border-radius: 0 0 14px 14px;
   border: 1px solid var(--surface-paper-edge);
   background:
     linear-gradient(90deg, rgba(173, 166, 151, 0.18) 1px, transparent 1px) 34px 0 / 1px 100% no-repeat,
     linear-gradient(180deg, #fffefd 0%, var(--surface-paper) 100%);
   box-shadow:
     var(--paper-shadow),
-    0 6px 18px rgba(59, 52, 43, 0.05),
+    0 4px 12px rgba(59, 52, 43, 0.035),
     0 1px 0 rgba(255, 255, 255, 0.95) inset;
-  transform: rotate(-0.2deg);
+  transform: rotate(-0.08deg);
+  animation: paper-settle 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.roundtable-workspace:not([hidden]) .roundtable-mode-head,
+.roundtable-workspace:not([hidden]) .roundtable-member-panel,
+.roundtable-workspace:not([hidden]) .roundtable-section-label {
+  animation: quiet-rise 180ms ease-out both;
+}
+
+.roundtable-workspace:not([hidden]) .roundtable-discussion {
+  animation: quiet-rise 260ms ease-out 70ms both;
 }
 
 .paper-scroll-viewport {
@@ -424,8 +445,8 @@ body.is-generating .send-button {
   right: 0;
   bottom: 0;
   display: block;
-  height: 48px;
-  margin-top: -48px;
+  height: 34px;
+  margin-top: -34px;
   pointer-events: none;
   background: linear-gradient(180deg, rgba(255, 253, 250, 0), rgba(255, 253, 250, 0.97));
 }
@@ -433,18 +454,18 @@ body.is-generating .send-button {
 .paper-grip {
   position: absolute;
   left: 50%;
-  bottom: -24px;
+  bottom: -16px;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  min-width: 150px;
+  gap: 6px;
+  min-width: 92px;
   max-width: calc(100% - 36px);
-  padding: 8px 11px;
-  border: 1px solid rgba(193, 187, 176, 0.88);
+  padding: 5px 7px;
+  border: 1px solid rgba(198, 193, 184, 0.78);
   border-radius: 999px;
   color: var(--text-soft);
   background: rgba(255, 255, 255, 0.97);
-  box-shadow: 0 14px 24px rgba(53, 48, 39, 0.1);
+  box-shadow: 0 8px 18px rgba(53, 48, 39, 0.08);
   transform: translateX(-50%);
   touch-action: none;
   user-select: none;
@@ -456,29 +477,30 @@ body.is-generating .send-button {
 .paper-grip:hover,
 .paper-grip:focus-visible {
   transform: translateX(-50%) translateY(-1px);
-  box-shadow: 0 18px 30px rgba(53, 48, 39, 0.12);
+  box-shadow: 0 12px 22px rgba(53, 48, 39, 0.1);
 }
 
 body.paper-dragging .paper-grip {
   transform: translateX(-50%) translateY(-2px) scale(1.01);
-  box-shadow: 0 20px 34px rgba(53, 48, 39, 0.14);
+  box-shadow: 0 14px 26px rgba(53, 48, 39, 0.12);
 }
 
 .paper-grip-ribs {
   display: inline-grid;
-  gap: 3px;
+  gap: 2px;
   flex: 0 0 auto;
 }
 
 .paper-grip-ribs i {
   display: block;
-  width: 18px;
+  width: 15px;
   height: 2px;
   border-radius: 999px;
   background: rgba(128, 122, 112, 0.7);
 }
 
 .paper-grip-copy {
+  display: none;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -490,8 +512,8 @@ body.paper-dragging .paper-grip {
 
 .paper-grip-meter {
   flex: 0 0 auto;
-  min-width: 40px;
-  padding: 3px 7px;
+  min-width: 34px;
+  padding: 3px 6px;
   border-radius: 999px;
   color: #fff;
   background: var(--accent);
@@ -515,10 +537,10 @@ body.paper-dragging .paper-grip {
 .manuscript-paper::before {
   content: "";
   position: absolute;
-  top: -10px;
+  top: -9px;
   left: 50%;
-  width: 78px;
-  height: 16px;
+  width: 70px;
+  height: 14px;
   border: 1px solid rgba(210, 208, 201, 0.65);
   background: rgba(245, 244, 240, 0.86);
   transform: translateX(-50%) rotate(1deg);
@@ -529,14 +551,14 @@ body.paper-dragging .paper-grip {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   color: var(--muted);
   font-size: 11px;
   font-weight: 700;
 }
 
 .paper-meta button {
-  padding: 4px 8px;
+  padding: 3px 7px;
   border: 1px solid var(--line);
   border-radius: 999px;
   color: var(--text-soft);
@@ -548,8 +570,8 @@ body.paper-dragging .paper-grip {
   margin: 0;
   color: #24211d;
   font-family: "Iowan Old Style", "Palatino Linotype", "Songti SC", "STSong", serif;
-  font-size: 16px;
-  line-height: 1.84;
+  font-size: 15px;
+  line-height: 1.74;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -557,35 +579,35 @@ body.paper-dragging .paper-grip {
 .roundtable-discussion {
   position: relative;
   display: grid;
-  gap: 8px;
-  max-width: 680px;
+  gap: 7px;
+  max-width: 640px;
   margin: 0 auto;
-  padding: 58px 0 10px;
+  padding: 40px 0 10px;
 }
 
 .roundtable-discussion::before {
   content: "";
   position: absolute;
-  top: 18px;
+  top: 10px;
   left: 6px;
   right: 6px;
   bottom: 0;
-  border-radius: 28px 28px 0 0;
-  border: 1px solid rgba(230, 228, 221, 0.85);
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 18px 36px rgba(39, 35, 28, 0.05);
+  border-radius: 22px 22px 0 0;
+  border: 1px solid rgba(232, 229, 222, 0.72);
+  background: rgba(255, 255, 255, 0.44);
+  box-shadow: none;
   z-index: -1;
 }
 
 .roundtable-empty {
   display: grid;
   gap: 5px;
-  margin: 0 12px;
-  padding: 18px 14px;
-  border: 1px dashed #d8c8aa;
-  border-radius: 16px;
+  margin: 0 10px;
+  padding: 16px 14px;
+  border: 1px solid rgba(221, 215, 204, 0.86);
+  border-radius: 14px;
   color: #776b59;
-  background: rgba(255, 255, 255, 0.84);
+  background: rgba(255, 255, 255, 0.58);
   text-align: center;
 }
 
@@ -642,7 +664,7 @@ body.paper-dragging .paper-grip {
 
 .roundtable-line.user .roundtable-speech {
   color: var(--text);
-  border-color: rgba(211, 218, 225, 0.96);
+  border-color: rgba(213, 218, 215, 0.92);
   background: var(--surface-user);
   border-top-right-radius: 10px;
 }
@@ -706,8 +728,8 @@ body.paper-dragging .paper-grip {
   border: 1px solid rgba(228, 224, 217, 0.95);
   border-radius: 11px 15px 15px 15px;
   color: var(--text);
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 5px 14px rgba(44, 39, 33, 0.035);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 3px 10px rgba(44, 39, 33, 0.028);
   font-size: 15px;
   line-height: 1.46;
   white-space: pre-wrap;
@@ -729,7 +751,31 @@ body.paper-dragging .paper-grip {
   background:
     linear-gradient(180deg, rgba(255, 254, 250, 0.98), rgba(252, 249, 243, 0.95)),
     linear-gradient(90deg, rgba(173, 166, 151, 0.14) 1px, transparent 1px) 34px 0 / 1px 100% no-repeat;
-  box-shadow: 0 8px 20px rgba(54, 46, 36, 0.05);
+  box-shadow: 0 5px 14px rgba(54, 46, 36, 0.04);
+}
+
+@keyframes paper-settle {
+  from {
+    opacity: 0;
+    transform: translateY(10px) rotate(-0.08deg) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) rotate(-0.08deg) scale(1);
+  }
+}
+
+@keyframes quiet-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .roundtable-writer-head {
@@ -829,6 +875,8 @@ body.paper-dragging .paper-grip {
 @media (max-width: 420px) {
   .roundtable-mode-head {
     display: grid;
+    gap: 8px;
+    margin-bottom: 6px;
   }
 
   .mode-actions {
@@ -842,6 +890,11 @@ body.paper-dragging .paper-grip {
   .roundtable-section-label {
     display: grid;
     justify-items: start;
+    margin-bottom: 4px;
+  }
+
+  .roundtable-section-label.roundtable-section-label-chat {
+    display: none;
   }
 
   .roundtable-section-label small {
@@ -850,14 +903,15 @@ body.paper-dragging .paper-grip {
 
   .manuscript-paper {
     width: min(calc(100vw - 22px), 430px);
-    padding: 16px 14px 42px;
+    min-height: 132px;
+    padding: 13px 14px 32px;
   }
 
   .paper-grip {
-    min-width: 148px;
+    min-width: 82px;
     max-width: calc(100% - 24px);
-    gap: 8px;
-    padding: 8px 10px;
+    gap: 6px;
+    padding: 5px 7px;
   }
 
   .paper-grip-copy {
@@ -887,6 +941,6 @@ body.paper-dragging .paper-grip {
   }
 
   .roundtable-discussion {
-    padding-top: 52px;
+    padding-top: 36px;
   }
 }

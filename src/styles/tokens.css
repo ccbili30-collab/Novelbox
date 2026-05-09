@@ -12,12 +12,12 @@
   --surface-chat: #f8f7f4;
   --surface-paper: #fffdfa;
   --surface-paper-edge: #efe8d8;
-  --surface-user: #edf1f5;
+  --surface-user: #eef1ef;
   --surface-selected: #f4ecdb;
   --accent: #171717;
   --accent-soft: #f1ede4;
   --shadow: 0 14px 34px rgba(35, 31, 25, 0.08);
-  --paper-shadow: 0 28px 54px rgba(52, 44, 33, 0.12);
+  --paper-shadow: 0 18px 38px rgba(52, 44, 33, 0.08);
   --composer-height: 76px;
   --composer-min-height: 66px;
   --composer-font-size: 16px;

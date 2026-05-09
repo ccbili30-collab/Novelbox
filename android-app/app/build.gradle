@@ -23,10 +23,17 @@ tasks.register("syncWebAssets", Sync) {
         include "index.html"
         include "src/**"
     }
+    exclude "src/**/*.js"
     into(generatedWebAssets)
+}
+
+tasks.register("bundleAndroidWebAssets", Exec) {
+    dependsOn("syncWebAssets")
+    workingDir(webRoot)
+    commandLine "node", "scripts/build-android-assets.mjs", webRoot.absolutePath, generatedWebAssets.get().asFile.absolutePath
 }
 
 android.sourceSets.main.assets.srcDir(generatedWebAssets)
 tasks.named("preBuild").configure {
-    dependsOn("syncWebAssets")
+    dependsOn("bundleAndroidWebAssets")
 }
