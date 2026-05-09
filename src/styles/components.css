@@ -429,6 +429,22 @@ body.is-generating .send-button {
   color: #302820;
 }
 
+.roundtable-context-topic {
+  grid-column: 1 / -1;
+  align-items: stretch;
+  flex-direction: column;
+}
+
+.roundtable-context-topic input {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 9px;
+  border: 1px solid #d9cdb7;
+  border-radius: 7px;
+  background: #fff;
+  color: #302820;
+}
+
 .roundtable-member-option.selected .roundtable-member-main span {
   color: #fff;
   border-color: #8d6b31;

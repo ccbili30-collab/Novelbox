@@ -42,6 +42,7 @@ const DEFAULT_ROUNDTABLE_CONTEXT = {
   includeDiscussion: true,
   excerptMax: 520,
   discussionCount: 24,
+  roundTopic: "",
 };
 const ROUND_ASSISTANTS = [
   {
@@ -307,6 +308,7 @@ function normalizeRoundtableContextOptions(options = {}) {
     includeDiscussion: source.includeDiscussion !== false,
     excerptMax: clamp(Number(source.excerptMax) || DEFAULT_ROUNDTABLE_CONTEXT.excerptMax, 120, 2400),
     discussionCount: clamp(Number(source.discussionCount) || DEFAULT_ROUNDTABLE_CONTEXT.discussionCount, 0, 80),
+    roundTopic: clean(source.roundTopic || ""),
   };
 }
 
@@ -613,6 +615,10 @@ function renderRoundtableContextControls(rt) {
       <label class="roundtable-context-number">
         <span>记录条数</span>
         <input type="number" min="0" max="80" step="1" data-roundtable-context-key="discussionCount" value="${options.discussionCount}" />
+      </label>
+      <label class="roundtable-context-topic">
+        <span>本轮主题</span>
+        <input type="text" data-roundtable-context-key="roundTopic" value="${escapeHtml(options.roundTopic)}" placeholder="例如：妹妹记忆被夺走这一转折是否成立" />
       </label>
     </section>`;
 }
@@ -1697,6 +1703,8 @@ function updateRoundtableContextOption(key, rawValue) {
     options.excerptMax = clamp(Number(rawValue) || DEFAULT_ROUNDTABLE_CONTEXT.excerptMax, 120, 2400);
   } else if (key === "discussionCount") {
     options.discussionCount = clamp(Number(rawValue) || 0, 0, 80);
+  } else if (key === "roundTopic") {
+    options.roundTopic = clean(rawValue);
   } else {
     return;
   }
@@ -2142,7 +2150,8 @@ async function startRoundtableRound() {
       const assistant = getRoundAssistant(id);
       if (!assistant) continue;
       showToast(`${assistant.name}正在发言`);
-      const text = await callRoundtableAssistant(assistant, "请根据当前正文和以上圆桌讨论发表你的意见。");
+      const topic = clean(rt.contextOptions?.roundTopic);
+      const text = await callRoundtableAssistant(assistant, topic ? `请围绕本轮主题发表意见：${topic}` : "请根据当前正文和以上圆桌讨论发表你的意见。");
       if (roundtableShouldStop) break;
       addRoundtableMessage(assistant.id, assistant.name, text);
     }
@@ -2207,6 +2216,7 @@ function buildRoundtableMessages(assistant, instruction) {
   const source = [
     `【当前模式】圆桌小说共创。参与者包括：${participants}`,
     "【发言规则】必须知道是谁说的话，不要把不同成员的意见串成同一个人。可自然赞同或反驳其他成员。",
+    options.roundTopic ? `【本轮主题】${options.roundTopic}` : "",
     `【你的身份】${assistant.name}。${assistant.prompt}`,
     options.includeManuscript ? `【当前正文小窗】\n${getRoundtablePromptExcerpt(options.excerptMax)}` : "",
     options.includeNovel ? `【小说资料】\n${buildNovelMemory() || "暂无小说资料。"}` : "",

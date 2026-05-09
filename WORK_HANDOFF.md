@@ -192,6 +192,28 @@ Not yet fully done:
 
 ## Recommended Next Steps
 
+### Feature Line Update: Round Topic
+
+Functional branch: `codex/roundtable-features`
+
+Implemented in the feature line:
+
+- the composer-side roundtable material panel now includes `本轮主题`
+- the topic is stored per session in `session.roundtable.contextOptions.roundTopic`
+- `开始本轮` uses the topic as the round instruction when present
+- `buildRoundtableMessages()` includes the topic as a separate prompt block, so all assistants stay focused on the same question
+
+Important code locations:
+
+- `src/main.js`
+  - `normalizeRoundtableContextOptions()`
+  - `renderRoundtableContextControls()`
+  - `updateRoundtableContextOption()`
+  - `startRoundtableRound()`
+  - `buildRoundtableMessages()`
+- `src/styles/components.css`
+  - `.roundtable-context-topic`
+
 ### Feature Line Update: Mainline / Roundtable Handoff
 
 Functional branch: `codex/roundtable-features`
