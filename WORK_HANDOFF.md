@@ -556,6 +556,36 @@ Validation:
 - `git diff --check`
 - `android-app\gradlew.bat assembleDebug --offline --no-daemon`
 
+### Main Update: Roundtable Paper Reading State
+
+Implemented on `main`:
+
+- the floating manuscript paper now remembers its scroll position per session
+- when the user is reading the middle of the manuscript, new writer prose does not force-scroll the paper
+- when new writer prose arrives while the paper is not at the bottom, a `跳到最新正文` anchor appears
+- tapping the anchor jumps the paper to the newest prose and clears the unread marker
+- if the paper was already near the bottom, new writer prose still follows automatically
+
+Important code locations:
+
+- `index.html`
+  - `#roundtablePaperJump`
+- `src/main.js`
+  - `syncRoundtablePaperContent()`
+  - `handleRoundtablePaperScroll()`
+  - `jumpRoundtablePaperLatest()`
+  - `scrollRoundtablePaperBottom()`
+  - `roundtableState()` paper state fields
+- `src/styles/components.css`
+  - `.paper-new-anchor`
+
+Validation:
+
+- `node --check src/main.js`
+- `node --check dev-server.mjs`
+- `git diff --check`
+- `android-app\gradlew.bat assembleDebug --offline --no-daemon`
+
 ### Priority 1: Real device tuning
 
 Test in Android/WebView-like sizes and tune:
@@ -578,9 +608,8 @@ Possible improvements:
 
 Potential future improvement:
 
-- remember paper scroll position per session
-- optionally jump to latest appended writer segment
-- add a small “new prose” anchor when not at bottom
+- optionally highlight the exact appended writer segment after jumping to latest prose
+- optionally add previous/next writer-segment navigation inside the paper
 
 ## Quick Resume Prompt For Next Agent
 

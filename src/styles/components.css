@@ -520,6 +520,28 @@ body.is-generating .send-button {
   display: none;
 }
 
+.paper-new-anchor {
+  position: absolute;
+  left: 50%;
+  bottom: 26px;
+  z-index: 2;
+  padding: 7px 12px;
+  border: 1px solid rgba(141, 107, 49, 0.28);
+  border-radius: 999px;
+  color: #5f4d31;
+  background: rgba(255, 250, 240, 0.94);
+  box-shadow:
+    0 10px 20px rgba(100, 79, 40, 0.16),
+    0 1px 0 rgba(255, 255, 255, 0.86) inset;
+  font-size: 12px;
+  font-weight: 800;
+  transform: translateX(-50%);
+}
+
+.paper-new-anchor[hidden] {
+  display: none;
+}
+
 .manuscript-paper.paper-peek .paper-scroll-viewport::after,
 .manuscript-paper.paper-deep-collapsed .paper-scroll-viewport::after {
   content: "";

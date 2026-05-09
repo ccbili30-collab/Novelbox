@@ -129,6 +129,7 @@ const els = {
   roundtablePaperViewport: $("#roundtablePaperViewport"),
   roundtablePaperGrip: $("#roundtablePaperGrip"),
   roundtablePaperGripLabel: $("#roundtablePaperGripLabel"),
+  roundtablePaperJump: $("#roundtablePaperJump"),
   roundtableManuscript: $("#roundtableManuscript"),
   roundtablePaperStatus: $("#roundtablePaperStatus"),
   roundtableDiscussion: $("#roundtableDiscussion"),
@@ -193,6 +194,7 @@ let roundtableGenerating = false;
 let roundtableShouldStop = false;
 let streamShouldFollow = true;
 let toastTimer = null;
+let paperScrollPersistTimer = null;
 const paperDrag = {
   active: false,
   moved: false,
@@ -300,6 +302,10 @@ function roundtableState(session = activeSession()) {
   rt.roundProgress = rt.roundProgress && typeof rt.roundProgress === "object" ? rt.roundProgress : null;
   rt.contextOptions = normalizeRoundtableContextOptions(rt.contextOptions);
   rt.paperReveal = clamp(Number.isFinite(Number(rt.paperReveal)) ? Number(rt.paperReveal) : 0.68, 0, 1);
+  rt.paperScrollTop = Math.max(0, Number(rt.paperScrollTop) || 0);
+  rt.paperAtBottom = rt.paperAtBottom !== false;
+  rt.paperTextLength = Math.max(0, Number(rt.paperTextLength) || 0);
+  rt.paperHasNewProse = Boolean(rt.paperHasNewProse);
   return rt;
 }
 
@@ -555,11 +561,12 @@ function renderRoundtable() {
     els.roundtableContextDock.hidden = !rt.enabled || !rt.contextOpen;
     els.roundtableContextDock.innerHTML = rt.enabled && rt.contextOpen ? renderRoundtableContextControls(rt) : "";
   }
-  if (els.roundtableManuscript) {
-    els.roundtableManuscript.textContent = getRoundtableManuscript();
-  }
+  syncRoundtablePaperContent(rt);
   if (els.roundtablePaperStatus) {
     els.roundtablePaperStatus.textContent = getRoundtablePaperStatus();
+  }
+  if (els.roundtablePaperJump) {
+    els.roundtablePaperJump.hidden = !rt.paperHasNewProse;
   }
   syncRoundtablePaper();
   if (els.roundtableDiscussion) {
@@ -801,6 +808,37 @@ function getRoundtablePaperMetrics() {
 
 function getRoundtableRevealLabel() {
   return `展开 ${Math.round(getRoundtablePaperMetrics().reveal * 100)}%`;
+}
+
+function isRoundtablePaperNearBottom() {
+  const viewport = els.roundtablePaperViewport;
+  if (!viewport) return true;
+  return viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 72;
+}
+
+function syncRoundtablePaperContent(rt = roundtableState()) {
+  if (!els.roundtableManuscript) return;
+  const nextText = getRoundtableManuscript();
+  const previousText = els.roundtableManuscript.textContent || "";
+  const wasNearBottom = isRoundtablePaperNearBottom() || rt.paperAtBottom;
+  if (previousText !== nextText) {
+    const grew = nextText.length > Math.max(previousText.length, rt.paperTextLength || 0);
+    els.roundtableManuscript.textContent = nextText;
+    rt.paperTextLength = nextText.length;
+    if (grew && !wasNearBottom) {
+      rt.paperHasNewProse = true;
+      restoreRoundtablePaperScroll();
+    } else if (wasNearBottom) {
+      rt.paperHasNewProse = false;
+      scrollRoundtablePaperBottom({ silent: true });
+    } else {
+      restoreRoundtablePaperScroll();
+    }
+  } else if (rt.paperAtBottom) {
+    scrollRoundtablePaperBottom({ silent: true });
+  } else {
+    restoreRoundtablePaperScroll();
+  }
 }
 
 function syncRoundtablePaper() {
@@ -2162,12 +2200,50 @@ function scrollRoundtableBottom() {
   });
 }
 
-function scrollRoundtablePaperBottom() {
+function scrollRoundtablePaperBottom(options = {}) {
   requestAnimationFrame(() => {
     if (els.roundtablePaperViewport) {
       els.roundtablePaperViewport.scrollTop = els.roundtablePaperViewport.scrollHeight;
+      const rt = roundtableState();
+      rt.paperScrollTop = els.roundtablePaperViewport.scrollTop;
+      rt.paperAtBottom = true;
+      rt.paperHasNewProse = false;
+      if (!options.silent) persistState(state);
     }
   });
+}
+
+function restoreRoundtablePaperScroll() {
+  requestAnimationFrame(() => {
+    const viewport = els.roundtablePaperViewport;
+    if (!viewport) return;
+    const rt = roundtableState();
+    const maxTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+    viewport.scrollTop = clamp(rt.paperScrollTop, 0, maxTop);
+  });
+}
+
+function handleRoundtablePaperScroll() {
+  const viewport = els.roundtablePaperViewport;
+  if (!viewport || !roundtableState().enabled) return;
+  const rt = roundtableState();
+  rt.paperScrollTop = viewport.scrollTop;
+  rt.paperAtBottom = isRoundtablePaperNearBottom();
+  if (rt.paperAtBottom) rt.paperHasNewProse = false;
+  if (els.roundtablePaperJump) {
+    els.roundtablePaperJump.hidden = !rt.paperHasNewProse;
+  }
+  window.clearTimeout(paperScrollPersistTimer);
+  paperScrollPersistTimer = window.setTimeout(() => persistState(state), 160);
+}
+
+function jumpRoundtablePaperLatest() {
+  const rt = roundtableState();
+  rt.paperAtBottom = true;
+  rt.paperHasNewProse = false;
+  scrollRoundtablePaperBottom();
+  if (els.roundtablePaperJump) els.roundtablePaperJump.hidden = true;
+  render();
 }
 
 async function handleRoundtableUser(text) {
@@ -2340,6 +2416,7 @@ const handleCommand = createCommandRegistry({
   "roundtable-start": () => startRoundtableRound(),
   "roundtable-resume": () => resumeRoundtableRound(),
   "roundtable-stop": () => stopRoundtableGeneration(),
+  "jump-roundtable-paper": () => jumpRoundtablePaperLatest(),
   "open-search": () => showPanel("history"),
   "roundtable-preview": () => toggleRoundtable(),
   "close-panels": () => closePanels(),
@@ -2640,6 +2717,7 @@ els.roundtablePaperGrip?.addEventListener("pointermove", handleRoundtablePaperPo
 els.roundtablePaperGrip?.addEventListener("pointerup", finishRoundtablePaperDrag);
 els.roundtablePaperGrip?.addEventListener("pointercancel", finishRoundtablePaperDrag);
 els.roundtablePaperGrip?.addEventListener("click", (event) => event.preventDefault());
+els.roundtablePaperViewport?.addEventListener("scroll", handleRoundtablePaperScroll, { passive: true });
 
 window.addEventListener("resize", resizeInput);
 window.visualViewport?.addEventListener("resize", resizeInput);
