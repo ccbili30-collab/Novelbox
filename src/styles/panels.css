@@ -520,6 +520,8 @@
 }
 
 .assistant-config-dialog input[type="text"],
+.assistant-config-dialog input[type="password"],
+.assistant-config-dialog input[type="number"],
 .assistant-config-dialog select {
   width: 100%;
   border: 1px solid var(--line);
@@ -538,6 +540,62 @@
   min-height: 210px;
 }
 
+.assistant-fold {
+  margin: 10px 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.assistant-fold summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 0 12px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 800;
+  list-style: none;
+  cursor: pointer;
+}
+
+.assistant-fold summary::-webkit-details-marker {
+  display: none;
+}
+
+.assistant-fold summary::after {
+  content: "展开";
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.assistant-fold[open] summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.assistant-fold[open] summary::after {
+  content: "收起";
+}
+
+.assistant-fold > .field,
+.assistant-fold > .assistant-context-head,
+.assistant-fold > .assistant-context-options,
+.assistant-fold > .assistant-context-numbers {
+  margin-inline: 12px;
+}
+
+.assistant-fold > .field:first-of-type,
+.assistant-fold > .assistant-context-head {
+  margin-top: 12px;
+}
+
+.assistant-fold > .field:last-child,
+.assistant-fold > .assistant-context-numbers {
+  margin-bottom: 12px;
+}
+
 .dialog-actions {
   display: flex;
   justify-content: flex-end;
@@ -552,6 +610,24 @@
   margin: 10px 0 12px;
 }
 
+.assistant-context-head {
+  display: grid;
+  gap: 2px;
+  margin: 12px 0 8px;
+}
+
+.assistant-context-head strong {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.assistant-context-numbers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
 .assistant-context-options label {
   display: flex;
   align-items: center;
@@ -563,6 +639,13 @@
   color: var(--text-soft);
   background: rgba(255, 255, 255, 0.72);
   font-size: 13px;
+}
+
+@media (max-width: 420px) {
+  .assistant-context-options,
+  .assistant-context-numbers {
+    grid-template-columns: 1fr;
+  }
 }
 
 .toast {
@@ -659,6 +742,8 @@
 }
 
 .assistant-config-dialog input[type="text"],
+.assistant-config-dialog input[type="password"],
+.assistant-config-dialog input[type="number"],
 .assistant-config-dialog select,
 .edit-dialog textarea {
   border-color: var(--line);
