@@ -192,6 +192,27 @@ Not yet fully done:
 
 ## Recommended Next Steps
 
+### Main Update: Assistant Import / Export
+
+Implemented on `main`:
+
+- assistant settings can export the current form as a JSON assistant file
+- assistant settings can import a JSON assistant file into the current form
+- imported assistant configs require `name` and `prompt`, then become active only after saving
+- assistant export uses `Roundtable-助手-<name>.json`
+
+Important code locations:
+
+- `index.html`
+  - `#assistantImportFile`
+  - `#importAssistantButton`
+  - `#exportAssistantButton`
+- `src/main.js`
+  - `exportAssistantConfig()`
+  - `importAssistantConfig()`
+  - `handleAssistantImportSelected()`
+  - `currentAssistantFormConfig()`
+
 ### Feature Line Update: Round Topic
 
 Functional branch: `codex/roundtable-features`

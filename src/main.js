@@ -161,6 +161,7 @@ const els = {
   editText: $("#editText"),
   saveEdit: $("#saveEditButton"),
   saveSendEdit: $("#saveSendEditButton"),
+  assistantImportFile: $("#assistantImportFile"),
   assistantConfigDialog: $("#assistantConfigDialog"),
   assistantConfigTitle: $("#assistantConfigTitle"),
   assistantNameInput: $("#assistantNameInput"),
@@ -171,6 +172,8 @@ const els = {
   assistantPromptInput: $("#assistantPromptInput"),
   resetAssistantConfig: $("#resetAssistantConfigButton"),
   deleteAssistant: $("#deleteAssistantButton"),
+  importAssistant: $("#importAssistantButton"),
+  exportAssistant: $("#exportAssistantButton"),
   saveAssistantConfig: $("#saveAssistantConfigButton"),
   toast: $("#toast"),
 };
@@ -1596,8 +1599,8 @@ function syncBodyFromAssistant() {
   showToast("已按顺序同步全部 AI 输出到正文库");
 }
 
-function downloadText(filename, text) {
-  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+function downloadText(filename, text, type = "text/plain;charset=utf-8") {
+  const blob = new Blob([text], { type });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -1763,6 +1766,57 @@ function applyAssistantTemplate(templateId) {
   if (!template) return;
   els.assistantNameInput.value = template.name;
   els.assistantPromptInput.value = template.prompt;
+}
+
+function currentAssistantFormConfig() {
+  return {
+    name: clean(els.assistantNameInput.value),
+    model: clean(els.assistantModelInput.value),
+    temperature: Number(els.assistantTemperatureInput.value),
+    prompt: clean(els.assistantPromptInput.value),
+  };
+}
+
+function exportAssistantConfig() {
+  if (!assistantConfigTargetId) return;
+  const config = currentAssistantFormConfig();
+  if (!config.name && !config.prompt) return showToast("助手配置为空");
+  const payload = {
+    type: "roundtable-assistant",
+    version: 1,
+    exportedAt: Date.now(),
+    config,
+  };
+  downloadText(`Roundtable-助手-${config.name || assistantConfigTargetId}.json`, JSON.stringify(payload, null, 2), "application/json;charset=utf-8");
+  showToast("助手配置已导出");
+}
+
+function importAssistantConfig() {
+  if (!assistantConfigTargetId) return;
+  els.assistantImportFile?.click();
+}
+
+async function handleAssistantImportSelected() {
+  const file = els.assistantImportFile?.files?.[0];
+  if (!file) return;
+  try {
+    const payload = JSON.parse(await file.text());
+    const config = payload?.config || payload;
+    const name = clean(config?.name);
+    const prompt = clean(config?.prompt);
+    if (!name || !prompt) return showToast("助手配置 JSON 缺少 name/prompt");
+    els.assistantNameInput.value = name;
+    els.assistantModelInput.value = clean(config.model);
+    const temperature = Number(config.temperature);
+    els.assistantTemperatureInput.value = Number.isFinite(temperature) ? clamp(temperature, 0, 2) : sessionSettings().temperature;
+    els.assistantTemperatureLabel.textContent = Number(els.assistantTemperatureInput.value).toFixed(2);
+    els.assistantPromptInput.value = prompt;
+    showToast("助手配置已导入，保存后生效");
+  } catch (error) {
+    showToast(humanizeError(error, "助手配置导入失败"));
+  } finally {
+    if (els.assistantImportFile) els.assistantImportFile.value = "";
+  }
 }
 
 function closeAssistantConfig() {
@@ -2529,6 +2583,9 @@ els.assistantTemperatureInput?.addEventListener("input", () => {
   els.assistantTemperatureLabel.textContent = Number(els.assistantTemperatureInput.value).toFixed(2);
 });
 els.assistantTemplateSelect?.addEventListener("change", () => applyAssistantTemplate(els.assistantTemplateSelect.value));
+els.importAssistant?.addEventListener("click", importAssistantConfig);
+els.exportAssistant?.addEventListener("click", exportAssistantConfig);
+els.assistantImportFile?.addEventListener("change", handleAssistantImportSelected);
 els.saveAssistantConfig?.addEventListener("click", saveAssistantConfig);
 els.resetAssistantConfig?.addEventListener("click", resetAssistantConfig);
 els.deleteAssistant?.addEventListener("click", deleteCustomRoundAssistant);
