@@ -75,6 +75,33 @@ const ROUND_ASSISTANTS = [
     prompt: "你是写手。根据用户和圆桌讨论继续写小说正文。只输出正文，不要解释，不要列提纲。",
   },
 ];
+const ASSISTANT_TEMPLATES = [
+  {
+    id: "contrarian",
+    name: "反对者",
+    prompt: "你是圆桌里的反对者。你的职责是专门寻找方案中的软肋、套路、逻辑偷懒和情绪不成立之处。可以尖锐反驳，但必须给出可执行的替代方案。",
+  },
+  {
+    id: "foreshadow",
+    name: "伏笔管理员",
+    prompt: "你是伏笔管理员。你只关注伏笔、回收、误导、信息差和长期结构。请指出哪些细节可以提前埋，哪些线索需要回收，哪些信息应该暂时隐藏。",
+  },
+  {
+    id: "pacing",
+    name: "节奏剪辑师",
+    prompt: "你是节奏剪辑师。你关注场景进入、退出、转折密度、对白长度和读者疲劳。请直接指出哪里该删、哪里该放慢、哪里该加速。",
+  },
+  {
+    id: "psychology",
+    name: "角色心理师",
+    prompt: "你是角色心理师。你关注人物动机、创伤、欲望、谎言和关系张力。请判断角色反应是否真实，并提出更有心理压力的写法。",
+  },
+  {
+    id: "continuity",
+    name: "连续性检查员",
+    prompt: "你是连续性检查员。你关注设定前后矛盾、时间线、称呼、道具、能力边界和人物已知信息。请列出风险并给出修正建议。",
+  },
+];
 
 const $ = (selector) => document.querySelector(selector);
 const els = {
@@ -135,6 +162,7 @@ const els = {
   assistantConfigDialog: $("#assistantConfigDialog"),
   assistantConfigTitle: $("#assistantConfigTitle"),
   assistantNameInput: $("#assistantNameInput"),
+  assistantTemplateSelect: $("#assistantTemplateSelect"),
   assistantModelInput: $("#assistantModelInput"),
   assistantTemperatureInput: $("#assistantTemperatureInput"),
   assistantTemperatureLabel: $("#assistantTemperatureLabel"),
@@ -950,11 +978,20 @@ function renderModelPicker() {
   els.modelSelect.innerHTML = models.map((model) => `<option value="${escapeHtml(model)}">${escapeHtml(model)}</option>`).join("");
   els.modelSelect.value = settings.model;
   els.modelDatalist.innerHTML = models.map((model) => `<option value="${escapeHtml(model)}"></option>`).join("");
+  renderAssistantTemplates();
 }
 
 function renderContextBadge() {
   const info = contextInfo(clean(els.input.value));
   drawContextBadge(els, info, formatK);
+}
+
+function renderAssistantTemplates() {
+  if (!els.assistantTemplateSelect) return;
+  els.assistantTemplateSelect.innerHTML = [
+    `<option value="">选择模板套用...</option>`,
+    ...ASSISTANT_TEMPLATES.map((template) => `<option value="${escapeHtml(template.id)}">${escapeHtml(template.name)}</option>`),
+  ].join("");
 }
 
 function renderContextPanel() {
@@ -1571,11 +1608,19 @@ function openAssistantConfig(id) {
   els.assistantTemperatureInput.value = config.temperature;
   els.assistantTemperatureLabel.textContent = Number(config.temperature).toFixed(2);
   els.assistantPromptInput.value = config.prompt;
+  if (els.assistantTemplateSelect) els.assistantTemplateSelect.value = "";
   if (els.deleteAssistant) {
     els.deleteAssistant.hidden = !isCustomRoundAssistant(id);
   }
   els.assistantConfigDialog.showModal();
   requestAnimationFrame(() => els.assistantPromptInput.focus());
+}
+
+function applyAssistantTemplate(templateId) {
+  const template = ASSISTANT_TEMPLATES.find((item) => item.id === templateId);
+  if (!template) return;
+  els.assistantNameInput.value = template.name;
+  els.assistantPromptInput.value = template.prompt;
 }
 
 function closeAssistantConfig() {
@@ -2299,6 +2344,7 @@ els.saveSendEdit.addEventListener("click", () => saveEditor(true));
 els.assistantTemperatureInput?.addEventListener("input", () => {
   els.assistantTemperatureLabel.textContent = Number(els.assistantTemperatureInput.value).toFixed(2);
 });
+els.assistantTemplateSelect?.addEventListener("change", () => applyAssistantTemplate(els.assistantTemplateSelect.value));
 els.saveAssistantConfig?.addEventListener("click", saveAssistantConfig);
 els.resetAssistantConfig?.addEventListener("click", resetAssistantConfig);
 els.deleteAssistant?.addEventListener("click", deleteCustomRoundAssistant);

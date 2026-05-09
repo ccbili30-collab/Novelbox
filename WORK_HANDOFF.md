@@ -192,6 +192,28 @@ Not yet fully done:
 
 ## Recommended Next Steps
 
+### Feature Line Update: Assistant Templates
+
+Functional branch: `codex/roundtable-features`
+
+Implemented in the feature line:
+
+- assistant settings now include an assistant template selector
+- selecting a template fills the assistant display name and role prompt before saving
+- available templates: 反对者, 伏笔管理员, 节奏剪辑师, 角色心理师, 连续性检查员
+- templates work for custom assistants and can also be applied to built-in assistants when the user wants to repurpose one for the current session
+
+Important code locations:
+
+- `index.html`
+  - `#assistantTemplateSelect`
+- `src/main.js`
+  - `ASSISTANT_TEMPLATES`
+  - `renderAssistantTemplates()`
+  - `applyAssistantTemplate()`
+- `src/styles/panels.css`
+  - assistant config select styling
+
 ### Feature Line Update: Roundtable Context Controls
 
 Functional branch: `codex/roundtable-features`

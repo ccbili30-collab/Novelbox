@@ -442,7 +442,8 @@
   line-height: 1.55;
 }
 
-.assistant-config-dialog input[type="text"] {
+.assistant-config-dialog input[type="text"],
+.assistant-config-dialog select {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 10px;
