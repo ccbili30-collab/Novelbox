@@ -293,6 +293,7 @@ function roundtableState(session = activeSession()) {
     : ["setting", "plot", "review"];
   rt.messages = Array.isArray(rt.messages) ? rt.messages : [];
   rt.assistantConfigs = rt.assistantConfigs && typeof rt.assistantConfigs === "object" ? rt.assistantConfigs : {};
+  rt.roundProgress = rt.roundProgress && typeof rt.roundProgress === "object" ? rt.roundProgress : null;
   rt.contextOptions = normalizeRoundtableContextOptions(rt.contextOptions);
   rt.paperReveal = clamp(Number.isFinite(Number(rt.paperReveal)) ? Number(rt.paperReveal) : 0.68, 0, 1);
   return rt;
@@ -2194,20 +2195,46 @@ async function startRoundtableRound() {
   const rt = roundtableState();
   if (roundtableGenerating || isGenerating || materialGenerating) return showToast("已有生成任务进行中");
   if (!rt.selectedIds.length) return showToast("先在成员里选择至少一个参与者");
+  rt.roundProgress = { ids: [...rt.selectedIds], nextIndex: 0, topic: clean(rt.contextOptions?.roundTopic), updatedAt: Date.now() };
+  await runRoundtableProgress();
+}
+
+async function resumeRoundtableRound() {
+  const rt = roundtableState();
+  if (roundtableGenerating || isGenerating || materialGenerating) return showToast("已有生成任务进行中");
+  if (!rt.roundProgress?.ids?.length) return showToast("没有可继续的圆桌轮次");
+  await runRoundtableProgress();
+}
+
+async function runRoundtableProgress() {
+  const rt = roundtableState();
+  const progress = rt.roundProgress;
+  if (!progress?.ids?.length) return;
   roundtableShouldStop = false;
   roundtableGenerating = true;
   render();
   try {
     validateApi();
-    for (const id of rt.selectedIds) {
+    for (let index = Number(progress.nextIndex) || 0; index < progress.ids.length; index += 1) {
+      progress.nextIndex = index;
+      progress.updatedAt = Date.now();
       if (roundtableShouldStop) break;
+      const id = progress.ids[index];
       const assistant = getRoundAssistant(id);
-      if (!assistant) continue;
+      if (!assistant) {
+        progress.nextIndex = index + 1;
+        continue;
+      }
       showToast(`${assistant.name}正在发言`);
-      const topic = clean(rt.contextOptions?.roundTopic);
+      const topic = clean(progress.topic || rt.contextOptions?.roundTopic);
       const text = await callRoundtableAssistant(assistant, topic ? `请围绕本轮主题发表意见：${topic}` : "请根据当前正文和以上圆桌讨论发表你的意见。");
       if (roundtableShouldStop) break;
       addRoundtableMessage(assistant.id, assistant.name, text);
+      progress.nextIndex = index + 1;
+    }
+    if (!roundtableShouldStop && progress.nextIndex >= progress.ids.length) {
+      rt.roundProgress = null;
+      showToast("本轮圆桌已完成");
     }
   } catch (error) {
     if (!roundtableShouldStop && error.name !== "AbortError") {
@@ -2218,6 +2245,7 @@ async function startRoundtableRound() {
     abortController = null;
     roundtableShouldStop = false;
     render();
+    persistState(state);
   }
 }
 
@@ -2294,6 +2322,7 @@ const handleCommand = createCommandRegistry({
   "roundtable-toggle-member": (target) => toggleRoundtableMember(target.dataset.memberId),
   "roundtable-edit-assistant": (target) => openAssistantConfig(target.dataset.memberId),
   "roundtable-start": () => startRoundtableRound(),
+  "roundtable-resume": () => resumeRoundtableRound(),
   "roundtable-stop": () => stopRoundtableGeneration(),
   "open-search": () => showPanel("history"),
   "roundtable-preview": () => toggleRoundtable(),

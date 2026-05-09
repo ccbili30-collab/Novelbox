@@ -192,6 +192,25 @@ Not yet fully done:
 
 ## Recommended Next Steps
 
+### Main Update: Roundtable Round Resume
+
+Implemented on `main`:
+
+- `开始本轮` now records round progress before running selected assistants
+- `继续本轮` resumes from the next uncompleted assistant after a manual stop or interruption
+- progress is stored in `session.roundtable.roundProgress`
+- completed rounds clear progress automatically
+- the round topic is captured at round start so resumed rounds keep the same topic
+
+Important code locations:
+
+- `index.html`
+  - `data-command="roundtable-resume"`
+- `src/main.js`
+  - `startRoundtableRound()`
+  - `resumeRoundtableRound()`
+  - `runRoundtableProgress()`
+
 ### Main Update: Assistant Import / Export
 
 Implemented on `main`:
