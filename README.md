@@ -12,21 +12,23 @@ Roundtable Novelbox is inspired by the immediacy of chat-based AI tools: open it
 
 But it is not trying to be another generic chat client. Long-form fiction has different pain points: the manuscript grows too large, worldbuilding becomes scattered, character state drifts, and the model often loses track of what it should remember. Roundtable Novelbox keeps the directness of conversation while adding the writing memory a novel actually needs.
 
-## Introducing The Roundtable Direction
+## Introducing Roundtable Co-Creation
 
-The new direction is roundtable co-creation.
+Roundtable co-creation is now the core product direction of Novelbox.
 
-The envisioned flow:
+Instead of forcing a long novel into a single chat thread, Novelbox lets the user gather several AI roles around the same manuscript:
 
 - By default, the user writes with the main writer assistant in a simple chat flow.
-- When discussion is needed, the user opens Roundtable Mode.
-- The manuscript shrinks into a paper-like window near the top, like a page placed on the table.
-- Below it, assistants such as Worldbuilder, Plot Designer, Reviewer, and Style Editor discuss the current draft.
-- Selected assistants speak in order and can read earlier comments, including disagreement and critique.
-- The user decides whether to accept, rewrite, or `@Writer` to turn discussion back into prose.
-- Writer output appears as manuscript text, not as a normal chat bubble.
+- When discussion is needed, the user opens Roundtable Mode with the `圆` button.
+- The manuscript becomes a draggable paper window near the top, like a page placed on the table.
+- Below it, council members such as Worldbuilder, Plot Designer, Reviewer, Style Editor, and custom roles discuss the current draft.
+- Selected council members speak in order and can read earlier comments without mixing up who said what.
+- Council members can `@` one another, and mentioned members answer in sequence with loop protection.
+- Each council member can have its own prompt, model, API settings, temperature, and material reading range.
+- The user decides whether to adopt, rewrite, continue discussion, or `@Writer` to turn discussion back into prose.
+- Writer output appears as manuscript text and is synced into the manuscript library, instead of being treated like an ordinary chat bubble.
 
-The current app includes a visible **Roundtable Co-creation Beta** entry to present this direction. Full ordered multi-assistant replies, member configuration, and independent assistant prompts are in development.
+This is the direction that makes Novelbox more than a chat UI: it becomes a personal post-AI writing room where different AI perspectives can argue, review, and help the human author keep control.
 
 ## Current Features
 
@@ -41,6 +43,20 @@ The current app includes a visible **Roundtable Co-creation Beta** entry to pres
 - Real assistant output editing.
 
 Assistant output editing changes the assistant message itself. Later context uses the edited version instead of treating the edit as a new prompt.
+
+### Roundtable Mode
+
+- One-tap switch between normal writing chat and Roundtable Mode.
+- Paper-like manuscript window placed above the discussion area.
+- Smooth drag to expand or fold the manuscript paper.
+- `参会人` panel for selecting and editing council members.
+- Built-in council members: Worldbuilder, Plot Designer, Reviewer, Style Editor, and Writer.
+- Add, modify, hide, and delete council members.
+- Ordered speaking: selected council members respond one by one.
+- Council-to-council `@` mentions with sequential follow-up replies.
+- Per-council-member prompts, models, API configuration, temperature, and material settings.
+- Global and per-member material scope: manuscript, main chat, roundtable history, plot line, characters, worldbuilding, outline, and foreshadowing.
+- Writer replies are displayed as manuscript blocks and synced to the manuscript library.
 
 ### OpenAI-Compatible API
 
@@ -173,19 +189,15 @@ Completed:
 - AI material summaries.
 - Android APK project.
 - Layout tuning and custom presets.
-- Roundtable Co-creation Beta entry.
+- Roundtable Mode with manuscript paper, council members, ordered replies, per-member settings, and `@` follow-ups.
 
 Planned:
 
-- Multi-assistant member configuration.
-- Per-assistant prompts, models, and temperature.
-- Ordered roundtable replies.
-- Separate assistant discussion bubbles and writer manuscript blocks.
-- `@Writer` to turn discussion into prose.
 - Finer chapter management.
 - Manuscript anchors.
 - Searchable manuscript memory.
 - Confirmation flow for generated materials.
+- Cleaner approval flow for accepting or rejecting council suggestions.
 
 ## Final Line
 

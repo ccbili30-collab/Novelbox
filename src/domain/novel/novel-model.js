@@ -6,5 +6,6 @@ export function createDefaultNovel() {
     world: "",
     outline: "",
     foreshadows: "",
+    autoCompression: null,
   };
 }

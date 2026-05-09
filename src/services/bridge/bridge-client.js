@@ -1,11 +1,12 @@
 import { uid } from "../../utils/id.js";
 
-export function createBridgeClient({ timeoutMs, callbacks, streamCallbacks, setActiveStreamRequestId }) {
+export function createBridgeClient({ timeoutMs, callbacks, streamCallbacks, setActiveRequestId, setActiveStreamRequestId }) {
   function callBridge(methodName, payload) {
     const bridge = window.AndroidBridge;
     const asyncName = `${methodName}Async`;
     if (!bridge || typeof bridge[asyncName] !== "function") return null;
     const requestId = uid("bridge");
+    setActiveRequestId?.(requestId);
     return new Promise((resolve, reject) => {
       const timeout = window.setTimeout(() => {
         callbacks.delete(requestId);
@@ -20,6 +21,11 @@ export function createBridgeClient({ timeoutMs, callbacks, streamCallbacks, setA
           } catch {
             reject(new Error(text || "Android bridge parse failed"));
           }
+        },
+        reject: (error) => {
+          window.clearTimeout(timeout);
+          callbacks.delete(requestId);
+          reject(error);
         },
       });
       bridge[asyncName](requestId, JSON.stringify(payload));
@@ -60,7 +66,15 @@ export function createBridgeClient({ timeoutMs, callbacks, streamCallbacks, setA
     });
   }
 
-  return { callBridge, callBridgeStream };
+  function cancelBridgeRequest(requestId) {
+    if (!requestId) return;
+    const error = new DOMException("Aborted", "AbortError");
+    if (callbacks.has(requestId)) callbacks.get(requestId).reject(error);
+    if (streamCallbacks.has(requestId)) streamCallbacks.get(requestId).reject(error);
+    window.AndroidBridge?.cancelRequest?.(requestId);
+  }
+
+  return { callBridge, callBridgeStream, cancelBridgeRequest };
 }
 
 export function registerBridgeHooks(callbacks, streamCallbacks) {
