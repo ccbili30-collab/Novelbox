@@ -55,7 +55,8 @@ public class MainActivity extends Activity {
         notificationHelper.createChannel();
         permissionHelper.requestNotificationPermissionIfNeeded();
         configureWebView();
-        webView.loadUrl("file:///android_asset/index.html");
+        webView.clearCache(true);
+        webView.loadUrl(WebViewConfigurator.LOCAL_ORIGIN + "/index.html");
     }
 
     private void configureWebView() {

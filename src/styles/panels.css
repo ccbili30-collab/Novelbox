@@ -579,3 +579,68 @@
     border-inline: 1px solid var(--line);
   }
 }
+
+/* Clean writing-desk adaptation for roundtable and manuscript controls. */
+.novel-version-item,
+.novel-segment-item {
+  border-color: rgba(228, 224, 217, 0.95);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.novel-segment-item.is-stale {
+  background: rgba(255, 250, 240, 0.82);
+}
+
+.novel-version-actions button,
+.roundtable-actions button {
+  border-color: var(--line);
+  border-radius: 9px;
+  color: var(--text-soft);
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.roundtable-panel {
+  border-color: var(--line);
+  background: linear-gradient(180deg, rgba(248, 246, 241, 0.98), rgba(246, 245, 241, 0.98));
+}
+
+.roundtable-paper {
+  border-color: var(--surface-paper-edge);
+  border-radius: 0 0 14px 14px;
+  background:
+    linear-gradient(90deg, rgba(173, 166, 151, 0.14) 1px, transparent 1px) 34px 0 / 1px 100% no-repeat,
+    linear-gradient(180deg, #fffefd 0%, var(--surface-paper) 100%);
+  box-shadow: var(--paper-shadow);
+}
+
+.roundtable-beta-copy {
+  border-color: rgba(221, 215, 204, 0.86);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.member-chip {
+  border-color: var(--line);
+  border-radius: 9px;
+  color: var(--text-soft);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.member-chip.selected {
+  border-color: var(--text);
+  color: var(--text);
+  background: var(--surface-selected);
+}
+
+.writer-snippet {
+  border-left-color: var(--surface-paper-edge);
+  background: var(--surface-paper);
+}
+
+.assistant-config-dialog input[type="text"],
+.assistant-config-dialog select,
+.edit-dialog textarea {
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.96);
+}

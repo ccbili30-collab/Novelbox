@@ -906,8 +906,8 @@ function getViewportHeight() {
 
 function getRoundtablePaperMetrics() {
   const viewportHeight = getViewportHeight();
-  const minHeight = clamp(Math.round(viewportHeight * 0.16), 108, 148);
-  const maxHeight = clamp(Math.round(viewportHeight * 0.46), 228, 430);
+  const minHeight = clamp(Math.round(viewportHeight * 0.13), 92, 124);
+  const maxHeight = clamp(Math.round(viewportHeight * 0.42), 210, 390);
   const reveal = roundtableState().paperReveal;
   const currentHeight = Math.round(minHeight + (maxHeight - minHeight) * reveal);
   return {
