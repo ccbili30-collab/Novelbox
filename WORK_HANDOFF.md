@@ -519,6 +519,43 @@ Note for additional worktrees:
 
 - Android builds need ignored `android-app/local.properties` in each worktree, or `ANDROID_HOME` / `ANDROID_SDK_ROOT`.
 
+### Main Update: Android Bridge Cancel On Stop
+
+Implemented on `main`:
+
+- stopping normal generation now cancels the active Android bridge request id
+- stopping roundtable generation now cancels both normal bridge and stream bridge request ids
+- Android keeps a cancelled request-id set and suppresses late callbacks for cancelled requests
+- cancelled non-stream results no longer call back into WebView or post the finished notification
+- cancelled stream results no longer deliver late chunks, done callbacks, error callbacks, or failure notifications
+- JS clears stale bridge request ids immediately after manual stop
+
+Important code locations:
+
+- `src/services/bridge/bridge-client.js`
+  - `setActiveRequestId`
+  - `cancelBridgeRequest()`
+- `src/main.js`
+  - `bridgeRequestId`
+  - `stopGeneration()`
+  - `stopRoundtableGeneration()`
+  - `callOpenAIText()`
+  - `callOpenAITextWithSettings()`
+- `android-app/app/src/main/java/com/qinglan/chatnovel/MainActivity.java`
+  - `cancelledRequestIds`
+  - `AndroidBridge.cancelRequest()`
+  - `isRequestCancelled()`
+  - `clearCancelledRequest()`
+  - `openAIChatAsync()`
+  - `streamOpenAIChat()`
+
+Validation:
+
+- `node --check src/main.js`
+- `node --check dev-server.mjs`
+- `git diff --check`
+- `android-app\gradlew.bat assembleDebug --offline --no-daemon`
+
 ### Priority 1: Real device tuning
 
 Test in Android/WebView-like sizes and tune:

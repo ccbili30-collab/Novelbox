@@ -185,6 +185,7 @@ let editTarget = null;
 let assistantConfigTargetId = null;
 let isGenerating = false;
 let abortController = null;
+let bridgeRequestId = null;
 let streamRequestId = null;
 let generatingNodeId = null;
 let materialGenerating = false;
@@ -211,6 +212,9 @@ const bridgeClient = createBridgeClient({
   timeoutMs: BRIDGE_TIMEOUT,
   callbacks: bridgeCallbacks,
   streamCallbacks: bridgeStreamCallbacks,
+  setActiveRequestId: (requestId) => {
+    bridgeRequestId = requestId;
+  },
   setActiveStreamRequestId: (requestId) => {
     streamRequestId = requestId;
   },
@@ -1232,6 +1236,7 @@ async function generateIntoAssistant(nodeId, userText, versionId, continueMode =
   } finally {
     isGenerating = false;
     abortController = null;
+    bridgeRequestId = null;
     streamRequestId = null;
     generatingNodeId = null;
     streamShouldFollow = false;
@@ -1260,11 +1265,14 @@ function renderStreamingNode(nodeId, versionId) {
 function stopGeneration() {
   if (!isGenerating) return;
   abortController?.abort();
+  bridgeClient.cancelBridgeRequest(bridgeRequestId);
   if (streamRequestId && bridgeStreamCallbacks.has(streamRequestId)) {
-    bridgeStreamCallbacks.get(streamRequestId).reject(new DOMException("Aborted", "AbortError"));
-    bridgeStreamCallbacks.delete(streamRequestId);
+    bridgeClient.cancelBridgeRequest(streamRequestId);
   }
   isGenerating = false;
+  abortController = null;
+  bridgeRequestId = null;
+  streamRequestId = null;
   generatingNodeId = null;
   streamShouldFollow = false;
   showToast("已停止生成");
@@ -1296,6 +1304,7 @@ async function callOpenAIText(messages) {
     });
   } finally {
     abortController = null;
+    bridgeRequestId = null;
   }
 }
 
@@ -1309,7 +1318,10 @@ async function callOpenAITextWithSettings(messages, settingsOverride) {
       messages,
     });
   } finally {
-    if (!roundtableGenerating) abortController = null;
+    if (!roundtableGenerating) {
+      abortController = null;
+      bridgeRequestId = null;
+    }
   }
 }
 
@@ -1418,8 +1430,12 @@ function stopRoundtableGeneration() {
   if (!roundtableGenerating) return showToast("当前没有圆桌生成任务");
   roundtableShouldStop = true;
   abortController?.abort();
+  bridgeClient.cancelBridgeRequest(bridgeRequestId);
+  bridgeClient.cancelBridgeRequest(streamRequestId);
   roundtableGenerating = false;
   abortController = null;
+  bridgeRequestId = null;
+  streamRequestId = null;
   showToast("已停止圆桌生成");
   render();
 }

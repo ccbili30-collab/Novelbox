@@ -23,6 +23,8 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class MainActivity extends Activity {
     private static final int FILE_CHOOSER_REQUEST = 42;
@@ -37,6 +39,7 @@ public class MainActivity extends Activity {
     private WakeLockHelper wakeLockHelper;
     private FileChooserHandler fileChooserHandler;
     private WebViewConfigurator webViewConfigurator;
+    private final Set<String> cancelledRequestIds = ConcurrentHashMap.newKeySet();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -87,6 +90,12 @@ public class MainActivity extends Activity {
     }
 
     public class AndroidBridge {
+        @JavascriptInterface
+        public void cancelRequest(String requestId) {
+            if (requestId == null || requestId.trim().isEmpty()) return;
+            cancelledRequestIds.add(requestId);
+        }
+
         @JavascriptInterface
         public String openAIChat(String rawPayload) {
             try {
@@ -140,9 +149,11 @@ public class MainActivity extends Activity {
                 String result = null;
                 try {
                     result = openAIChat(rawPayload);
+                    if (isRequestCancelled(requestId)) return;
                     deliverBridgeResult(requestId, result);
                     postChatNotification(result);
                 } finally {
+                    clearCancelledRequest(requestId);
                     wakeLockHelper.release(wakeLock);
                 }
             }).start();
@@ -151,6 +162,14 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void openAIChatStreamAsync(String requestId, String rawPayload) {
             new Thread(() -> streamOpenAIChat(requestId, rawPayload)).start();
+        }
+
+        private boolean isRequestCancelled(String requestId) {
+            return requestId != null && cancelledRequestIds.contains(requestId);
+        }
+
+        private void clearCancelledRequest(String requestId) {
+            if (requestId != null) cancelledRequestIds.remove(requestId);
         }
 
         private void postChatNotification(String result) {
@@ -223,6 +242,7 @@ public class MainActivity extends Activity {
                 try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
                     String line;
                     while ((line = reader.readLine()) != null) {
+                        if (isRequestCancelled(requestId)) return;
                         if (!line.startsWith("data:")) continue;
                         String dataText = line.substring(5).trim();
                         if (dataText.isEmpty() || "[DONE]".equals(dataText)) continue;
@@ -239,11 +259,14 @@ public class MainActivity extends Activity {
                         }
                         if (!piece.isEmpty()) {
                             content.append(piece);
-                            deliverBridgeStreamChunk(requestId, content.toString());
+                            if (!isRequestCancelled(requestId)) {
+                                deliverBridgeStreamChunk(requestId, content.toString());
+                            }
                         }
                     }
                 }
 
+                if (isRequestCancelled(requestId)) return;
                 JSONObject meta = new JSONObject();
                 meta.put("content", content.toString());
                 if (usage != null) meta.put("usage", usage);
@@ -254,9 +277,13 @@ public class MainActivity extends Activity {
                 );
             } catch (Exception error) {
                 String message = error.getMessage() == null ? "Android bridge stream failed" : error.getMessage();
-                deliverBridgeStreamError(requestId, message);
+                if (!isRequestCancelled(requestId)) {
+                    deliverBridgeStreamError(requestId, message);
+                }
+                if (isRequestCancelled(requestId)) return;
                 notificationHelper.postBackgroundNotification(isInForeground, "TBird 生成失败", notificationHelper.trimNotificationText(message));
             } finally {
+                clearCancelledRequest(requestId);
                 wakeLockHelper.release(wakeLock);
             }
         }
