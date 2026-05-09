@@ -1,4 +1,39 @@
-const STORAGE_KEY = "tbird-chatbox-v1";
+import { uid } from "./utils/id.js";
+import { clean, escapeHtml } from "./utils/text.js";
+import { formatTime } from "./utils/time.js";
+import { estimateTokens, formatK } from "./utils/tokens.js";
+import { humanizeError } from "./utils/errors.js";
+import { createCommandRegistry } from "./app/command-registry.js";
+import { createDefaultLayout, hydrateLayout } from "./domain/layout/layout-model.js";
+import { createDefaultNovel } from "./domain/novel/novel-model.js";
+import {
+  buildNovelMemory as buildNovelMemoryFromSession,
+  buildNovelSourceText,
+} from "./domain/novel/novel-context-builder.js";
+import { buildNovelStats } from "./domain/novel/novel-stats.js";
+import { hydrateSessionSettings } from "./domain/settings/settings-model.js";
+import { hydrateApiSettings } from "./domain/settings/api-settings.js";
+import { createSession } from "./domain/session/session-model.js";
+import {
+  getNode as getSessionNode,
+  activePath as getActivePath,
+  getAssistantVersion,
+  getAssistantVersionById,
+  setAssistantVersionContent,
+  createNode,
+  addChild as appendChild,
+  titleForSession,
+  touchSession,
+} from "./domain/session/session-tree.js";
+import { createAiClient } from "./services/api/ai-client.js";
+import { createBridgeClient, registerBridgeHooks } from "./services/bridge/bridge-client.js";
+import { loadState, saveState as persistState } from "./state/persistence.js";
+import { bindCommandDelegation } from "./ui/bindings/event-binding.js";
+import { createPanelManager } from "./ui/panels/panel-manager.js";
+import { renderContextBadge as drawContextBadge, renderContextPanel as drawContextPanel } from "./ui/renderers/context-renderer.js";
+import { renderSessions as drawSessions } from "./ui/renderers/session-renderer.js";
+
+const CONTINUE_PROMPT = "继续完成上一条请求，直接输出正文，不要重复确认。";
 const BRIDGE_TIMEOUT = 160000;
 
 const $ = (selector) => document.querySelector(selector);
@@ -17,6 +52,7 @@ const els = {
   settingsPanel: $("#settingsPanel"),
   novelPanel: $("#novelPanel"),
   contextPanel: $("#contextPanel"),
+  roundtablePanel: $("#roundtablePanel"),
   novelFields: Array.from(document.querySelectorAll("[data-novel-key]")),
   novelStats: $("#novelStats"),
   bodyImportFile: $("#bodyImportFile"),
@@ -50,7 +86,6 @@ const els = {
 
 let state = loadState();
 let activeMenuNodeId = null;
-let activePanel = null;
 let editTarget = null;
 let isGenerating = false;
 let abortController = null;
@@ -61,94 +96,25 @@ let streamShouldFollow = true;
 let toastTimer = null;
 const bridgeCallbacks = new Map();
 const bridgeStreamCallbacks = new Map();
-
-function uid(prefix = "id") {
-  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function clean(text) {
-  return String(text ?? "").replace(/\r\n/g, "\n").trim();
-}
-
-function escapeHtml(text) {
-  return String(text ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function formatTime(value) {
-  const date = new Date(value || Date.now());
-  return `${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-}
-
-function estimateTokens(text) {
-  const compact = String(text || "").replace(/\s+/g, "");
-  return Math.ceil(compact.length / 1.7);
-}
-
-function formatK(tokens) {
-  if (tokens >= 1000) return `${Math.round(tokens / 100) / 10}K`;
-  return `${tokens}`;
-}
-
-function humanizeError(error, fallback = "操作失败") {
-  const raw = String(error?.message || error || "").trim();
-  const lower = raw.toLowerCase();
-  if (!raw) return fallback;
-  if (lower.includes("param incorrect") || lower.includes("invalid parameter") || lower.includes("invalid param")) {
-    return "接口参数不兼容：当前模型网关不接受这组请求参数。我已改为兼容模式，请重试。";
-  }
-  if (lower.includes("api key is required")) return "请先在设置里填写 API Key";
-  if (lower.includes("model is required")) return "请先选择或填写模型";
-  if (lower.includes("messages are required")) return "请求内容为空，请先输入或保存资料";
-  if (lower.includes("timeout")) return "请求超时，请检查网络或模型服务";
-  if (lower.includes("failed to fetch")) return "网络请求失败，请检查 Base URL、网络或代理";
-  if (lower.includes("unauthorized") || lower.includes("401")) return "认证失败，请检查 API Key";
-  if (lower.includes("forbidden") || lower.includes("403")) return "模型服务拒绝访问，请检查权限或模型名";
-  return raw;
-}
-
-function createSettings() {
-  return {
-    systemPrompt: "你是小说创作助手。回答可以自由，但要尊重已有对话上下文；如果用户要求正文创作，优先输出可直接进入小说的中文正文。",
-    model: "gpt-4o-mini",
-    temperature: 0.8,
-    contextCount: 12,
-    unlimitedContext: false,
-    maxTokens: 2048,
-    stream: true,
-    layout: createDefaultLayout(),
-    layoutPresets: [],
-  };
-}
-
-function createApiSettings() {
-  return {
-    baseUrl: "https://api.openai.com/v1",
-    apiKey: "",
-    models: ["gpt-4o-mini"],
-  };
-}
-
-function createDefaultLayout() {
-  return {
-    composerMinHeight: 66,
-    composerFontSize: 16,
-    sendButtonSize: 32,
-    toolButtonSize: 26,
-    messageFontSize: 17,
-    messageLineHeight: 150,
-    assistantLeft: 12,
-    messageSidePadding: 18,
-    messageGap: 22,
-    userBubblePadding: 5,
-    metaFontSize: 12,
-    footerGap: 8,
-    moreButtonSize: 28,
-  };
-}
+const panelManager = createPanelManager(els, {
+  onShow: (name) => {
+    if (name === "context") renderContextPanel();
+    if (name === "novel") renderNovelPanel();
+  },
+});
+const bridgeClient = createBridgeClient({
+  timeoutMs: BRIDGE_TIMEOUT,
+  callbacks: bridgeCallbacks,
+  streamCallbacks: bridgeStreamCallbacks,
+  setActiveStreamRequestId: (requestId) => {
+    streamRequestId = requestId;
+  },
+});
+const aiClient = createAiClient({
+  bridgeClient,
+  getAbortSignal: () => abortController?.signal,
+});
+registerBridgeHooks(bridgeCallbacks, bridgeStreamCallbacks);
 
 const layoutPresets = {
   compact: {
@@ -160,8 +126,8 @@ const layoutPresets = {
     messageLineHeight: 145,
     assistantLeft: 18,
     messageSidePadding: 14,
-    messageGap: 18,
-    userBubblePadding: 4,
+    messageGap: 10,
+    userBubblePadding: 2,
     metaFontSize: 11,
     footerGap: 6,
     moreButtonSize: 24,
@@ -175,134 +141,13 @@ const layoutPresets = {
     messageLineHeight: 165,
     assistantLeft: 22,
     messageSidePadding: 20,
-    messageGap: 28,
-    userBubblePadding: 8,
+    messageGap: 18,
+    userBubblePadding: 4,
     metaFontSize: 13,
     footerGap: 10,
     moreButtonSize: 32,
   },
 };
-
-function createSession(title = "新会话") {
-  const root = {
-    id: "root",
-    role: "root",
-    parentId: null,
-    children: [],
-    activeChildId: null,
-    createdAt: Date.now(),
-  };
-  return {
-    id: uid("sess"),
-    title,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-    rootId: root.id,
-    nodes: { [root.id]: root },
-    settings: createSettings(),
-    novel: createDefaultNovel(),
-  };
-}
-
-function defaultState() {
-  const session = createSession();
-  return {
-    activeSessionId: session.id,
-    sessions: [session],
-    api: createApiSettings(),
-  };
-}
-
-function createDefaultNovel() {
-  return {
-    body: "",
-    plotline: "",
-    characters: "",
-    world: "",
-    outline: "",
-    foreshadows: "",
-  };
-}
-
-function hydrate(next) {
-  const fallback = defaultState();
-  next ||= fallback;
-  const legacySettings = next.settings || {};
-  const legacyNovel = next.novel || null;
-  next.api = hydrateApiSettings(next.api || legacySettings);
-  next.sessions = Array.isArray(next.sessions) && next.sessions.length ? next.sessions : fallback.sessions;
-  next.sessions.forEach((session) => {
-    session.settings = hydrateSessionSettings(session.settings || legacySettings);
-    session.novel = { ...createDefaultNovel(), ...(session.novel || {}) };
-    session.rootId ||= "root";
-    session.nodes ||= {};
-    session.nodes[session.rootId] ||= {
-      id: session.rootId,
-      role: "root",
-      parentId: null,
-      children: [],
-      activeChildId: null,
-      createdAt: Date.now(),
-    };
-    Object.values(session.nodes).forEach((node) => {
-      node.children ||= [];
-      node.activeChildId = node.children.includes(node.activeChildId) ? node.activeChildId : node.children[0] || null;
-      if (node.role === "assistant") {
-        node.versions ||= [];
-        if (!node.versions.length) node.versions.push(createAssistantVersion(""));
-        node.activeVersionId ||= node.versions[0].id;
-      }
-    });
-  });
-  if (!next.sessions.some((session) => session.id === next.activeSessionId)) {
-    next.activeSessionId = next.sessions[0].id;
-  }
-  const active = next.sessions.find((session) => session.id === next.activeSessionId) || next.sessions[0];
-  if (legacyNovel && active && !active.__legacyNovelMigrated) {
-    active.novel = { ...createDefaultNovel(), ...(active.novel || {}), ...legacyNovel };
-    active.__legacyNovelMigrated = true;
-  }
-  delete next.settings;
-  delete next.novel;
-  return next;
-}
-
-function hydrateApiSettings(api) {
-  const next = { ...createApiSettings(), ...(api || {}) };
-  next.models = Array.isArray(next.models) && next.models.length
-    ? Array.from(new Set(next.models.filter(Boolean)))
-    : ["gpt-4o-mini"];
-  return next;
-}
-
-function hydrateSessionSettings(settings) {
-  const next = { ...createSettings(), ...(settings || {}) };
-  next.layout = hydrateLayout(next.layout);
-  next.layoutPresets = Array.isArray(next.layoutPresets) ? next.layoutPresets : [];
-  return next;
-}
-
-function hydrateLayout(layout) {
-  const defaults = createDefaultLayout();
-  const next = { ...defaults, ...(layout || {}) };
-  Object.keys(defaults).forEach((key) => {
-    const value = Number(next[key]);
-    next[key] = Number.isFinite(value) ? value : defaults[key];
-  });
-  return next;
-}
-
-function loadState() {
-  try {
-    return hydrate(JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"));
-  } catch {
-    return defaultState();
-  }
-}
-
-function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-}
 
 function activeSession() {
   return state.sessions.find((session) => session.id === state.activeSessionId) || state.sessions[0];
@@ -324,65 +169,11 @@ function sessionNovel(session = activeSession()) {
 }
 
 function getNode(id, session = activeSession()) {
-  return session.nodes[id];
+  return getSessionNode(session, id);
 }
 
 function activePath(session = activeSession()) {
-  const path = [];
-  let node = getNode(session.rootId, session);
-  while (node?.activeChildId) {
-    const next = getNode(node.activeChildId, session);
-    if (!next) break;
-    path.push(next);
-    node = next;
-  }
-  return path;
-}
-
-function getAssistantVersion(node) {
-  if (!node || node.role !== "assistant") return null;
-  return node.versions.find((version) => version.id === node.activeVersionId) || node.versions[0] || null;
-}
-
-function createAssistantVersion(content = "", usage = null) {
-  return {
-    id: uid("ver"),
-    content,
-    usage,
-    createdAt: Date.now(),
-  };
-}
-
-function createNode(role, parentId, content = "") {
-  return {
-    id: uid(role),
-    role,
-    parentId,
-    content,
-    children: [],
-    activeChildId: null,
-    versions: role === "assistant" ? [createAssistantVersion(content)] : [],
-    activeVersionId: role === "assistant" ? null : null,
-    createdAt: Date.now(),
-  };
-}
-
-function addChild(parent, child, session = activeSession()) {
-  session.nodes[child.id] = child;
-  parent.children.push(child.id);
-  parent.activeChildId = child.id;
-}
-
-function titleForSession(session = activeSession()) {
-  const firstUser = Object.values(session.nodes).find((node) => node.role === "user" && clean(node.content));
-  return clean(session.title) && session.title !== "新会话"
-    ? session.title
-    : clean(firstUser?.content).slice(0, 18) || "新会话";
-}
-
-function touchSession(session = activeSession()) {
-  session.title = titleForSession(session);
-  session.updatedAt = Date.now();
+  return getActivePath(session);
 }
 
 function getMessageContent(node) {
@@ -414,20 +205,7 @@ function contextMessages(extraUserText = "", includeDraftAssistantId = null) {
 }
 
 function buildNovelMemory() {
-  const novel = sessionNovel();
-  const parts = [
-    ["剧情线", novel.plotline],
-    ["角色卡", novel.characters],
-    ["世界观", novel.world],
-    ["大纲", novel.outline],
-    ["伏笔线", novel.foreshadows],
-    ["正文库节选", clean(novel.body).slice(-6000)],
-  ].filter(([, text]) => clean(text));
-  if (!parts.length) return "";
-  return [
-    "以下是小说创作记忆。续写、改写、解释人物动机时必须优先参考这些资料，不要自顾自另起设定。",
-    ...parts.map(([title, text]) => `【${title}】\n${clean(text)}`),
-  ].join("\n\n");
+  return buildNovelMemoryFromSession(sessionNovel());
 }
 
 function getNovelSourceText() {
@@ -436,15 +214,7 @@ function getNovelSourceText() {
     .slice(-12)
     .map((node) => `${node.role === "user" ? "用户" : "AI"}：${getMessageContent(node)}`)
     .join("\n\n");
-  return [
-    clean(novel.body) ? `【正文库】\n${clean(novel.body).slice(-12000)}` : "",
-    clean(novel.plotline) ? `【已有剧情线】\n${clean(novel.plotline)}` : "",
-    clean(novel.characters) ? `【已有角色卡】\n${clean(novel.characters)}` : "",
-    clean(novel.world) ? `【已有世界观】\n${clean(novel.world)}` : "",
-    clean(novel.outline) ? `【已有大纲】\n${clean(novel.outline)}` : "",
-    clean(novel.foreshadows) ? `【已有伏笔线】\n${clean(novel.foreshadows)}` : "",
-    clean(chat) ? `【最近对话】\n${chat}` : "",
-  ].filter(Boolean).join("\n\n");
+  return buildNovelSourceText(novel, chat);
 }
 
 function contextInfo(extraUserText = "") {
@@ -476,23 +246,11 @@ function showToast(message) {
 }
 
 function showPanel(name) {
-  activePanel = name;
-  els.backdrop.hidden = false;
-  els.historyPanel.hidden = name !== "history";
-  els.settingsPanel.hidden = name !== "settings";
-  els.novelPanel.hidden = name !== "novel";
-  els.contextPanel.hidden = name !== "context";
-  if (name === "context") renderContextPanel();
-  if (name === "novel") renderNovelPanel();
+  panelManager.showPanel(name);
 }
 
 function closePanels() {
-  activePanel = null;
-  els.backdrop.hidden = true;
-  els.historyPanel.hidden = true;
-  els.settingsPanel.hidden = true;
-  els.novelPanel.hidden = true;
-  els.contextPanel.hidden = true;
+  panelManager.closePanels();
 }
 
 function applyLayout() {
@@ -529,7 +287,7 @@ function render() {
   renderMenu();
   els.body.classList.toggle("is-generating", isGenerating);
   els.body.classList.toggle("is-ready", Boolean(clean(els.input.value)));
-  saveState();
+  persistState(state);
 }
 
 function renderMessages() {
@@ -607,23 +365,12 @@ function renderMenu() {
 
 function renderSessions() {
   const query = clean(els.historySearch.value).toLowerCase();
-  const sessions = state.sessions
-    .slice()
-    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
-    .filter((session) => !query || titleForSession(session).toLowerCase().includes(query));
-  els.sessionList.innerHTML = sessions.map((session) => {
-    const count = activePath(session).length;
-    return `<article class="session-item ${session.id === state.activeSessionId ? "active" : ""}">
-      <button class="session-main" type="button" data-command="switch-session" data-session-id="${session.id}">
-        <strong>${escapeHtml(titleForSession(session))}</strong>
-        <span>${count} 条 · ${formatTime(session.updatedAt)}</span>
-      </button>
-      <div class="session-actions">
-        <button type="button" data-command="copy-session" data-session-id="${session.id}">复制</button>
-        <button type="button" data-command="delete-session" data-session-id="${session.id}">删除</button>
-      </div>
-    </article>`;
-  }).join("") || `<p class="muted">还没有历史会话。</p>`;
+  drawSessions(els, state.sessions, state.activeSessionId, query, {
+    activePath,
+    titleForSession,
+    escapeHtml,
+    formatTime,
+  });
 }
 
 function renderSettings() {
@@ -669,10 +416,11 @@ function renderNovelPanel() {
     if (document.activeElement !== field) field.value = novel[key] || "";
   });
   if (els.novelStats) {
+    const stats = buildNovelStats(novel);
     const items = [
-      `正文 ${clean(novel.body).length} 字`,
-      `剧情线 ${clean(novel.plotline).length} 字`,
-      `资料估算 ${formatK(estimateTokens(buildNovelMemory()))} token`,
+      `正文 ${stats.bodyLength} 字`,
+      `剧情线 ${stats.plotlineLength} 字`,
+      `资料估算 ${formatK(stats.memoryTokens)} token`,
     ];
     els.novelStats.innerHTML = items.map((item) => `<span>${escapeHtml(item)}</span>`).join("");
   }
@@ -693,21 +441,12 @@ function renderModelPicker() {
 
 function renderContextBadge() {
   const info = contextInfo(clean(els.input.value));
-  els.contextBadge.textContent = `${info.nonSystem}/${info.limit} · ${formatK(info.tokens)}`;
+  drawContextBadge(els, info, formatK);
 }
 
 function renderContextPanel() {
   const info = contextInfo(clean(els.input.value));
-  const settings = sessionSettings();
-  els.contextStats.innerHTML = [
-    `上下文 ${info.nonSystem}/${info.limit} 条`,
-    `估算 ${formatK(info.tokens)} token`,
-    `模型 ${settings.model || "未设置"}`,
-    `温度 ${Number(settings.temperature).toFixed(2)}`,
-  ].map((item) => `<span>${escapeHtml(item)}</span>`).join("");
-  els.contextPreview.textContent = info.messages.map((message, index) => {
-    return `#${index + 1} ${message.role}\n${message.content}`;
-  }).join("\n\n---\n\n") || "本次没有可发送上下文。";
+  drawContextPanel(els, info, sessionSettings(), escapeHtml, formatK);
 }
 
 function setActiveModel(model) {
@@ -721,9 +460,10 @@ function setActiveModel(model) {
 function openEditor(nodeId) {
   const node = getNode(nodeId);
   if (!node) return;
-  editTarget = { nodeId, role: node.role };
+  const version = node.role === "assistant" ? getAssistantVersion(node) : null;
+  editTarget = { nodeId, role: node.role, versionId: version?.id || null };
   els.editTitle.textContent = node.role === "assistant" ? "编辑 AI 输出" : "编辑内容";
-  els.editText.value = getMessageContent(node);
+  els.editText.value = node.role === "assistant" ? version?.content || "" : getMessageContent(node);
   els.saveEdit.textContent = "保存";
   els.saveSendEdit.textContent = node.role === "assistant" ? "保存并继续" : "保存并重新发送";
   els.saveSendEdit.style.display = "";
@@ -743,8 +483,10 @@ async function saveEditor(sendAfterSave = false) {
   const node = getNode(editTarget.nodeId);
   if (!node) return;
   if (node.role === "assistant") {
-    const version = getAssistantVersion(node);
-    version.content = text;
+    const version = getAssistantVersionById(node, editTarget.versionId);
+    if (!version) return;
+    setAssistantVersionContent(node, version, text);
+    version.usage = null;
     version.createdAt = Date.now();
     closeEditor();
     touchSession();
@@ -771,10 +513,10 @@ async function appendUserMessage(text) {
   const path = activePath(session);
   const parent = path[path.length - 1] || getNode(session.rootId, session);
   const user = createNode("user", parent.id, text);
-  addChild(parent, user, session);
+  appendChild(session, parent, user);
   const assistant = createNode("assistant", user.id, "");
   assistant.activeVersionId = assistant.versions[0].id;
-  addChild(user, assistant, session);
+  appendChild(session, user, assistant);
   touchSession(session);
   activeMenuNodeId = null;
   render();
@@ -787,10 +529,10 @@ async function editUserBranch(nodeId, text) {
   const parent = getNode(old?.parentId);
   if (!old || !parent) return;
   const user = createNode("user", parent.id, text);
-  addChild(parent, user);
+  appendChild(activeSession(), parent, user);
   const assistant = createNode("assistant", user.id, "");
   assistant.activeVersionId = assistant.versions[0].id;
-  addChild(user, assistant);
+  appendChild(activeSession(), user, assistant);
   touchSession();
   activeMenuNodeId = null;
   render();
@@ -830,7 +572,7 @@ async function continueFromAssistant(nodeId) {
   if (!assistant || assistant.role !== "assistant") return;
   const next = createNode("assistant", assistant.id, "");
   next.activeVersionId = next.versions[0].id;
-  addChild(assistant, next);
+  appendChild(activeSession(), assistant, next);
   touchSession();
   activeMenuNodeId = null;
   render();
@@ -853,18 +595,18 @@ async function generateIntoAssistant(nodeId, userText, versionId, continueMode =
   generatingNodeId = nodeId;
   streamShouldFollow = shouldFollowBottom();
   activeMenuNodeId = nodeId;
-  version.content = "";
+  setAssistantVersionContent(node, version, "");
   version.usage = null;
   render();
   scrollBottom();
   try {
     const result = sessionSettings().stream
       ? await callOpenAIStream((partial) => {
-          version.content = partial;
+          setAssistantVersionContent(node, version, partial);
           renderStreamingNode(nodeId, versionId);
         }, nodeId, continueMode)
       : await callOpenAI(nodeId, continueMode);
-    version.content = result.content;
+    setAssistantVersionContent(node, version, result.content);
     version.usage = result.usage || null;
     version.createdAt = Date.now();
     touchSession();
@@ -916,194 +658,44 @@ function stopGeneration() {
   render();
 }
 
-function requestPayload(assistantNodeId, stream = false) {
-  const messages = contextMessages("", assistantNodeId);
-  const api = apiSettings();
-  const settings = sessionSettings();
-  return {
-    baseUrl: api.baseUrl,
-    apiKey: api.apiKey,
-    model: settings.model,
-    messages,
-    temperature: settings.temperature,
-    max_tokens: Number(settings.maxTokens) || undefined,
-    stream,
-  };
+function requestMessages(assistantNodeId, continueMode = false) {
+  return contextMessages(continueMode ? CONTINUE_PROMPT : "", assistantNodeId);
 }
 
-async function callOpenAI(assistantNodeId) {
-  const payload = requestPayload(assistantNodeId, false);
-  const bridge = await callAndroidBridge("openAIChat", payload);
-  const data = bridge || await fetchJson("/api/openai-chat", payload);
-  if (data.__bridgeStatus >= 400) throw new Error(data.error?.message || "请求失败");
-  const content = data.choices?.[0]?.message?.content || data.content || "";
-  if (!content) throw new Error("模型返回为空");
-  return { content, usage: data.usage || null };
+async function callOpenAI(assistantNodeId, continueMode = false) {
+  return aiClient.generate({
+    api: apiSettings(),
+    settings: sessionSettings(),
+    messages: requestMessages(assistantNodeId),
+    continueMode,
+    continuePrompt: CONTINUE_PROMPT,
+  });
 }
 
 async function callOpenAIText(messages) {
   validateApi();
   abortController = new AbortController();
-  const payload = {
-    baseUrl: apiSettings().baseUrl,
-    apiKey: apiSettings().apiKey,
-    model: sessionSettings().model,
-    messages,
-    minimal: true,
-  };
   try {
-    const bridge = await callAndroidBridge("openAIChat", payload);
-    const data = bridge || await fetchJson("/api/openai-chat", payload);
-    if (data.__bridgeStatus >= 400) throw new Error(data.error?.message || "请求失败");
-    const content = data.choices?.[0]?.message?.content || data.content || "";
-    if (!clean(content)) throw new Error("模型返回为空");
-    return clean(content);
+    return await aiClient.generateText({
+      api: apiSettings(),
+      settings: sessionSettings(),
+      messages,
+    });
   } finally {
     abortController = null;
   }
 }
 
-async function callOpenAIStream(onChunk, assistantNodeId) {
-  const payload = requestPayload(assistantNodeId, true);
-  const bridgeResult = callAndroidBridgeStream("openAIChat", payload, onChunk);
-  if (bridgeResult) return bridgeResult;
-  const response = await fetch("/api/openai-chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-    signal: abortController?.signal,
-  });
-  if (!response.ok) {
-    const data = await safeJson(response);
-    throw new Error(data?.error?.message || `请求失败 ${response.status}`);
-  }
-  return readOpenAIStream(response, onChunk);
-}
-
-async function fetchJson(url, payload) {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-    signal: abortController?.signal,
-  });
-  const data = await safeJson(response);
-  if (!response.ok) throw new Error(data?.error?.message || `请求失败 ${response.status}`);
-  return data;
-}
-
-async function safeJson(response) {
-  const text = await response.text();
-  try {
-    return text ? JSON.parse(text) : {};
-  } catch {
-    return { error: { message: text } };
-  }
-}
-
-async function readOpenAIStream(response, onChunk) {
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let content = "";
-  let usage = null;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split(/\r?\n/);
-    buffer = lines.pop() || "";
-    for (const line of lines) {
-      if (!line.startsWith("data:")) continue;
-      const dataText = line.slice(5).trim();
-      if (!dataText || dataText === "[DONE]") continue;
-      const data = JSON.parse(dataText);
-      if (data.usage) usage = data.usage;
-      const piece = data.choices?.[0]?.delta?.content || "";
-      if (piece) {
-        content += piece;
-        onChunk(content);
-      }
-    }
-  }
-  if (!content) throw new Error("模型返回为空");
-  return { content, usage };
-}
-
-function callAndroidBridge(methodName, payload) {
-  const bridge = window.AndroidBridge;
-  const asyncName = `${methodName}Async`;
-  if (!bridge || typeof bridge[asyncName] !== "function") return null;
-  const requestId = uid("bridge");
-  return new Promise((resolve, reject) => {
-    const timeout = window.setTimeout(() => {
-      bridgeCallbacks.delete(requestId);
-      reject(new Error("Android bridge timeout"));
-    }, BRIDGE_TIMEOUT);
-    bridgeCallbacks.set(requestId, {
-      resolve: (text) => {
-        window.clearTimeout(timeout);
-        bridgeCallbacks.delete(requestId);
-        try {
-          resolve(JSON.parse(text || "{}"));
-        } catch {
-          reject(new Error(text || "Android bridge parse failed"));
-        }
-      },
-    });
-    bridge[asyncName](requestId, JSON.stringify(payload));
+async function callOpenAIStream(onChunk, assistantNodeId, continueMode = false) {
+  return aiClient.generateStream({
+    api: apiSettings(),
+    settings: sessionSettings(),
+    messages: requestMessages(assistantNodeId),
+    onChunk,
+    continueMode,
+    continuePrompt: CONTINUE_PROMPT,
   });
 }
-
-function callAndroidBridgeStream(methodName, payload, onChunk) {
-  const bridge = window.AndroidBridge;
-  const streamName = `${methodName}StreamAsync`;
-  if (!bridge || typeof bridge[streamName] !== "function") return null;
-  const requestId = uid("stream");
-  streamRequestId = requestId;
-  return new Promise((resolve, reject) => {
-    const timeout = window.setTimeout(() => {
-      bridgeStreamCallbacks.delete(requestId);
-      reject(new Error("Android bridge stream timeout"));
-    }, BRIDGE_TIMEOUT);
-    bridgeStreamCallbacks.set(requestId, {
-      chunk: onChunk,
-      done: (metaText) => {
-        window.clearTimeout(timeout);
-        bridgeStreamCallbacks.delete(requestId);
-        let meta = {};
-        try {
-          meta = metaText ? JSON.parse(metaText) : {};
-        } catch {
-          meta = {};
-        }
-        resolve({ content: meta.content || "", usage: meta.usage || null });
-      },
-      reject: (error) => {
-        window.clearTimeout(timeout);
-        bridgeStreamCallbacks.delete(requestId);
-        reject(error);
-      },
-    });
-    bridge[streamName](requestId, JSON.stringify(payload));
-  });
-}
-
-window.__qinglanBridgeResolve = (requestId, text) => {
-  bridgeCallbacks.get(requestId)?.resolve(text);
-};
-
-window.__qinglanBridgeStreamChunk = (requestId, text) => {
-  bridgeStreamCallbacks.get(requestId)?.chunk(text || "");
-};
-
-window.__qinglanBridgeStreamDone = (requestId, text) => {
-  bridgeStreamCallbacks.get(requestId)?.done(text);
-};
-
-window.__qinglanBridgeStreamError = (requestId, message) => {
-  bridgeStreamCallbacks.get(requestId)?.reject(new Error(message || "Android bridge stream failed"));
-};
 
 async function fetchModels() {
   try {
@@ -1111,9 +703,7 @@ async function fetchModels() {
     els.modelStatus.textContent = "正在拉取...";
     const api = apiSettings();
     const settings = sessionSettings();
-    const payload = { baseUrl: api.baseUrl, apiKey: api.apiKey };
-    const bridge = await callAndroidBridge("openAIModels", payload);
-    const data = bridge || await fetchJson("/api/openai-models", payload);
+    const data = await aiClient.fetchModels({ api });
     if (data.__bridgeStatus >= 400) throw new Error(data.error?.message || "模型拉取失败");
     const models = (data.data || []).map((item) => item.id).filter(Boolean).sort();
     if (!models.length) throw new Error("没有读取到模型");
@@ -1149,12 +739,6 @@ function switchVersion(nodeId, delta) {
   render();
 }
 
-function collectSubtreeIds(nodeId, session = activeSession()) {
-  const node = getNode(nodeId, session);
-  if (!node) return [];
-  return [node.id, ...node.children.flatMap((childId) => collectSubtreeIds(childId, session))];
-}
-
 function deleteMessage(nodeId) {
   if (isGenerating) return showToast("生成中不能删除消息");
   const session = activeSession();
@@ -1162,16 +746,21 @@ function deleteMessage(nodeId) {
   const parent = getNode(node?.parentId, session);
   if (!node || !parent) return;
   const index = parent.children.indexOf(node.id);
-  const ids = collectSubtreeIds(node.id, session);
-  ids.forEach((id) => delete session.nodes[id]);
-  parent.children = parent.children.filter((id) => id !== node.id);
+  const childIds = node.children.filter((id) => getNode(id, session));
+  childIds.forEach((id) => {
+    session.nodes[id].parentId = parent.id;
+  });
+  if (index >= 0) parent.children.splice(index, 1, ...childIds);
+  delete session.nodes[node.id];
   if (parent.activeChildId === node.id) {
-    parent.activeChildId = parent.children[Math.max(0, Math.min(index, parent.children.length - 1))] || null;
+    parent.activeChildId = childIds.includes(node.activeChildId)
+      ? node.activeChildId
+      : parent.children[Math.max(0, Math.min(index, parent.children.length - 1))] || null;
   }
   activeMenuNodeId = null;
   touchSession(session);
   render();
-  showToast("已删除这条消息和后续分支");
+  showToast("已删除这条消息，分支已保留");
 }
 
 async function copyText(text) {
@@ -1245,7 +834,7 @@ function saveNovel() {
   syncNovelFromFields();
   renderNovelPanel();
   renderContextBadge();
-  saveState();
+  persistState(state);
   showToast("小说资料已保存");
 }
 
@@ -1261,7 +850,7 @@ async function handleBodyFileSelected() {
     sessionNovel().body = clean(text);
     renderNovelPanel();
     renderContextBadge();
-    saveState();
+    persistState(state);
     showToast("正文 TXT 已导入");
   } catch (error) {
     showToast(humanizeError(error, "正文导入失败"));
@@ -1287,7 +876,7 @@ function syncBodyFromAssistant() {
   sessionNovel().body = bodyText;
   renderNovelPanel();
   renderContextBadge();
-  saveState();
+  persistState(state);
   showToast("已按顺序同步全部 AI 输出到正文库");
 }
 
@@ -1345,7 +934,7 @@ async function generateNovelMaterial(target) {
     sessionNovel()[target] = text;
     renderNovelPanel();
     renderContextBadge();
-    saveState();
+    persistState(state);
     showToast(`${label}已填充`);
   } catch (error) {
     showToast(humanizeError(error, `${label}生成失败`));
@@ -1354,46 +943,48 @@ async function generateNovelMaterial(target) {
   }
 }
 
-function handleCommand(command, target) {
-  const nodeId = target.dataset.nodeId;
-  const sessionId = target.dataset.sessionId;
-  if (command === "open-history") return showPanel("history");
-  if (command === "open-settings") return showPanel("settings");
-  if (command === "open-novel") return showPanel("novel");
-  if (command === "open-context") return showPanel("context");
-  if (command === "open-search") return showPanel("history");
-  if (command === "close-panels") return closePanels();
-  if (command === "new-session") return newSession();
-  if (command === "switch-session") return switchSession(sessionId);
-  if (command === "copy-session") return copySession(sessionId);
-  if (command === "delete-session") return deleteSession(sessionId);
-  if (command === "fetch-models") return fetchModels();
-  if (command === "save-novel") return saveNovel();
-  if (command === "import-body-file") return importBodyFile();
-  if (command === "export-body-file") return exportBodyFile();
-  if (command === "sync-body-from-ai") return syncBodyFromAssistant();
-  if (command === "generate-novel") return generateNovelMaterial(target.dataset.novelTarget);
-  if (command === "layout-preset") return applyLayoutPreset(target.dataset.preset);
-  if (command === "layout-custom-preset") return applyCustomLayoutPreset(target.dataset.presetId);
-  if (command === "save-layout-preset") return saveLayoutPreset();
-  if (command === "delete-layout-preset") return deleteLayoutPreset(target.dataset.presetId);
-  if (command === "copy-layout") return copyLayoutParams();
-  if (command === "reset-layout") return resetLayoutParams();
-  if (command === "toggle-menu") {
+const handleCommand = createCommandRegistry({
+  "open-history": () => showPanel("history"),
+  "open-settings": () => showPanel("settings"),
+  "open-novel": () => showPanel("novel"),
+  "open-context": () => showPanel("context"),
+  "open-roundtable": () => showPanel("roundtable"),
+  "open-search": () => showPanel("history"),
+  "roundtable-preview": () => showToast("圆桌共创仍是 Beta 预览，完整群聊发言正在开发中"),
+  "close-panels": () => closePanels(),
+  "new-session": () => newSession(),
+  "switch-session": (target) => switchSession(target.dataset.sessionId),
+  "copy-session": (target) => copySession(target.dataset.sessionId),
+  "delete-session": (target) => deleteSession(target.dataset.sessionId),
+  "fetch-models": () => fetchModels(),
+  "save-novel": () => saveNovel(),
+  "import-body-file": () => importBodyFile(),
+  "export-body-file": () => exportBodyFile(),
+  "sync-body-from-ai": () => syncBodyFromAssistant(),
+  "generate-novel": (target) => generateNovelMaterial(target.dataset.novelTarget),
+  "layout-preset": (target) => applyLayoutPreset(target.dataset.preset),
+  "layout-custom-preset": (target) => applyCustomLayoutPreset(target.dataset.presetId),
+  "save-layout-preset": () => saveLayoutPreset(),
+  "delete-layout-preset": (target) => deleteLayoutPreset(target.dataset.presetId),
+  "copy-layout": () => copyLayoutParams(),
+  "reset-layout": () => resetLayoutParams(),
+  "toggle-menu": (target) => {
+    const nodeId = target.dataset.nodeId;
     activeMenuNodeId = activeMenuNodeId === nodeId ? null : nodeId;
     return render();
-  }
-  if (command === "edit-user" || command === "edit-ai") return openEditor(nodeId);
-  if (command === "copy-message") return copyText(getMessageContent(getNode(nodeId)));
-  if (command === "delete-message") return deleteMessage(nodeId);
-  if (command === "resend-user") return resendUser(nodeId);
-  if (command === "regen-ai") return regenerateAssistant(nodeId);
-  if (command === "continue-ai") return continueFromAssistant(nodeId);
-  if (command === "prev-version") return switchVersion(nodeId, -1);
-  if (command === "next-version") return switchVersion(nodeId, 1);
-  if (command === "prev-branch") return switchSibling(nodeId, -1);
-  if (command === "next-branch") return switchSibling(nodeId, 1);
-}
+  },
+  "edit-user": (target) => openEditor(target.dataset.nodeId),
+  "edit-ai": (target) => openEditor(target.dataset.nodeId),
+  "copy-message": (target) => copyText(getMessageContent(getNode(target.dataset.nodeId))),
+  "delete-message": (target) => deleteMessage(target.dataset.nodeId),
+  "resend-user": (target) => resendUser(target.dataset.nodeId),
+  "regen-ai": (target) => regenerateAssistant(target.dataset.nodeId),
+  "continue-ai": (target) => continueFromAssistant(target.dataset.nodeId),
+  "prev-version": (target) => switchVersion(target.dataset.nodeId, -1),
+  "next-version": (target) => switchVersion(target.dataset.nodeId, 1),
+  "prev-branch": (target) => switchSibling(target.dataset.nodeId, -1),
+  "next-branch": (target) => switchSibling(target.dataset.nodeId, 1),
+});
 
 function applyLayoutPreset(name) {
   const preset = layoutPresets[name];
@@ -1447,18 +1038,9 @@ function copyLayoutParams() {
   copyText(JSON.stringify(sessionSettings().layout, null, 2));
 }
 
-document.addEventListener("click", (event) => {
-  const target = event.target.closest("[data-command]");
-  if (!target) {
-    if (activeMenuNodeId && !event.target.closest(".message-menu")) {
-      activeMenuNodeId = null;
-      renderMenu();
-    }
-    return;
-  }
-  event.preventDefault();
-  handleCommand(target.dataset.command, target);
-});
+bindCommandDelegation(document, renderMenu, () => activeMenuNodeId, (value) => {
+  activeMenuNodeId = value;
+}, (command, target) => handleCommand(command, target));
 
 els.composer.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -1509,7 +1091,7 @@ els.historySearch.addEventListener("input", renderSessions);
   element.addEventListener("input", () => {
     sessionSettings()[key] = key === "contextCount" || key === "maxTokens" ? Number(element.value) || 0 : element.value;
     renderContextBadge();
-    saveState();
+    persistState(state);
   });
 });
 
@@ -1519,7 +1101,7 @@ els.historySearch.addEventListener("input", renderSessions);
 ].forEach(([, element, key]) => {
   element.addEventListener("input", () => {
     apiSettings()[key] = element.value;
-    saveState();
+    persistState(state);
   });
 });
 
@@ -1527,7 +1109,7 @@ els.modelInput.addEventListener("input", () => {
   setActiveModel(els.modelInput.value);
   renderModelPicker();
   renderContextBadge();
-  saveState();
+  persistState(state);
 });
 
 els.modelSelect.addEventListener("change", () => {
@@ -1538,7 +1120,7 @@ els.modelSelect.addEventListener("change", () => {
 els.temperature.addEventListener("input", () => {
   sessionSettings().temperature = Number(els.temperature.value);
   els.temperatureLabel.textContent = sessionSettings().temperature.toFixed(2);
-  saveState();
+  persistState(state);
 });
 
 els.unlimitedContext.addEventListener("change", () => {
@@ -1548,7 +1130,7 @@ els.unlimitedContext.addEventListener("change", () => {
 
 els.stream.addEventListener("change", () => {
   sessionSettings().stream = els.stream.checked;
-  saveState();
+  persistState(state);
 });
 
 els.layoutInputs.forEach((input) => {
@@ -1558,7 +1140,7 @@ els.layoutInputs.forEach((input) => {
     applyLayout();
     renderSettings();
     resizeInput();
-    saveState();
+    persistState(state);
   });
 });
 
@@ -1567,7 +1149,7 @@ els.novelFields.forEach((field) => {
     sessionNovel()[field.dataset.novelKey] = field.value;
     renderContextBadge();
     renderNovelPanel();
-    saveState();
+    persistState(state);
   });
 });
 

@@ -6,8 +6,8 @@
 
 ## 当前项目状态
 
-- 项目名称：TBird / Novelbox
-- 形态：移动端优先的 Chatbox 式小说创作工具，Web 原型 + Android WebView 打包。
+- 项目名称：圆桌小说盒子 / Roundtable Novelbox
+- 形态：移动端优先的 AI 小说创作工作台，灵感来自对话式 AI 工具，核心方向是圆桌群聊式小说共创。Web 原型 + Android WebView 打包。
 - GitHub：`https://github.com/ccbili30-collab/Novelbox`
 - 当前本地分支：`master`
 - 远端主分支：`main`
@@ -38,7 +38,7 @@
 
 - `index.html`：应用壳、面板、编辑弹窗。
 - `src/main.js`：核心状态、会话树、OpenAI 调用、正文/资料逻辑。
-- `src/styles.css`：移动端 Chatbox 风格 UI 和排版调试参数。
+- `src/styles.css`：移动端写作 UI 和排版调试参数。
 - `dev-server.mjs`：本地开发服务器和 OpenAI 兼容代理。
 - `android-app/`：Android WebView 打包工程。
 

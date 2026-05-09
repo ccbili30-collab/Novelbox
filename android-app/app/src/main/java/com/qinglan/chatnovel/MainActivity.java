@@ -1,17 +1,18 @@
 package com.qinglan.chatnovel;
 
-import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Intent;
-import android.net.Uri;
 import android.os.Bundle;
+import android.os.PowerManager;
 import android.view.View;
 import android.webkit.JavascriptInterface;
-import android.webkit.ValueCallback;
-import android.webkit.WebChromeClient;
-import android.webkit.WebSettings;
 import android.webkit.WebView;
-import android.webkit.WebViewClient;
+
+import com.qinglan.chatnovel.system.NotificationHelper;
+import com.qinglan.chatnovel.system.PermissionHelper;
+import com.qinglan.chatnovel.system.WakeLockHelper;
+import com.qinglan.chatnovel.webview.FileChooserHandler;
+import com.qinglan.chatnovel.webview.WebViewConfigurator;
 
 import org.json.JSONObject;
 
@@ -25,8 +26,17 @@ import java.nio.charset.StandardCharsets;
 
 public class MainActivity extends Activity {
     private static final int FILE_CHOOSER_REQUEST = 42;
+    private static final int NOTIFICATION_PERMISSION_REQUEST = 43;
+    private static final int GENERATION_NOTIFICATION_ID = 1001;
+    private static final long GENERATION_WAKE_LOCK_MS = 10 * 60 * 1000L;
+    private static final String NOTIFICATION_CHANNEL_ID = "tbird_generation";
     private WebView webView;
-    private ValueCallback<Uri[]> filePathCallback;
+    private boolean isInForeground = false;
+    private NotificationHelper notificationHelper;
+    private PermissionHelper permissionHelper;
+    private WakeLockHelper wakeLockHelper;
+    private FileChooserHandler fileChooserHandler;
+    private WebViewConfigurator webViewConfigurator;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -34,53 +44,37 @@ public class MainActivity extends Activity {
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
         webView = new WebView(this);
         setContentView(webView);
+        notificationHelper = new NotificationHelper(this, NOTIFICATION_CHANNEL_ID, GENERATION_NOTIFICATION_ID);
+        permissionHelper = new PermissionHelper(this, NOTIFICATION_PERMISSION_REQUEST);
+        wakeLockHelper = new WakeLockHelper(this, GENERATION_WAKE_LOCK_MS, "TBird:Generation");
+        fileChooserHandler = new FileChooserHandler(this, FILE_CHOOSER_REQUEST);
+        webViewConfigurator = new WebViewConfigurator();
+        notificationHelper.createChannel();
+        permissionHelper.requestNotificationPermissionIfNeeded();
         configureWebView();
         webView.loadUrl("file:///android_asset/index.html");
     }
 
-    @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
     private void configureWebView() {
-        WebSettings settings = webView.getSettings();
-        settings.setJavaScriptEnabled(true);
-        settings.setDomStorageEnabled(true);
-        settings.setDatabaseEnabled(true);
-        settings.setAllowFileAccess(true);
-        settings.setAllowContentAccess(true);
-        settings.setMediaPlaybackRequiresUserGesture(false);
+        webViewConfigurator.configure(webView, new AndroidBridge(), fileChooserHandler);
+    }
 
-        webView.addJavascriptInterface(new AndroidBridge(), "AndroidBridge");
-        webView.setWebViewClient(new WebViewClient());
-        webView.setWebChromeClient(new WebChromeClient() {
-            @Override
-            public boolean onShowFileChooser(
-                    WebView view,
-                    ValueCallback<Uri[]> filePathCallback,
-                    FileChooserParams fileChooserParams
-            ) {
-                if (MainActivity.this.filePathCallback != null) {
-                    MainActivity.this.filePathCallback.onReceiveValue(null);
-                }
-                MainActivity.this.filePathCallback = filePathCallback;
-                Intent intent = fileChooserParams.createIntent();
-                intent.addCategory(Intent.CATEGORY_OPENABLE);
-                try {
-                    startActivityForResult(intent, FILE_CHOOSER_REQUEST);
-                } catch (Exception error) {
-                    MainActivity.this.filePathCallback = null;
-                    return false;
-                }
-                return true;
-            }
-        });
+    @Override
+    protected void onResume() {
+        super.onResume();
+        isInForeground = true;
+    }
+
+    @Override
+    protected void onPause() {
+        isInForeground = false;
+        super.onPause();
     }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode != FILE_CHOOSER_REQUEST || filePathCallback == null) return;
-        Uri[] result = WebChromeClient.FileChooserParams.parseResult(resultCode, data);
-        filePathCallback.onReceiveValue(result);
-        filePathCallback = null;
+        fileChooserHandler.handleActivityResult(requestCode, resultCode, data);
     }
 
     @Override
@@ -141,7 +135,17 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public void openAIChatAsync(String requestId, String rawPayload) {
-            new Thread(() -> deliverBridgeResult(requestId, openAIChat(rawPayload))).start();
+            new Thread(() -> {
+                PowerManager.WakeLock wakeLock = wakeLockHelper.acquire();
+                String result = null;
+                try {
+                    result = openAIChat(rawPayload);
+                    deliverBridgeResult(requestId, result);
+                    postChatNotification(result);
+                } finally {
+                    wakeLockHelper.release(wakeLock);
+                }
+            }).start();
         }
 
         @JavascriptInterface
@@ -149,7 +153,33 @@ public class MainActivity extends Activity {
             new Thread(() -> streamOpenAIChat(requestId, rawPayload)).start();
         }
 
+        private void postChatNotification(String result) {
+            try {
+                JSONObject data = new JSONObject(result == null ? "" : result);
+                if (data.optInt("__bridgeStatus", 200) >= 400 || data.has("error")) {
+                    String message = data.optJSONObject("error") == null
+                            ? "请求失败"
+                            : data.getJSONObject("error").optString("message", "请求失败");
+                    notificationHelper.postBackgroundNotification(isInForeground, "TBird 生成失败", notificationHelper.trimNotificationText(message));
+                    return;
+                }
+
+                String content = "";
+                if (data.has("choices") && data.getJSONArray("choices").length() > 0) {
+                    JSONObject message = data.getJSONArray("choices")
+                            .getJSONObject(0)
+                            .optJSONObject("message");
+                    if (message != null) content = message.optString("content", "");
+                }
+                if (content.isEmpty()) content = data.optString("content", "本次生成已完成");
+                notificationHelper.postBackgroundNotification(isInForeground, "TBird 写完了", notificationHelper.trimNotificationText(content));
+            } catch (Exception error) {
+                notificationHelper.postBackgroundNotification(isInForeground, "TBird 写完了", "本次生成已完成");
+            }
+        }
+
         private void streamOpenAIChat(String requestId, String rawPayload) {
+            PowerManager.WakeLock wakeLock = wakeLockHelper.acquire();
             StringBuilder content = new StringBuilder();
             JSONObject usage = null;
             try {
@@ -218,8 +248,16 @@ public class MainActivity extends Activity {
                 meta.put("content", content.toString());
                 if (usage != null) meta.put("usage", usage);
                 deliverBridgeStreamDone(requestId, meta.toString());
+                notificationHelper.postBackgroundNotification(isInForeground,
+                        "TBird 写完了",
+                        notificationHelper.trimNotificationText(content.length() > 0 ? content.toString() : "本次生成已完成")
+                );
             } catch (Exception error) {
-                deliverBridgeStreamError(requestId, error.getMessage() == null ? "Android bridge stream failed" : error.getMessage());
+                String message = error.getMessage() == null ? "Android bridge stream failed" : error.getMessage();
+                deliverBridgeStreamError(requestId, message);
+                notificationHelper.postBackgroundNotification(isInForeground, "TBird 生成失败", notificationHelper.trimNotificationText(message));
+            } finally {
+                wakeLockHelper.release(wakeLock);
             }
         }
 

@@ -1,15 +1,19 @@
 .godot/
 node_modules/
 *.tmp
+src/services_setup.ps1
 .server-job-id
 .server-pid
 tmp/
 outputs/
+dist/
 spore_lore_extract/
 android-app/.gradle/
 android-app/build/
 android-app/app/build/
 android-app/local.properties
+.claude/
+CLAUDE.md
 
 # Workspace leftovers unrelated to Novelbox
 Simulated-Project/
