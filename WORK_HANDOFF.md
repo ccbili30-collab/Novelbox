@@ -192,6 +192,36 @@ Not yet fully done:
 
 ## Recommended Next Steps
 
+### Feature Line Update: Custom Roundtable Assistants
+
+Functional branch: `codex/roundtable-features`
+
+Implemented in the feature line:
+
+- roundtable member panel now supports adding custom assistants per session
+- a new custom assistant is selected into the speaking order immediately and opens the assistant settings dialog
+- custom assistants can use their own display name, prompt, model, and temperature
+- custom assistant names work as `@` mention aliases, just like built-in assistants
+- custom assistants are included in roundtable context so other assistants can see who is present
+- custom assistants can be deleted from the settings dialog without deleting old discussion history
+- the old bottom-sheet Beta preview copy was rewritten as a formal roundtable entry
+
+Important code locations:
+
+- `src/main.js`
+  - `roundtableState()`
+  - `normalizeCustomAssistant()`
+  - `getRoundAssistantBases()`
+  - `createCustomRoundAssistant()`
+  - `deleteCustomRoundAssistant()`
+  - `renderRoundtableMembers()`
+  - `parseRoundtableMentions()`
+- `index.html`
+  - `#deleteAssistantButton`
+  - `#roundtablePanel`
+- `src/styles/components.css`
+  - `.roundtable-member-add`
+
 ### Feature Line Update: Roundtable Stop Control
 
 Functional branch: `codex/roundtable-features`

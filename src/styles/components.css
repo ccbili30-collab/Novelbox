@@ -334,6 +334,16 @@ body.is-generating .send-button {
   border-style: dashed;
 }
 
+.roundtable-member-add {
+  min-height: 48px;
+  border: 1px dashed #cdbb9d;
+  border-radius: 8px;
+  color: #65553f;
+  background: rgba(255, 255, 255, 0.62);
+  font-size: 14px;
+  font-weight: 700;
+}
+
 .roundtable-member-option.selected .roundtable-member-main span {
   color: #fff;
   border-color: #8d6b31;
