@@ -534,13 +534,23 @@ function assistantAliases(assistant) {
   return [...names].map(normalizeMentionName).filter(Boolean);
 }
 
+function getRoundtableMentionableAssistants(options = {}) {
+  const rt = roundtableState();
+  const selected = new Set(rt.selectedIds);
+  const allowWriter = options.allowWriter !== false;
+  return getRoundAssistants().filter((assistant) => {
+    if (assistant.id === "writer") return allowWriter;
+    return selected.has(assistant.id);
+  });
+}
+
 function parseRoundtableMentions(text, options = {}) {
   const source = clean(text);
   if (!source.includes("@")) return [];
   const normalized = normalizeMentionName(source);
   const excludeIds = options.excludeIds instanceof Set ? options.excludeIds : new Set(options.excludeIds || []);
   const allowWriter = options.allowWriter !== false;
-  return getRoundAssistants()
+  return getRoundtableMentionableAssistants({ allowWriter })
     .map((assistant) => {
       if ((!allowWriter && assistant.id === "writer") || excludeIds.has(assistant.id)) return null;
       const index = assistantAliases(assistant)
@@ -561,7 +571,7 @@ function renderRoundtableRichText(text) {
   const source = clean(text);
   if (!source) return "";
   const mentionMap = new Map();
-  getRoundAssistants().forEach((assistant) => {
+  getRoundtableMentionableAssistants().forEach((assistant) => {
     assistantAliases(assistant).forEach((alias) => {
       if (!mentionMap.has(alias)) mentionMap.set(alias, assistant);
     });
@@ -3384,6 +3394,9 @@ function moveRoundtableMember(id, delta) {
 async function handleRoundtableUser(text) {
   addRoundtableMessage("user", clean(sessionAppearance().userName) || "我", text);
   const mentions = parseRoundtableMentions(text);
+  if (!mentions.length && clean(text).includes("@")) {
+    showToast("只能 @ 已安排顺序的议员，或 @写手");
+  }
   if (!mentions.length) return;
   const writer = mentions.find((assistant) => assistant.id === "writer");
   if (writer) return generateRoundtableWriter(text);
@@ -3605,9 +3618,13 @@ function buildRoundtableMessages(assistant, instruction) {
     ...rt.contextOptions,
     ...(assistant.contextOptions || {}),
   });
-  const participants = getRoundAssistants()
+  const mentionableAssistants = getRoundtableMentionableAssistants();
+  const participants = mentionableAssistants
     .map((current) => `${current.name}：${current.role}`)
     .join("；");
+  const mentionableNames = mentionableAssistants
+    .map((current) => `@${current.name}`)
+    .join(" / ");
   const speakingRule = assistant.id === "writer"
     ? "写手负责把讨论转成正文。只输出小说正文，不要解释，不要列提纲；写手正文长度按用户请求和剧情需要决定。"
     : `议员默认发言必须短。${ROUNDTABLE_CONCISE_RULE}`;
@@ -3636,7 +3653,7 @@ function buildRoundtableMessages(assistant, instruction) {
     return [
       `【当前模式】圆桌小说共创。参与者包括：${participants}`,
       `【发言规则】必须知道是谁说的话，不要把不同议员的意见串成同一个人。可自然赞同或反驳其他议员。${speakingRule}`,
-      "【@规则】如果你想点名其他议员补充，请直接写 @世界观塑造者 / @事件管理 / @角色管理 / @伏笔管理 或自定义议员名。系统会让被 @ 的议员追加回应。除非用户明确要求，不要用 @写手 直接触发正文产出。",
+      `【@规则】只能 @ 本轮已安排顺序的议员或写手。当前可 @：${mentionableNames || "无"}。不要 @ 未列在这里的成员；系统只会让这些成员追加回应。除非用户明确要求，不要用 @写手 直接触发正文产出。`,
       compressed ? "【自动压缩】本轮上下文过长，已只保留小说资料、短正文摘录和最近圆桌记录。请根据剧情线/角色卡/世界观/大纲/伏笔线保持连续性。" : "",
       options.roundTopic ? `【本轮主题】${options.roundTopic}` : "",
       `【你的身份】${assistant.name}。${assistant.prompt}`,
@@ -3969,7 +3986,9 @@ els.unlimitedContext.addEventListener("change", () => {
 });
 
 els.stream.addEventListener("change", () => {
-  sessionSettings().stream = els.stream.checked;
+  const settings = sessionSettings();
+  settings.stream = els.stream.checked;
+  settings.streamTouched = true;
   persistState(state);
 });
 

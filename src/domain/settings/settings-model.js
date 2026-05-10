@@ -9,6 +9,7 @@ export function createSettings() {
     unlimitedContext: false,
     maxTokens: 2048,
     stream: true,
+    streamTouched: false,
     layout: createDefaultLayout(),
     layoutPresets: [],
     appearance: {
@@ -21,6 +22,8 @@ export function createSettings() {
 
 export function hydrateSessionSettings(settings) {
   const next = { ...createSettings(), ...(settings || {}) };
+  next.stream = settings?.streamTouched ? Boolean(settings.stream) : true;
+  next.streamTouched = Boolean(settings?.streamTouched);
   next.layout = hydrateLayout(next.layout);
   next.layoutPresets = Array.isArray(next.layoutPresets) ? next.layoutPresets : [];
   next.appearance = {

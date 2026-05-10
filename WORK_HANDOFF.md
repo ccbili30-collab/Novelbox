@@ -38,6 +38,17 @@ Inactive members are still dry professional modules:
 - they treat deletion, sorting, API failure, and hiding as tool/config events
 - they should not infer social relationships, emotional drama, or who made whom leave
 
+Roundtable mention rules:
+
+- only ordered/selected council members can be mentioned with @
+- `@写手` remains available even though writer is not part of the numbered council order
+- unselected council members are treated as unavailable for @ and should not be triggered by user or assistant messages
+
+Streaming output:
+
+- stream output is the default for sessions that have not explicitly changed the stream switch
+- once the user toggles the stream switch, that choice is preserved per session
+
 ## What Was Implemented In This Session
 
 ### 1. Roundtable visual structure was redesigned
