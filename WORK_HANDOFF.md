@@ -24,6 +24,20 @@ The current UI direction is a mobile-first Android chat scene for Roundtable Nov
 - The manuscript paper is now meant for human reading of historical prose.
 - The AI roundtable context must still use a trimmed excerpt instead of the full manuscript body.
 
+## Current Roundtable Behavior
+
+Activated council members now have real social interpretation:
+
+- an activated member may treat member joining, leaving, deletion, silence, pause, hide, or API failure as meeting dynamics
+- it may briefly infer atmosphere, responsibility, or conflict impact, such as "someone was asked out" or "my words may have made them leave"
+- this is intentionally limited to short creative-discussion color, not long emotional acting
+- if the user says "别演" or "回到工具模式", activated members must stop social interpretation
+
+Inactive members are still dry professional modules:
+
+- they treat deletion, sorting, API failure, and hiding as tool/config events
+- they should not infer social relationships, emotional drama, or who made whom leave
+
 ## What Was Implemented In This Session
 
 ### 1. Roundtable visual structure was redesigned
