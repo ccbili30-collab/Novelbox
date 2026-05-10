@@ -2011,22 +2011,24 @@ body.paper-dragging .paper-grip {
 /* Mobile roundtable cleanup: keep the manuscript calm and stop controls from colliding. */
 .roundtable-workspace {
   position: relative;
-  padding: 14px 12px calc(var(--composer-height) + 82px);
+  padding: 0 12px calc(var(--composer-height) + 82px);
 }
 
 .roundtable-mode .roundtable-member-panel:not([hidden]) {
   position: fixed;
-  top: calc(max(env(safe-area-inset-top), 7px) + 58px);
+  top: auto;
   right: max(12px, calc((100vw - 820px) / 2 + 12px));
+  bottom: calc(var(--composer-height) + max(env(safe-area-inset-bottom), 7px) + 12px);
   left: max(12px, calc((100vw - 820px) / 2 + 12px));
-  z-index: 19;
+  z-index: 24;
   width: auto;
   max-width: 640px;
   margin: 0 auto;
-  max-height: min(58dvh, calc(100dvh - var(--composer-height) - 132px));
+  max-height: min(56dvh, calc(100dvh - var(--composer-height) - 112px));
   box-shadow:
-    0 22px 50px rgba(38, 34, 28, 0.14),
+    0 -18px 46px rgba(38, 34, 28, 0.16),
     0 1px 0 rgba(255, 255, 255, 0.9) inset;
+  transform-origin: 50% 100%;
   backdrop-filter: blur(18px);
 }
 
@@ -2081,7 +2083,7 @@ body.paper-dragging .paper-grip {
 
 .manuscript-desk {
   position: sticky;
-  top: 10px;
+  top: 0;
   z-index: 4;
   margin: 0 auto calc(-1 * min(190px, calc(var(--paper-body-height, 278px) * 0.46)));
   pointer-events: none;
@@ -2192,7 +2194,14 @@ body.paper-dragging .paper-grip {
 
 @media (max-width: 420px) {
   .roundtable-workspace {
-    padding: 12px 8px calc(var(--composer-height) + 78px);
+    padding: 0 8px calc(var(--composer-height) + 78px);
+  }
+
+  .roundtable-mode .roundtable-member-panel:not([hidden]) {
+    right: 8px;
+    bottom: calc(var(--composer-height) + max(env(safe-area-inset-bottom), 7px) + 10px);
+    left: 8px;
+    max-height: min(58dvh, calc(100dvh - var(--composer-height) - 94px));
   }
 
   .roundtable-mode-head {

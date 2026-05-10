@@ -14,6 +14,7 @@ Keep this core composition:
 - manuscript paper visually floating above the group chat
 - QQ/WeChat-like discussion underneath
 - draggable/collapsible paper, not a hard split panel
+- roundtable member settings should open as a bottom sheet above the composer, not as a top document-flow block
 
 ## Current Goal
 
@@ -21,6 +22,7 @@ The current UI direction is a mobile-first Android chat scene for Roundtable Nov
 
 - A manuscript paper floats above the group discussion area instead of being a hard split panel.
 - The paper should feel like a draggable, collapsible sheet laid on top of a QQ/WeChat-style group chat.
+- The paper should sit tight under the roundtable top bar; do not place a visible "writer area" heading above it.
 - The manuscript paper is now meant for human reading of historical prose.
 - The AI roundtable context must still use a trimmed excerpt instead of the full manuscript body.
 
