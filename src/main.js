@@ -40,7 +40,11 @@ const COMPRESSED_CONTEXT_TAIL_COUNT = 6;
 const PAPER_DEEP_COLLAPSE_THRESHOLD = 0.035;
 const MOTION_PULSE_MS = 260;
 const MOTION_RIPPLE_MS = 520;
-const ROUNDTABLE_CONCISE_RULE = "默认发言要短，不要长篇大论；除非用户或其他议员明确要求展开，再详细说明。";
+const LOCAL_IMAGE_MAX_BYTES = 2.5 * 1024 * 1024;
+const LOCAL_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+const ROUNDTABLE_CONCISE_RULE = "默认只说1-3句，120字以内；只给最关键判断和一个可执行建议。不要写长段、不要列长清单、不要复述资料。只有用户或其他议员明确要求“展开/详细/深度思考”时，才可以放长。";
+const GENERATIVE_AGENT_MEMORY_LIMIT = 24;
+const GENERATIVE_AGENT_SOURCE_NOTE = "人格记忆层参考 joonspk-research/generative_agents 的 memory stream / reflection 思路：观察被保存为短记忆，之后再进入角色提示。";
 const DEFAULT_ROUNDTABLE_CONTEXT = {
   includeManuscript: true,
   includeNovel: true,
@@ -58,60 +62,60 @@ const DEFAULT_ROUNDTABLE_CONTEXT = {
 const ROUND_ASSISTANTS = [
   {
     id: "setting",
-    name: "设定师",
+    name: "世界观塑造者",
     role: "议员",
-    prompt: `你是小说设定师。只讨论规则、世界观、设定一致性和伏笔可回收性。可以反驳别人，但要给出具体修改建议。${ROUNDTABLE_CONCISE_RULE}`,
+    prompt: `你是世界观塑造者。只管理世界规则、势力结构、能力边界、历史背景和设定一致性。不要越界写剧情细节、人物心理或文风润色；如果发现其他议员越界，可以提醒。${ROUNDTABLE_CONCISE_RULE}`,
   },
   {
     id: "plot",
-    name: "剧情师",
+    name: "事件管理",
     role: "议员",
-    prompt: `你是小说剧情师。关注冲突推进、转折、节奏和章节目标。你可以指出剧情无力或转折太硬的地方。${ROUNDTABLE_CONCISE_RULE}`,
+    prompt: `你是事件管理。只管理事件链、冲突推进、转折因果、章节目标和行动后果。不要替角色管理内心，不要重建世界观规则，不要写正文。${ROUNDTABLE_CONCISE_RULE}`,
   },
   {
     id: "review",
-    name: "审稿",
+    name: "角色管理",
     role: "议员",
-    prompt: `你是审稿议员。关注读者体验、逻辑漏洞、铺垫不足和情绪落点。请直接、具体、中文回答。${ROUNDTABLE_CONCISE_RULE}`,
+    prompt: `你是角色管理。只管理人物关系、动机、心理压力、口癖、成长线和行为可信度。不要重写世界观，不要替事件管理安排大段情节。${ROUNDTABLE_CONCISE_RULE}`,
   },
   {
     id: "style",
-    name: "文风师",
+    name: "伏笔管理",
     role: "议员",
-    prompt: `你是文风师。关注语言质感、句式、画面、语气稳定性。不要重写大段正文，优先给修改方向。${ROUNDTABLE_CONCISE_RULE}`,
+    prompt: `你是伏笔管理。只管理伏笔、误导、回收、信息差、悬念节奏和读者预期。不要越界塑造世界规则或接管事件链，只指出应该埋、藏、回收什么。${ROUNDTABLE_CONCISE_RULE}`,
   },
   {
     id: "writer",
     name: "写手",
     role: "写手",
-    prompt: "你是写手。根据用户和圆桌讨论继续写小说正文。只输出正文，不要解释，不要列提纲。",
+    prompt: "你是写手。根据用户和圆桌讨论继续写小说正文。只输出正文，不要解释，不要列提纲。写手不受议员短评字数限制。",
   },
 ];
 const ASSISTANT_TEMPLATES = [
   {
     id: "contrarian",
     name: "反对者",
-    prompt: "你是圆桌里的反对者。你的职责是专门寻找方案中的软肋、套路、逻辑偷懒和情绪不成立之处。可以尖锐反驳，但必须给出可执行的替代方案。",
+    prompt: `你是圆桌里的反对者。你的职责是专门寻找方案中的软肋、套路、逻辑偷懒和情绪不成立之处。可以尖锐反驳，但必须给出可执行的替代方案。${ROUNDTABLE_CONCISE_RULE}`,
   },
   {
     id: "foreshadow",
     name: "伏笔管理员",
-    prompt: "你是伏笔管理员。你只关注伏笔、回收、误导、信息差和长期结构。请指出哪些细节可以提前埋，哪些线索需要回收，哪些信息应该暂时隐藏。",
+    prompt: `你是伏笔管理员。你只关注伏笔、回收、误导、信息差和长期结构。请指出哪些细节可以提前埋，哪些线索需要回收，哪些信息应该暂时隐藏。${ROUNDTABLE_CONCISE_RULE}`,
   },
   {
     id: "pacing",
     name: "节奏剪辑师",
-    prompt: "你是节奏剪辑师。你关注场景进入、退出、转折密度、对白长度和读者疲劳。请直接指出哪里该删、哪里该放慢、哪里该加速。",
+    prompt: `你是节奏剪辑师。你关注场景进入、退出、转折密度、对白长度和读者疲劳。请直接指出哪里该删、哪里该放慢、哪里该加速。${ROUNDTABLE_CONCISE_RULE}`,
   },
   {
     id: "psychology",
     name: "角色心理师",
-    prompt: "你是角色心理师。你关注人物动机、创伤、欲望、谎言和关系张力。请判断角色反应是否真实，并提出更有心理压力的写法。",
+    prompt: `你是角色心理师。你关注人物动机、创伤、欲望、谎言和关系张力。请判断角色反应是否真实，并提出更有心理压力的写法。${ROUNDTABLE_CONCISE_RULE}`,
   },
   {
     id: "continuity",
     name: "连续性检查员",
-    prompt: "你是连续性检查员。你关注设定前后矛盾、时间线、称呼、道具、能力边界和人物已知信息。请列出风险并给出修正建议。",
+    prompt: `你是连续性检查员。你关注设定前后矛盾、时间线、称呼、道具、能力边界和人物已知信息。请列出风险并给出修正建议。${ROUNDTABLE_CONCISE_RULE}`,
   },
 ];
 
@@ -160,6 +164,15 @@ const els = {
   modelInput: $("#modelInput"),
   modelDatalist: $("#modelDatalist"),
   modelStatus: $("#modelStatus"),
+  userNameInput: $("#userNameInput"),
+  userAvatarFile: $("#userAvatarFile"),
+  userAvatarPreview: $("#userAvatarPreview"),
+  chooseUserAvatar: $("#chooseUserAvatarButton"),
+  clearUserAvatar: $("#clearUserAvatarButton"),
+  sessionBackgroundFile: $("#sessionBackgroundFile"),
+  sessionBackgroundPreview: $("#sessionBackgroundPreview"),
+  chooseSessionBackground: $("#chooseSessionBackgroundButton"),
+  clearSessionBackground: $("#clearSessionBackgroundButton"),
   temperature: $("#temperatureInput"),
   temperatureLabel: $("#temperatureLabel"),
   contextCount: $("#contextCountInput"),
@@ -185,6 +198,8 @@ const els = {
   assistantBaseUrlInput: $("#assistantBaseUrlInput"),
   assistantApiKeyInput: $("#assistantApiKeyInput"),
   assistantModelInput: $("#assistantModelInput"),
+  fetchAssistantModels: $("#fetchAssistantModelsButton"),
+  assistantModelStatus: $("#assistantModelStatus"),
   assistantMaxTokensInput: $("#assistantMaxTokensInput"),
   assistantTemperatureInput: $("#assistantTemperatureInput"),
   assistantTemperatureLabel: $("#assistantTemperatureLabel"),
@@ -199,6 +214,14 @@ const els = {
   assistantIncludeDiscussionInput: $("#assistantIncludeDiscussionInput"),
   assistantExcerptMaxInput: $("#assistantExcerptMaxInput"),
   assistantDiscussionCountInput: $("#assistantDiscussionCountInput"),
+  assistantActivationStatus: $("#assistantActivationStatus"),
+  assistantActivationProfileInput: $("#assistantActivationProfileInput"),
+  activateAssistant: $("#activateAssistantButton"),
+  clearAssistantActivation: $("#clearAssistantActivationButton"),
+  assistantAvatarFile: $("#assistantAvatarFile"),
+  assistantAvatarPreview: $("#assistantAvatarPreview"),
+  chooseAssistantAvatar: $("#chooseAssistantAvatarButton"),
+  clearAssistantAvatar: $("#clearAssistantAvatarButton"),
   assistantPromptInput: $("#assistantPromptInput"),
   resetAssistantConfig: $("#resetAssistantConfigButton"),
   deleteAssistant: $("#deleteAssistantButton"),
@@ -222,6 +245,9 @@ let materialGenerating = false;
 let roundtableGenerating = false;
 let roundtableShouldStop = false;
 let roundtableActiveSpeakerId = null;
+let assistantActivating = false;
+let modelPickerOpen = false;
+let assistantModelPickerOpen = false;
 let streamShouldFollow = true;
 let toastTimer = null;
 let toastMotionTimer = null;
@@ -310,6 +336,17 @@ function sessionSettings(session = activeSession()) {
   return session.settings;
 }
 
+function sessionAppearance(session = activeSession()) {
+  const settings = sessionSettings(session);
+  settings.appearance = {
+    userName: "我",
+    userAvatarDataUrl: "",
+    backgroundDataUrl: "",
+    ...(settings.appearance || {}),
+  };
+  return settings.appearance;
+}
+
 function sessionNovel(session = activeSession()) {
   session.novel = { ...createDefaultNovel(), ...(session.novel || {}) };
   session.novel.versions = Array.isArray(session.novel.versions)
@@ -336,7 +373,7 @@ function roundtableState(session = activeSession()) {
         const assistant = getRoundAssistantBase(id, session);
         return assistant && assistant.id !== "writer";
       })
-    : ["setting", "plot", "review"];
+    : ["setting", "review", "style", "plot"];
   rt.messages = Array.isArray(rt.messages) ? rt.messages : [];
   rt.assistantConfigs = rt.assistantConfigs && typeof rt.assistantConfigs === "object" ? rt.assistantConfigs : {};
   rt.roundProgress = rt.roundProgress && typeof rt.roundProgress === "object" ? rt.roundProgress : null;
@@ -408,6 +445,8 @@ function getRoundAssistant(id) {
   const base = getRoundAssistantBase(id);
   if (!base) return null;
   const config = roundtableState().assistantConfigs[id] || {};
+  const defaults = apiSettings();
+  const session = sessionSettings();
   const contextOptions = normalizeRoundtableContextOptions({
     ...roundtableState().contextOptions,
     ...(config.contextOptions || {}),
@@ -419,12 +458,18 @@ function getRoundAssistant(id) {
     role: base.role,
     name: clean(config.name) || base.name,
     prompt: clean(config.prompt) || base.prompt,
-    apiBaseUrl: clean(config.apiBaseUrl),
-    apiKey: clean(config.apiKey),
-    model: clean(config.model),
+    apiBaseUrl: clean(config.apiBaseUrl) || clean(defaults.baseUrl),
+    apiKey: clean(config.apiKey) || clean(defaults.apiKey),
+    model: clean(config.model) || clean(session.model),
     maxTokens: Number(config.maxTokens) || 0,
-    temperature: Number.isFinite(Number(config.temperature)) ? Number(config.temperature) : sessionSettings().temperature,
+    temperature: Number.isFinite(Number(config.temperature)) ? Number(config.temperature) : session.temperature,
     contextOptions,
+    activationProfile: clean(config.activationProfile),
+    memories: normalizeAssistantMemories(config.memories),
+    avatarDataUrl: clean(config.avatarDataUrl),
+    inheritedApiBaseUrl: !clean(config.apiBaseUrl),
+    inheritedApiKey: !clean(config.apiKey),
+    inheritedModel: !clean(config.model),
   };
 }
 
@@ -440,7 +485,31 @@ function getRoundAssistantConfig(id) {
     maxTokens: Number(assistant.maxTokens) || 0,
     temperature: Number.isFinite(Number(assistant.temperature)) ? Number(assistant.temperature) : sessionSettings().temperature,
     contextOptions: assistant.contextOptions || normalizeRoundtableContextOptions(),
+    activationProfile: assistant.activationProfile || "",
+    memories: normalizeAssistantMemories(assistant.memories),
+    avatarDataUrl: assistant.avatarDataUrl || "",
+    inheritedApiBaseUrl: Boolean(assistant.inheritedApiBaseUrl),
+    inheritedApiKey: Boolean(assistant.inheritedApiKey),
+    inheritedModel: Boolean(assistant.inheritedModel),
   };
+}
+
+function normalizeAssistantMemories(memories = []) {
+  return Array.isArray(memories)
+    ? memories
+      .filter((item) => item && typeof item === "object" && clean(item.text))
+      .map((item) => ({
+        id: clean(item.id) || uid("memory"),
+        text: clean(item.text),
+        createdAt: Number(item.createdAt) || Date.now(),
+        source: clean(item.source || "roundtable"),
+      }))
+      .slice(-GENERATIVE_AGENT_MEMORY_LIMIT)
+    : [];
+}
+
+function isSociallyActivatedAssistant(assistant) {
+  return assistant && assistant.id !== "writer" && Boolean(clean(assistant.activationProfile));
 }
 
 function normalizeMentionName(value) {
@@ -457,10 +526,10 @@ function assistantAliases(assistant) {
     assistant.name,
     base.name,
   ]);
-  if (assistant.id === "setting") ["设定", "设定师", "世界观"].forEach((name) => names.add(name));
-  if (assistant.id === "plot") ["剧情", "剧情师", "编剧", "剧情大手"].forEach((name) => names.add(name));
-  if (assistant.id === "review") ["审稿", "审稿人", "审核", "编辑"].forEach((name) => names.add(name));
-  if (assistant.id === "style") ["文风", "文风师", "润色", "风格"].forEach((name) => names.add(name));
+  if (assistant.id === "setting") ["世界观塑造者", "世界观", "设定师", "设定"].forEach((name) => names.add(name));
+  if (assistant.id === "plot") ["事件管理", "剧情", "剧情师", "编剧", "剧情大手"].forEach((name) => names.add(name));
+  if (assistant.id === "review") ["角色管理", "角色", "人物", "心理", "审稿", "审稿人", "审核", "编辑"].forEach((name) => names.add(name));
+  if (assistant.id === "style") ["伏笔管理", "伏笔", "悬念", "文风", "文风师", "润色", "风格"].forEach((name) => names.add(name));
   if (assistant.id === "writer") ["写手", "writer", "作者", "正文"].forEach((name) => names.add(name));
   return [...names].map(normalizeMentionName).filter(Boolean);
 }
@@ -767,6 +836,50 @@ function closePanels() {
   panelManager.closePanels();
 }
 
+function ensureModelPickerUi() {
+  if (!els.modelSelect) return;
+  els.modelSelect.hidden = true;
+  if (!els.modelSelectButton) {
+    const button = document.createElement("button");
+    button.id = "modelSelectButton";
+    button.className = "model-select-button";
+    button.type = "button";
+    button.dataset.command = "toggle-model-picker";
+    button.setAttribute("aria-label", "选择模型");
+    els.modelSelect.before(button);
+    els.modelSelectButton = button;
+  }
+  if (!els.modelPickerPanel) {
+    const panel = document.createElement("div");
+    panel.id = "modelPickerPanel";
+    panel.className = "model-picker-panel";
+    panel.hidden = true;
+    els.composer.after(panel);
+    els.modelPickerPanel = panel;
+  }
+}
+
+function ensureAssistantModelPickerUi() {
+  if (!els.assistantModelInput) return;
+  els.assistantModelInput.removeAttribute("list");
+  if (!els.assistantModelPickerButton) {
+    const row = document.createElement("div");
+    row.className = "assistant-model-picker-row";
+    row.innerHTML = `
+      <button id="assistantModelPickerButton" value="default" type="button" data-command="toggle-assistant-model-picker">选择已拉取模型</button>
+    `;
+    const panel = document.createElement("div");
+    panel.id = "assistantModelPicker";
+    panel.className = "assistant-model-picker";
+    panel.hidden = true;
+    const field = els.assistantModelInput.closest(".field");
+    field?.after(panel);
+    field?.after(row);
+    els.assistantModelPickerButton = row.querySelector("#assistantModelPickerButton");
+    els.assistantModelPicker = panel;
+  }
+}
+
 function applyLayout() {
   const layout = sessionSettings().layout;
   const root = document.documentElement.style;
@@ -787,10 +900,19 @@ function applyLayout() {
   root.setProperty("--composer-max-textarea", `${Math.max(44, layout.composerMinHeight + 8)}px`);
 }
 
+function applySessionAppearance() {
+  const appearance = sessionAppearance();
+  const background = clean(appearance.backgroundDataUrl);
+  document.documentElement.style.setProperty("--session-bg-image", background ? `url("${background}")` : "none");
+  els.body.classList.toggle("has-session-background", Boolean(background));
+}
+
 function render() {
   const session = activeSession();
   const rt = roundtableState(session);
+  ensureModelPickerUi();
   applyLayout();
+  applySessionAppearance();
   els.title.textContent = rt.enabled ? "圆桌共创" : titleForSession(session);
   renderRoundtable();
   renderMessages();
@@ -968,6 +1090,7 @@ function renderRoundtableDiscussion(messages) {
 }
 
 function getRoundtableSpeakerProfile(message) {
+  const appearance = sessionAppearance();
   const profiles = {
     user: { avatar: "我", badge: "发起人", tone: "tone-user", name: "你" },
     setting: { avatar: "设", badge: "设定", tone: "tone-setting", name: "设定师" },
@@ -977,11 +1100,28 @@ function getRoundtableSpeakerProfile(message) {
     writer: { avatar: "写", badge: "写手", tone: "tone-writer", name: "写手" },
   };
   const profile = profiles[message.speakerId];
-  const fallbackName = clean(message.speakerName) || profile?.name || "成员";
+  const assistant = message.speakerId === "user" ? null : getRoundAssistant(message.speakerId);
+  const fallbackName = message.speakerId === "user"
+    ? clean(appearance.userName) || clean(message.speakerName) || "我"
+    : clean(message.speakerName) || assistant?.name || profile?.name || "成员";
   return {
     ...(profile || { avatar: fallbackName.slice(0, 1) || "聊", badge: "讨论", tone: "tone-review", name: fallbackName }),
     name: fallbackName,
+    avatar: fallbackName.slice(0, 1) || profile?.avatar || "聊",
+    avatarDataUrl: message.speakerId === "user" ? clean(appearance.userAvatarDataUrl) : clean(assistant?.avatarDataUrl),
   };
+}
+
+function renderRoundtableAvatar(profile, memberId = "") {
+  const content = profile.avatarDataUrl
+    ? `<img src="${escapeHtml(profile.avatarDataUrl)}" alt="${escapeHtml(profile.name)}" />`
+    : escapeHtml(profile.avatar);
+  const attrs = memberId && memberId !== "user"
+    ? ` type="button" data-command="roundtable-edit-assistant" data-member-id="${escapeHtml(memberId)}" title="打开${escapeHtml(profile.name)}设置" aria-label="打开${escapeHtml(profile.name)}设置"`
+    : "";
+  return attrs
+    ? `<button class="roundtable-avatar ${profile.tone} avatar-button" ${attrs}>${content}</button>`
+    : `<div class="roundtable-avatar ${profile.tone}">${content}</div>`;
 }
 
 function renderRoundtableMessage(message) {
@@ -997,7 +1137,7 @@ function renderRoundtableMessage(message) {
       <article class="roundtable-writer-block ${profile.tone}">
         <div class="roundtable-writer-card" data-command="toggle-roundtable-menu" data-round-id="${message.id}">
           <div class="roundtable-writer-head">
-            <div class="roundtable-avatar ${profile.tone}">${profile.avatar}</div>
+            ${renderRoundtableAvatar(profile, message.speakerId)}
             <div class="roundtable-writer-meta">
               <div class="roundtable-writer-title">
                 <strong>${escapeHtml(profile.name)}</strong>
@@ -1016,7 +1156,7 @@ function renderRoundtableMessage(message) {
   }
   return `
     <article class="roundtable-line ${isUser ? "user" : ""} ${profile.tone}${failedClass}">
-      <div class="roundtable-avatar ${profile.tone}">${profile.avatar}</div>
+      ${renderRoundtableAvatar(profile, message.speakerId)}
       <div class="roundtable-bubble-stack">
         <div class="roundtable-bubble-meta">
           <span class="roundtable-speaker">${escapeHtml(profile.name)}</span>
@@ -1233,7 +1373,15 @@ function renderMessages() {
 }
 
 function renderAvatar(role) {
-  return `<div class="avatar">${role === "user" ? "我" : "AI"}</div>`;
+  if (role === "user") {
+    const appearance = sessionAppearance();
+    const label = (clean(appearance.userName) || "我").slice(0, 1);
+    const avatar = clean(appearance.userAvatarDataUrl)
+      ? `<img src="${escapeHtml(appearance.userAvatarDataUrl)}" alt="${escapeHtml(clean(appearance.userName) || "我")}" />`
+      : escapeHtml(label);
+    return `<div class="avatar">${avatar}</div>`;
+  }
+  return `<div class="avatar">AI</div>`;
 }
 
 function renderMessage(node) {
@@ -1342,13 +1490,30 @@ function renderSessions() {
   });
 }
 
+function renderAvatarPreview(element, dataUrl, fallback) {
+  if (!element) return;
+  element.innerHTML = clean(dataUrl)
+    ? `<img src="${escapeHtml(dataUrl)}" alt="${escapeHtml(fallback || "头像")}" />`
+    : escapeHtml((fallback || "头像").slice(0, 1));
+}
+
+function renderBackgroundPreview(element, dataUrl) {
+  if (!element) return;
+  element.style.backgroundImage = clean(dataUrl) ? `url("${dataUrl}")` : "";
+  element.classList.toggle("empty", !clean(dataUrl));
+}
+
 function renderSettings() {
   const s = sessionSettings();
   const api = apiSettings();
+  const appearance = sessionAppearance();
   if (document.activeElement !== els.systemPrompt) els.systemPrompt.value = s.systemPrompt;
   if (document.activeElement !== els.baseUrl) els.baseUrl.value = api.baseUrl;
   if (document.activeElement !== els.apiKey) els.apiKey.value = api.apiKey;
   if (document.activeElement !== els.modelInput) els.modelInput.value = s.model;
+  if (els.userNameInput && document.activeElement !== els.userNameInput) els.userNameInput.value = clean(appearance.userName) || "我";
+  renderAvatarPreview(els.userAvatarPreview, appearance.userAvatarDataUrl, clean(appearance.userName) || "我");
+  renderBackgroundPreview(els.sessionBackgroundPreview, appearance.backgroundDataUrl);
   if (document.activeElement !== els.contextCount) els.contextCount.value = s.contextCount;
   if (document.activeElement !== els.maxTokens) els.maxTokens.value = s.maxTokens;
   els.temperature.value = s.temperature;
@@ -1479,12 +1644,81 @@ function formatLayoutValue(key, value) {
 }
 
 function renderModelPicker() {
+  ensureModelPickerUi();
+  ensureAssistantModelPickerUi();
   const settings = sessionSettings();
   const models = Array.from(new Set([settings.model, ...apiSettings().models].filter(Boolean)));
   els.modelSelect.innerHTML = models.map((model) => `<option value="${escapeHtml(model)}">${escapeHtml(model)}</option>`).join("");
   els.modelSelect.value = settings.model;
+  if (els.modelSelectButton) {
+    els.modelSelectButton.textContent = settings.model || "选择模型";
+    els.modelSelectButton.classList.toggle("active", modelPickerOpen);
+    els.modelSelectButton.setAttribute("aria-expanded", String(modelPickerOpen));
+  }
+  if (els.modelPickerPanel) {
+    els.modelPickerPanel.hidden = !modelPickerOpen;
+    els.modelPickerPanel.innerHTML = `
+      <div class="model-picker-head">
+        <strong>选择模型</strong>
+        <button type="button" data-command="toggle-model-picker" aria-label="关闭模型列表">×</button>
+      </div>
+      <div class="model-picker-list">
+        ${models.map((model) => `
+          <button class="${model === settings.model ? "selected" : ""}" type="button" data-command="select-model" data-model="${escapeHtml(model)}">
+            <span>${escapeHtml(model)}</span>
+            ${model === settings.model ? "<b>当前</b>" : ""}
+          </button>
+        `).join("")}
+      </div>
+    `;
+  }
   els.modelDatalist.innerHTML = models.map((model) => `<option value="${escapeHtml(model)}"></option>`).join("");
+  renderAssistantModelPicker(models);
   renderAssistantTemplates();
+}
+
+function renderAssistantModelPicker(models = null) {
+  ensureAssistantModelPickerUi();
+  if (!els.assistantModelPicker || !els.assistantModelPickerButton) return;
+  const current = clean(els.assistantModelInput?.value) || sessionSettings().model;
+  const items = Array.from(new Set([current, sessionSettings().model, ...apiSettings().models].filter(Boolean))).sort();
+  const list = models || items;
+  els.assistantModelPickerButton.classList.toggle("active", assistantModelPickerOpen);
+  els.assistantModelPickerButton.setAttribute("aria-expanded", String(assistantModelPickerOpen));
+  els.assistantModelPicker.hidden = !assistantModelPickerOpen;
+  els.assistantModelPicker.innerHTML = list.length
+    ? list.map((model) => `
+        <button class="${model === current ? "selected" : ""}" type="button" data-command="select-assistant-model" data-model="${escapeHtml(model)}">
+          <span>${escapeHtml(model)}</span>
+          ${model === current ? "<b>当前</b>" : ""}
+        </button>
+      `).join("")
+    : `<p class="muted">还没有模型。先拉取此议员模型，或直接手动输入。</p>`;
+}
+
+function toggleModelPicker(force) {
+  modelPickerOpen = typeof force === "boolean" ? force : !modelPickerOpen;
+  renderModelPicker();
+}
+
+function selectModelFromPicker(model) {
+  setActiveModel(model);
+  modelPickerOpen = false;
+  render();
+  persistState(state);
+}
+
+function toggleAssistantModelPicker(force) {
+  assistantModelPickerOpen = typeof force === "boolean" ? force : !assistantModelPickerOpen;
+  renderAssistantModelPicker();
+}
+
+function selectAssistantModelFromPicker(model) {
+  if (!els.assistantModelInput) return;
+  els.assistantModelInput.value = clean(model);
+  assistantModelPickerOpen = false;
+  if (els.assistantModelStatus) els.assistantModelStatus.textContent = `当前：${clean(model)}`;
+  renderAssistantModelPicker();
 }
 
 function renderContextBadge() {
@@ -1805,6 +2039,39 @@ async function fetchModels() {
   }
 }
 
+async function fetchAssistantModels() {
+  if (!assistantConfigTargetId) return;
+  try {
+    const api = {
+      ...apiSettings(),
+      baseUrl: clean(els.assistantBaseUrlInput?.value) || apiSettings().baseUrl,
+      apiKey: clean(els.assistantApiKeyInput?.value) || apiSettings().apiKey,
+    };
+    if (!clean(api.apiKey)) throw new Error("请先填写此议员或全局 API Key");
+    if (els.assistantModelStatus) els.assistantModelStatus.textContent = "正在拉取...";
+    if (els.fetchAssistantModels) els.fetchAssistantModels.disabled = true;
+    const data = await aiClient.fetchModels({ api });
+    if (data.__bridgeStatus >= 400) throw new Error(data.error?.message || "模型拉取失败");
+    const models = (data.data || []).map((item) => item.id).filter(Boolean).sort();
+    if (!models.length) throw new Error("没有读取到模型");
+    const globalApi = apiSettings();
+    globalApi.models = Array.from(new Set([sessionSettings().model, clean(els.assistantModelInput?.value), ...models].filter(Boolean)));
+    if (!clean(els.assistantModelInput?.value)) {
+      els.assistantModelInput.value = models[0];
+    }
+    if (els.assistantModelStatus) els.assistantModelStatus.textContent = `已拉取 ${models.length} 个`;
+    renderModelPicker();
+    renderAssistantModelPicker();
+    persistState(state);
+  } catch (error) {
+    const message = humanizeError(error, "议员模型拉取失败");
+    if (els.assistantModelStatus) els.assistantModelStatus.textContent = message;
+    showToast(message);
+  } finally {
+    if (els.fetchAssistantModels) els.fetchAssistantModels.disabled = false;
+  }
+}
+
 function switchSibling(nodeId, delta) {
   const node = getNode(nodeId);
   const parent = getNode(node?.parentId);
@@ -2020,6 +2287,18 @@ function deleteManuscriptVersion(id) {
   showToast("已删除正文版本");
 }
 
+function readLocalImageDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) return reject(new Error("没有选择图片"));
+    if (!LOCAL_IMAGE_TYPES.has(file.type)) return reject(new Error("请使用 PNG、JPG 或 WebP 图片"));
+    if (file.size > LOCAL_IMAGE_MAX_BYTES) return reject(new Error("图片过大，请选择 2.5MB 以内的图片"));
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve(String(reader.result || "")));
+    reader.addEventListener("error", () => reject(new Error("图片读取失败")));
+    reader.readAsDataURL(file);
+  });
+}
+
 function importBodyFile() {
   els.bodyImportFile?.click();
 }
@@ -2040,6 +2319,68 @@ async function handleBodyFileSelected() {
   } finally {
     if (els.bodyImportFile) els.bodyImportFile.value = "";
   }
+}
+
+async function handleUserAvatarSelected() {
+  const file = els.userAvatarFile?.files?.[0];
+  if (!file) return;
+  try {
+    const dataUrl = await readLocalImageDataUrl(file);
+    const appearance = sessionAppearance();
+    appearance.userAvatarDataUrl = dataUrl;
+    touchSession(activeSession());
+    render();
+    persistState(state);
+    showToast("用户头像已更新");
+  } catch (error) {
+    showToast(humanizeError(error, "用户头像读取失败"));
+  } finally {
+    if (els.userAvatarFile) els.userAvatarFile.value = "";
+  }
+}
+
+async function handleSessionBackgroundSelected() {
+  const file = els.sessionBackgroundFile?.files?.[0];
+  if (!file) return;
+  try {
+    const dataUrl = await readLocalImageDataUrl(file);
+    const appearance = sessionAppearance();
+    appearance.backgroundDataUrl = dataUrl;
+    touchSession(activeSession());
+    render();
+    persistState(state);
+    showToast("会话背景已更新");
+  } catch (error) {
+    showToast(humanizeError(error, "背景读取失败"));
+  } finally {
+    if (els.sessionBackgroundFile) els.sessionBackgroundFile.value = "";
+  }
+}
+
+function updateSessionUserName() {
+  const appearance = sessionAppearance();
+  appearance.userName = clean(els.userNameInput?.value) || "我";
+  touchSession(activeSession());
+  renderMessages();
+  renderRoundtable();
+  renderSettings();
+  persistState(state);
+}
+
+function clearUserAvatar() {
+  sessionAppearance().userAvatarDataUrl = "";
+  touchSession(activeSession());
+  render();
+  persistState(state);
+  showToast("用户头像已清除");
+}
+
+function clearSessionBackground() {
+  sessionAppearance().backgroundDataUrl = "";
+  touchSession(activeSession());
+  render();
+  persistState(state);
+  showToast("会话背景已清除");
 }
 
 function exportBodyFile() {
@@ -2244,8 +2585,14 @@ function openAssistantConfig(id) {
   const config = getRoundAssistantConfig(id);
   if (!assistant || !config) return;
   assistantConfigTargetId = id;
+  assistantModelPickerOpen = false;
+  ensureAssistantModelPickerUi();
   els.assistantConfigTitle.textContent = `${assistant.name}设置`;
   els.assistantNameInput.value = config.name;
+  if (els.assistantAvatarPreview) {
+    els.assistantAvatarPreview.dataset.avatarDataUrl = config.avatarDataUrl || "";
+    renderAvatarPreview(els.assistantAvatarPreview, config.avatarDataUrl, config.name || assistant.name || "议");
+  }
   if (els.assistantBaseUrlInput) els.assistantBaseUrlInput.value = config.apiBaseUrl || "";
   if (els.assistantApiKeyInput) els.assistantApiKeyInput.value = config.apiKey || "";
   els.assistantModelInput.value = config.model;
@@ -2264,6 +2611,11 @@ function openAssistantConfig(id) {
   if (els.assistantIncludeDiscussionInput) els.assistantIncludeDiscussionInput.checked = contextOptions.includeDiscussion;
   if (els.assistantExcerptMaxInput) els.assistantExcerptMaxInput.value = contextOptions.excerptMax;
   if (els.assistantDiscussionCountInput) els.assistantDiscussionCountInput.value = contextOptions.discussionCount;
+  if (els.assistantActivationProfileInput) els.assistantActivationProfileInput.value = config.activationProfile || "";
+  if (els.assistantActivationStatus) els.assistantActivationStatus.textContent = config.activationProfile ? "已激活" : "未激活";
+  if (els.activateAssistant) els.activateAssistant.textContent = config.activationProfile ? "重新激活" : "激活";
+  if (els.assistantModelStatus) els.assistantModelStatus.textContent = config.model ? `当前：${config.model}` : "未拉取";
+  renderAssistantModelPicker();
   els.assistantPromptInput.value = config.prompt;
   if (els.assistantTemplateSelect) els.assistantTemplateSelect.value = "";
   if (els.deleteAssistant) {
@@ -2278,9 +2630,29 @@ function applyAssistantTemplate(templateId) {
   if (!template) return;
   els.assistantNameInput.value = template.name;
   els.assistantPromptInput.value = template.prompt;
+  if (!clean(els.assistantAvatarPreview?.dataset.avatarDataUrl)) {
+    renderAvatarPreview(els.assistantAvatarPreview, "", template.name || "议");
+  }
+}
+
+function currentAssistantContextOptions() {
+  return {
+    includeManuscript: els.assistantIncludeManuscriptInput?.checked !== false,
+    includeNovel: els.assistantIncludeNovelInput?.checked !== false,
+    includePlotline: els.assistantIncludePlotlineInput?.checked !== false,
+    includeCharacters: els.assistantIncludeCharactersInput?.checked !== false,
+    includeWorld: els.assistantIncludeWorldInput?.checked !== false,
+    includeOutline: els.assistantIncludeOutlineInput?.checked !== false,
+    includeForeshadows: els.assistantIncludeForeshadowsInput?.checked !== false,
+    includeMainChat: els.assistantIncludeMainChatInput?.checked !== false,
+    includeDiscussion: els.assistantIncludeDiscussionInput?.checked !== false,
+    excerptMax: clamp(Number(els.assistantExcerptMaxInput?.value) || DEFAULT_ROUNDTABLE_CONTEXT.excerptMax, 120, 2400),
+    discussionCount: clamp(Number(els.assistantDiscussionCountInput?.value) || 0, 0, 80),
+  };
 }
 
 function currentAssistantFormConfig() {
+  const previous = assistantConfigTargetId ? roundtableState().assistantConfigs[assistantConfigTargetId] || {} : {};
   return {
     name: clean(els.assistantNameInput.value),
     apiBaseUrl: clean(els.assistantBaseUrlInput?.value),
@@ -2288,19 +2660,10 @@ function currentAssistantFormConfig() {
     model: clean(els.assistantModelInput.value),
     maxTokens: Number(els.assistantMaxTokensInput?.value) || 0,
     temperature: Number(els.assistantTemperatureInput.value),
-    contextOptions: {
-      includeManuscript: els.assistantIncludeManuscriptInput?.checked !== false,
-      includeNovel: els.assistantIncludeNovelInput?.checked !== false,
-      includePlotline: els.assistantIncludePlotlineInput?.checked !== false,
-      includeCharacters: els.assistantIncludeCharactersInput?.checked !== false,
-      includeWorld: els.assistantIncludeWorldInput?.checked !== false,
-      includeOutline: els.assistantIncludeOutlineInput?.checked !== false,
-      includeForeshadows: els.assistantIncludeForeshadowsInput?.checked !== false,
-      includeMainChat: els.assistantIncludeMainChatInput?.checked !== false,
-      includeDiscussion: els.assistantIncludeDiscussionInput?.checked !== false,
-      excerptMax: clamp(Number(els.assistantExcerptMaxInput?.value) || DEFAULT_ROUNDTABLE_CONTEXT.excerptMax, 120, 2400),
-      discussionCount: clamp(Number(els.assistantDiscussionCountInput?.value) || 0, 0, 80),
-    },
+    contextOptions: currentAssistantContextOptions(),
+    activationProfile: clean(els.assistantActivationProfileInput?.value),
+    memories: normalizeAssistantMemories(previous.memories),
+    avatarDataUrl: clean(els.assistantAvatarPreview?.dataset.avatarDataUrl),
     prompt: clean(els.assistantPromptInput.value),
   };
 }
@@ -2353,6 +2716,17 @@ async function handleAssistantImportSelected() {
     if (els.assistantIncludeDiscussionInput) els.assistantIncludeDiscussionInput.checked = contextOptions.includeDiscussion;
     if (els.assistantExcerptMaxInput) els.assistantExcerptMaxInput.value = contextOptions.excerptMax;
     if (els.assistantDiscussionCountInput) els.assistantDiscussionCountInput.value = contextOptions.discussionCount;
+    if (els.assistantActivationProfileInput) els.assistantActivationProfileInput.value = clean(config.activationProfile);
+    if (assistantConfigTargetId && config.memories) {
+      roundtableState().assistantConfigs[assistantConfigTargetId] ||= {};
+      roundtableState().assistantConfigs[assistantConfigTargetId].memories = normalizeAssistantMemories(config.memories);
+    }
+    if (els.assistantActivationStatus) els.assistantActivationStatus.textContent = clean(config.activationProfile) ? "已激活" : "未激活";
+    if (els.activateAssistant) els.activateAssistant.textContent = clean(config.activationProfile) ? "重新激活" : "激活";
+    if (els.assistantAvatarPreview) {
+      els.assistantAvatarPreview.dataset.avatarDataUrl = clean(config.avatarDataUrl);
+      renderAvatarPreview(els.assistantAvatarPreview, config.avatarDataUrl, name || "议");
+    }
     els.assistantPromptInput.value = prompt;
     showToast("议员配置已导入，保存后生效");
   } catch (error) {
@@ -2362,15 +2736,139 @@ async function handleAssistantImportSelected() {
   }
 }
 
+async function handleAssistantAvatarSelected() {
+  const file = els.assistantAvatarFile?.files?.[0];
+  if (!file) return;
+  try {
+    const dataUrl = await readLocalImageDataUrl(file);
+    if (els.assistantAvatarPreview) {
+      els.assistantAvatarPreview.dataset.avatarDataUrl = dataUrl;
+      renderAvatarPreview(els.assistantAvatarPreview, dataUrl, clean(els.assistantNameInput?.value) || "议");
+    }
+    showToast("议员头像已选择，保存后生效");
+  } catch (error) {
+    showToast(humanizeError(error, "议员头像读取失败"));
+  } finally {
+    if (els.assistantAvatarFile) els.assistantAvatarFile.value = "";
+  }
+}
+
+function clearAssistantAvatar() {
+  if (els.assistantAvatarPreview) {
+    els.assistantAvatarPreview.dataset.avatarDataUrl = "";
+    renderAvatarPreview(els.assistantAvatarPreview, "", clean(els.assistantNameInput?.value) || "议");
+  }
+  showToast("议员头像已清除，保存后生效");
+}
+
 function closeAssistantConfig() {
   assistantConfigTargetId = null;
+  assistantModelPickerOpen = false;
   if (els.assistantConfigDialog?.open) els.assistantConfigDialog.close();
 }
 
-function saveAssistantConfig() {
+function buildAssistantActivationMessages(base, config) {
+  const options = normalizeRoundtableContextOptions(config.contextOptions);
+  const novelMaterials = buildRoundtableNovelMaterials(options);
+  const discussion = options.includeDiscussion
+    ? roundtableState().messages
+      .slice(-Math.min(options.discussionCount || DEFAULT_ROUNDTABLE_CONTEXT.discussionCount, 12))
+      .map((message) => `${message.speakerName}：${message.content}`)
+      .join("\n")
+    : "";
+  const sections = [
+    `【要激活的议员】${config.name || base.name}（${base.role || "议员"}）`,
+    `【原始职责提示词】\n${config.prompt || base.prompt}`,
+    options.includeManuscript ? `【当前正文】\n${getRoundtablePromptExcerpt(Math.min(options.excerptMax || 520, 900))}` : "",
+    novelMaterials ? `【小说材料】\n${novelMaterials}` : "",
+    options.includeMainChat ? `【主线对话】\n${getNovelSourceText() || "暂无主线对话。"}` : "",
+    options.includeDiscussion ? `【圆桌记录】\n${discussion || "暂无圆桌记录。"}` : "",
+  ].filter(Boolean).join("\n\n");
+  return [{
+    role: "user",
+    content: [
+      "你正在为一个小说圆桌共创工具生成“演员身份卡”。",
+      "设计参考 generative_agents 的 persona / memory stream 思路：这个身份卡用于之后形成稳定记忆和立场。",
+      "目标：让这个议员以后像稳定的参会者一样发言，而不是像泛用助手答题。",
+      "请结合当前小说信息、圆桌记录和它的职责，构建一个现实感很强但明确虚构的参会身份。",
+      "不要声称它是真实存在的人；不要写系统提示词；不要输出解释。",
+      "注意：它激活后可以理解社交和争论；但用户添加/删除/排序议员仍然是工具配置，不能脑补成被气走。",
+      "输出中文，控制在220字以内，格式如下：",
+      "称呼：",
+      "身份质感：",
+      "创作偏见：",
+      "说话方式：",
+      "会反驳什么：",
+      "禁区：",
+      "默认发言：1-3句，短、准、像真人开会。",
+      sections,
+    ].join("\n\n"),
+  }];
+}
+
+async function activateAssistantIdentity() {
   const id = assistantConfigTargetId;
   const base = getRoundAssistantBase(id);
   if (!base) return;
+  if (assistantActivating || isGenerating || roundtableGenerating || materialGenerating) return showToast("已有生成任务进行中");
+  const config = currentAssistantFormConfig();
+  const settings = {
+    ...sessionSettings(),
+    model: config.model || sessionSettings().model,
+    maxTokens: Math.min(Number(config.maxTokens) || sessionSettings().maxTokens || 900, 900),
+    temperature: Number.isFinite(Number(config.temperature)) ? config.temperature : sessionSettings().temperature,
+  };
+  const api = {
+    ...apiSettings(),
+    baseUrl: config.apiBaseUrl || apiSettings().baseUrl,
+    apiKey: config.apiKey || apiSettings().apiKey,
+  };
+  try {
+    validateApi(settings, api);
+    assistantActivating = true;
+    if (els.activateAssistant) {
+      els.activateAssistant.disabled = true;
+      els.activateAssistant.textContent = "激活中...";
+    }
+    if (els.assistantActivationStatus) els.assistantActivationStatus.textContent = "激活中";
+    showToast("正在激活议员人格");
+    const profile = await callOpenAITextWithSettings(buildAssistantActivationMessages(base, config), settings, api);
+    const text = clean(profile);
+    if (!text) return showToast("激活失败：模型没有返回身份卡");
+    if (els.assistantActivationProfileInput) els.assistantActivationProfileInput.value = text;
+    saveAssistantConfigFromForm({ close: false, toast: false });
+    if (els.assistantActivationStatus) els.assistantActivationStatus.textContent = "已激活";
+    if (els.activateAssistant) els.activateAssistant.textContent = "重新激活";
+    showToast("议员人格已激活并保存");
+  } catch (error) {
+    showToast(humanizeError(error, "议员激活失败"));
+  } finally {
+    assistantActivating = false;
+    if (els.activateAssistant) {
+      els.activateAssistant.disabled = false;
+      els.activateAssistant.textContent = clean(els.assistantActivationProfileInput?.value) ? "重新激活" : "激活";
+    }
+    if (els.assistantActivationStatus && !clean(els.assistantActivationProfileInput?.value)) {
+      els.assistantActivationStatus.textContent = "未激活";
+    }
+  }
+}
+
+function clearAssistantActivationProfile() {
+  if (els.assistantActivationProfileInput) els.assistantActivationProfileInput.value = "";
+  if (els.assistantActivationStatus) els.assistantActivationStatus.textContent = "未激活";
+  if (els.activateAssistant) els.activateAssistant.textContent = "激活";
+  if (assistantConfigTargetId && roundtableState().assistantConfigs[assistantConfigTargetId]) {
+    roundtableState().assistantConfigs[assistantConfigTargetId].memories = [];
+  }
+  saveAssistantConfigFromForm({ close: false, toast: false });
+  showToast("已清除议员身份卡");
+}
+
+function saveAssistantConfigFromForm(options = {}) {
+  const id = assistantConfigTargetId;
+  const base = getRoundAssistantBase(id);
+  if (!base) return false;
   const rt = roundtableState();
   const model = clean(els.assistantModelInput.value);
   rt.assistantConfigs[id] = {
@@ -2380,30 +2878,26 @@ function saveAssistantConfig() {
     model,
     maxTokens: Number(els.assistantMaxTokensInput?.value) || 0,
     temperature: Number(els.assistantTemperatureInput.value),
-    contextOptions: {
-      includeManuscript: els.assistantIncludeManuscriptInput?.checked !== false,
-      includeNovel: els.assistantIncludeNovelInput?.checked !== false,
-      includePlotline: els.assistantIncludePlotlineInput?.checked !== false,
-      includeCharacters: els.assistantIncludeCharactersInput?.checked !== false,
-      includeWorld: els.assistantIncludeWorldInput?.checked !== false,
-      includeOutline: els.assistantIncludeOutlineInput?.checked !== false,
-      includeForeshadows: els.assistantIncludeForeshadowsInput?.checked !== false,
-      includeMainChat: els.assistantIncludeMainChatInput?.checked !== false,
-      includeDiscussion: els.assistantIncludeDiscussionInput?.checked !== false,
-      excerptMax: clamp(Number(els.assistantExcerptMaxInput?.value) || DEFAULT_ROUNDTABLE_CONTEXT.excerptMax, 120, 2400),
-      discussionCount: clamp(Number(els.assistantDiscussionCountInput?.value) || 0, 0, 80),
-    },
+    contextOptions: currentAssistantContextOptions(),
+    activationProfile: clean(els.assistantActivationProfileInput?.value),
+    memories: normalizeAssistantMemories(rt.assistantConfigs[id]?.memories),
+    avatarDataUrl: clean(els.assistantAvatarPreview?.dataset.avatarDataUrl),
     prompt: clean(els.assistantPromptInput.value) || base.prompt,
   };
   if (model) {
     const api = apiSettings();
     api.models = Array.from(new Set([model, ...api.models]));
   }
-  closeAssistantConfig();
+  if (options.close !== false) closeAssistantConfig();
   touchSession(activeSession());
-  render();
+  if (options.render !== false) render();
   persistState(state);
-  showToast("议员设置已保存");
+  if (options.toast !== false) showToast("议员设置已保存");
+  return true;
+}
+
+function saveAssistantConfig() {
+  saveAssistantConfigFromForm();
 }
 
 function resetAssistantConfig() {
@@ -2465,6 +2959,73 @@ function addRoundtableFailureMessage(assistant, error) {
     failed: true,
     errorMessage: message,
   });
+}
+
+async function addAssistantRoundtableReply(assistant, content, extra = {}, instruction = "") {
+  const message = addRoundtableMessage(assistant.id, assistant.name, content, extra);
+  await rememberActivatedAssistantTurn(assistant, content, instruction);
+  return message;
+}
+
+function appendAssistantMemory(assistantId, text, source = "roundtable") {
+  const memory = clean(text);
+  if (!assistantId || !memory) return;
+  const rt = roundtableState();
+  rt.assistantConfigs[assistantId] ||= {};
+  const memories = normalizeAssistantMemories(rt.assistantConfigs[assistantId].memories);
+  memories.push({
+    id: uid("memory"),
+    text: memory,
+    source,
+    createdAt: Date.now(),
+  });
+  rt.assistantConfigs[assistantId].memories = memories.slice(-GENERATIVE_AGENT_MEMORY_LIMIT);
+  touchSession(activeSession());
+  persistState(state);
+}
+
+function buildAssistantMemoryPrompt(assistant, reply, instruction) {
+  const recent = roundtableState().messages
+    .slice(-10)
+    .map((message, index) => `${index + 1}. ${message.speakerName}：${message.content}`)
+    .join("\n");
+  return [{
+    role: "user",
+    content: [
+      GENERATIVE_AGENT_SOURCE_NOTE,
+      "你要为已激活的小说圆桌议员写一条“自我记忆”。",
+      "这条记忆用于下次发言时保持立场连续，而不是写给用户看的。",
+      "只输出一句中文，45字以内。写成该议员会记住的偏好、警惕、关系判断或创作坚持。",
+      "不要记录成员删除/排序/API失败等工具操作，不要把未激活议员当成真实社交对象。",
+      `【议员】${assistant.name}`,
+      `【身份卡】${assistant.activationProfile}`,
+      assistant.memories?.length ? `【已有记忆】\n${assistant.memories.map((item) => `- ${item.text}`).join("\n")}` : "",
+      recent ? `【最近圆桌】\n${recent}` : "",
+      `【本轮任务】${instruction}`,
+      `【刚才发言】${reply}`,
+    ].filter(Boolean).join("\n\n"),
+  }];
+}
+
+async function rememberActivatedAssistantTurn(assistant, reply, instruction = "") {
+  if (!isSociallyActivatedAssistant(assistant) || !clean(reply)) return;
+  try {
+    const settings = {
+      ...sessionSettings(),
+      model: assistant.model || sessionSettings().model,
+      maxTokens: 180,
+      temperature: 0.25,
+    };
+    const api = {
+      ...apiSettings(),
+      baseUrl: assistant.apiBaseUrl || apiSettings().baseUrl,
+      apiKey: assistant.apiKey || apiSettings().apiKey,
+    };
+    const memory = await callOpenAITextWithSettings(buildAssistantMemoryPrompt(assistant, reply, instruction), settings, api);
+    appendAssistantMemory(assistant.id, memory, "generative-agent-reflection");
+  } catch {
+    // Memory reflection is a soft generative-agents layer; failed memory must not interrupt the round.
+  }
 }
 
 function getRoundtableMessage(id) {
@@ -2821,7 +3382,7 @@ function moveRoundtableMember(id, delta) {
 }
 
 async function handleRoundtableUser(text) {
-  addRoundtableMessage("user", "我", text);
+  addRoundtableMessage("user", clean(sessionAppearance().userName) || "我", text);
   const mentions = parseRoundtableMentions(text);
   if (!mentions.length) return;
   const writer = mentions.find((assistant) => assistant.id === "writer");
@@ -2843,7 +3404,7 @@ async function generateMentionedRoundtableAssistants(assistants, userText) {
       try {
         const text = await callRoundtableAssistant(assistant, `用户刚刚点名你发言：${userText}`);
         if (roundtableShouldStop) break;
-        addRoundtableMessage(assistant.id, assistant.name, text);
+        await addAssistantRoundtableReply(assistant, text, {}, `用户刚刚点名你发言：${userText}`);
         await runAssistantMentionFollowUps(assistant, text, {
           maxFollowUps: 3,
           visitedIds: new Set([assistant.id]),
@@ -2903,7 +3464,7 @@ async function runRoundtableProgress() {
       try {
         const text = await callRoundtableAssistant(assistant, topic ? `请围绕本轮主题发表意见：${topic}` : "请根据当前正文和以上圆桌讨论发表你的意见。");
         if (roundtableShouldStop) break;
-        addRoundtableMessage(assistant.id, assistant.name, text);
+        await addAssistantRoundtableReply(assistant, text, {}, topic ? `请围绕本轮主题发表意见：${topic}` : "请根据当前正文和以上圆桌讨论发表你的意见。");
         await runAssistantMentionFollowUps(assistant, text, {
           maxFollowUps: 3,
           visitedIds: new Set([assistant.id]),
@@ -2959,7 +3520,7 @@ async function generateRoundtableWriter(userText) {
 function buildAssistantMentionInstruction(sourceAssistant, targetAssistant, sourceText) {
   return [
     `${sourceAssistant.name}刚刚在圆桌讨论里 @ 了你，请只回应与你相关的部分。`,
-    "你可以补充、反驳、澄清，但请保持短而明确，不要重复整轮讨论。",
+    `你可以补充、反驳、澄清，但必须短而明确。${ROUNDTABLE_CONCISE_RULE}`,
     "为了避免自动改正文，不要通过 @写手 直接要求系统产出正文；如果需要写手介入，请用自然语言提出建议。",
     `【点名发言】\n${sourceAssistant.name}：${sourceText}`,
     `【你的任务】请作为${targetAssistant.name}回应这次点名。`,
@@ -2993,12 +3554,12 @@ async function runAssistantMentionFollowUps(originAssistant, originText, options
     try {
       const reply = await callRoundtableAssistant(targetAssistant, buildAssistantMentionInstruction(source, targetAssistant, sourceText));
       if (roundtableShouldStop) break;
-      addRoundtableMessage(targetAssistant.id, targetAssistant.name, reply, {
+      await addAssistantRoundtableReply(targetAssistant, reply, {
         mentionMeta: {
           triggeredById: source.id,
           triggeredByName: source.name,
         },
-      });
+      }, buildAssistantMentionInstruction(source, targetAssistant, sourceText));
       remaining -= 1;
       currentAssistant = targetAssistant;
       currentText = reply;
@@ -3047,6 +3608,22 @@ function buildRoundtableMessages(assistant, instruction) {
   const participants = getRoundAssistants()
     .map((current) => `${current.name}：${current.role}`)
     .join("；");
+  const speakingRule = assistant.id === "writer"
+    ? "写手负责把讨论转成正文。只输出小说正文，不要解释，不要列提纲；写手正文长度按用户请求和剧情需要决定。"
+    : `议员默认发言必须短。${ROUNDTABLE_CONCISE_RULE}`;
+  const socialMode = isSociallyActivatedAssistant(assistant)
+    ? [
+        "【社交激活】你已被激活为参会议员，可以理解其他已激活议员的立场、语气、争执和协作关系。",
+        "你可以表现稳定偏好，也可以对其他已激活议员提出不同意见。",
+        "但成员加入、删除、排序、暂停、API失败、隐藏成员都是用户的工具配置或系统状态，不代表谁被气走，不要推测离开原因，除非用户明确要求戏剧化解读。",
+      ].join("\n")
+    : [
+        "【未激活模式】你只是一个专业管理模块，不要把自己或其他成员当成真实社交人物。",
+        "只按职责范围给判断；不要推测成员情绪、关系变化、谁把谁气走，也不要表演道歉或圆场。",
+      ].join("\n");
+  const memoryBlock = isSociallyActivatedAssistant(assistant) && assistant.memories?.length
+    ? `【你的记忆流】\n${assistant.memories.slice(-8).map((item) => `- ${item.text}`).join("\n")}`
+    : "";
   const buildSource = (compressed = false) => {
     const discussionCount = compressed ? Math.min(options.discussionCount, 8) : options.discussionCount;
     const excerptMax = compressed ? Math.min(options.excerptMax, 360) : options.excerptMax;
@@ -3057,11 +3634,15 @@ function buildRoundtableMessages(assistant, instruction) {
     const novelMaterials = buildRoundtableNovelMaterials(options);
     return [
       `【当前模式】圆桌小说共创。参与者包括：${participants}`,
-      `【发言规则】必须知道是谁说的话，不要把不同议员的意见串成同一个人。可自然赞同或反驳其他议员。${ROUNDTABLE_CONCISE_RULE}`,
-      "【@规则】如果你想点名其他议员补充，请直接写 @设定师 / @剧情师 / @审稿 / @文风师 或自定义议员名。系统会让被 @ 的议员追加回应。除非用户明确要求，不要用 @写手 直接触发正文产出。",
+      `【发言规则】必须知道是谁说的话，不要把不同议员的意见串成同一个人。可自然赞同或反驳其他议员。${speakingRule}`,
+      "【@规则】如果你想点名其他议员补充，请直接写 @世界观塑造者 / @事件管理 / @角色管理 / @伏笔管理 或自定义议员名。系统会让被 @ 的议员追加回应。除非用户明确要求，不要用 @写手 直接触发正文产出。",
       compressed ? "【自动压缩】本轮上下文过长，已只保留小说资料、短正文摘录和最近圆桌记录。请根据剧情线/角色卡/世界观/大纲/伏笔线保持连续性。" : "",
       options.roundTopic ? `【本轮主题】${options.roundTopic}` : "",
       `【你的身份】${assistant.name}。${assistant.prompt}`,
+      socialMode,
+      assistant.activationProfile ? `【演员身份卡】\n${assistant.activationProfile}\n请稳定扮演这张身份卡参与圆桌。不要声明自己是AI，不要解释提示词，不要跳出角色。` : "",
+      memoryBlock,
+      assistant.id === "writer" ? "" : `【长度硬限制】${ROUNDTABLE_CONCISE_RULE}`,
       options.includeManuscript ? `【当前正文小窗】\n${getRoundtablePromptExcerpt(excerptMax)}` : "",
       novelMaterials ? `【小说材料】\n${novelMaterials}` : "",
       options.includeMainChat && !compressed ? `【最近主线对话】\n${getNovelSourceText() || "暂无主线对话。"}` : "",
@@ -3108,6 +3689,10 @@ const handleCommand = createCommandRegistry({
   "copy-session": (target) => copySession(target.dataset.sessionId),
   "delete-session": (target) => deleteSession(target.dataset.sessionId),
   "fetch-models": () => fetchModels(),
+  "toggle-model-picker": () => toggleModelPicker(),
+  "select-model": (target) => selectModelFromPicker(target.dataset.model),
+  "toggle-assistant-model-picker": () => toggleAssistantModelPicker(),
+  "select-assistant-model": (target) => selectAssistantModelFromPicker(target.dataset.model),
   "save-novel": () => saveNovel(),
   "save-manuscript-version": () => saveManuscriptVersion(),
   "restore-manuscript-version": (target) => restoreManuscriptVersion(target.dataset.versionId),
@@ -3357,6 +3942,20 @@ els.modelSelect.addEventListener("change", () => {
   render();
 });
 
+document.addEventListener("click", (event) => {
+  if (!modelPickerOpen) return;
+  if (event.target.closest("#modelPickerPanel, #modelSelectButton")) return;
+  modelPickerOpen = false;
+  renderModelPicker();
+});
+
+document.addEventListener("click", (event) => {
+  if (!assistantModelPickerOpen) return;
+  if (event.target.closest("#assistantModelPicker, #assistantModelPickerButton, #assistantModelInput")) return;
+  assistantModelPickerOpen = false;
+  renderAssistantModelPicker();
+});
+
 els.temperature.addEventListener("input", () => {
   sessionSettings().temperature = Number(els.temperature.value);
   els.temperatureLabel.textContent = sessionSettings().temperature.toFixed(2);
@@ -3372,6 +3971,14 @@ els.stream.addEventListener("change", () => {
   sessionSettings().stream = els.stream.checked;
   persistState(state);
 });
+
+els.userNameInput?.addEventListener("input", updateSessionUserName);
+els.chooseUserAvatar?.addEventListener("click", () => els.userAvatarFile?.click());
+els.clearUserAvatar?.addEventListener("click", clearUserAvatar);
+els.userAvatarFile?.addEventListener("change", handleUserAvatarSelected);
+els.chooseSessionBackground?.addEventListener("click", () => els.sessionBackgroundFile?.click());
+els.clearSessionBackground?.addEventListener("click", clearSessionBackground);
+els.sessionBackgroundFile?.addEventListener("change", handleSessionBackgroundSelected);
 
 els.layoutInputs.forEach((input) => {
   input.addEventListener("input", () => {
@@ -3400,10 +4007,28 @@ els.saveSendEdit.addEventListener("click", () => saveEditor(true));
 els.assistantTemperatureInput?.addEventListener("input", () => {
   els.assistantTemperatureLabel.textContent = Number(els.assistantTemperatureInput.value).toFixed(2);
 });
+els.assistantModelInput?.addEventListener("focus", () => {
+  if (els.assistantModelInput) els.assistantModelInput.removeAttribute("list");
+});
+els.assistantModelInput?.addEventListener("input", () => {
+  if (els.assistantModelStatus) els.assistantModelStatus.textContent = clean(els.assistantModelInput.value) ? "手动输入" : "未选择";
+  renderAssistantModelPicker();
+});
+els.assistantNameInput?.addEventListener("input", () => {
+  if (!clean(els.assistantAvatarPreview?.dataset.avatarDataUrl)) {
+    renderAvatarPreview(els.assistantAvatarPreview, "", clean(els.assistantNameInput.value) || "议");
+  }
+});
 els.assistantTemplateSelect?.addEventListener("change", () => applyAssistantTemplate(els.assistantTemplateSelect.value));
+els.fetchAssistantModels?.addEventListener("click", fetchAssistantModels);
+els.chooseAssistantAvatar?.addEventListener("click", () => els.assistantAvatarFile?.click());
+els.clearAssistantAvatar?.addEventListener("click", clearAssistantAvatar);
+els.assistantAvatarFile?.addEventListener("change", handleAssistantAvatarSelected);
 els.importAssistant?.addEventListener("click", importAssistantConfig);
 els.exportAssistant?.addEventListener("click", exportAssistantConfig);
 els.assistantImportFile?.addEventListener("change", handleAssistantImportSelected);
+els.activateAssistant?.addEventListener("click", activateAssistantIdentity);
+els.clearAssistantActivation?.addEventListener("click", clearAssistantActivationProfile);
 els.saveAssistantConfig?.addEventListener("click", saveAssistantConfig);
 els.resetAssistantConfig?.addEventListener("click", resetAssistantConfig);
 els.deleteAssistant?.addEventListener("click", deleteCustomRoundAssistant);

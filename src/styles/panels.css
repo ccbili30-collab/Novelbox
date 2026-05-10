@@ -246,6 +246,70 @@
   font-size: 13px;
 }
 
+.avatar-setting-row,
+.background-setting-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: center;
+  margin: 12px 0;
+}
+
+.avatar-preview {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  color: #fff;
+  background: #3b352d;
+  font-weight: 800;
+}
+
+.avatar-preview img,
+.background-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.background-preview {
+  width: 86px;
+  height: 54px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: linear-gradient(135deg, #f7f3ea, #e7edf0);
+  background-position: center;
+  background-size: cover;
+}
+
+.background-preview.empty::after {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: var(--muted);
+  content: "无";
+  font-size: 13px;
+}
+
+.avatar-setting-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.avatar-setting-actions button,
+#fetchAssistantModelsButton {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #f7f7f7;
+  font-size: 13px;
+}
+
 .novel-version-item small,
 .novel-segment-item small {
   color: var(--muted);
@@ -563,6 +627,12 @@
   min-height: 210px;
 }
 
+#assistantActivationProfileInput {
+  min-height: 150px;
+  background:
+    linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(255, 250, 242, 0.98));
+}
+
 .assistant-fold {
   margin: 10px 0;
   border: 1px solid var(--line);
@@ -605,7 +675,10 @@
 .assistant-fold > .field,
 .assistant-fold > .assistant-context-head,
 .assistant-fold > .assistant-context-options,
-.assistant-fold > .assistant-context-numbers {
+.assistant-fold > .assistant-context-numbers,
+.assistant-fold > .assistant-activation-actions,
+.assistant-fold > .assistant-model-picker-row,
+.assistant-fold > .assistant-model-picker {
   margin-inline: 12px;
 }
 
@@ -615,8 +688,80 @@
 }
 
 .assistant-fold > .field:last-child,
-.assistant-fold > .assistant-context-numbers {
+.assistant-fold > .assistant-context-numbers,
+.assistant-fold > .assistant-activation-actions,
+.assistant-fold > .assistant-model-picker {
   margin-bottom: 12px;
+}
+
+.assistant-activation-actions {
+  justify-content: flex-start;
+}
+
+.assistant-model-picker-row {
+  display: flex;
+  margin-top: -6px;
+  margin-bottom: 10px;
+}
+
+.assistant-model-picker-row button {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: #4c4237;
+  background: #faf8f4;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.assistant-model-picker-row button.active {
+  border-color: rgba(141, 107, 49, 0.34);
+  background: var(--surface-selected);
+}
+
+.assistant-model-picker {
+  display: grid;
+  gap: 5px;
+  max-height: 230px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 7px;
+  border: 1px solid rgba(226, 220, 211, 0.95);
+  border-radius: 12px;
+  background: rgba(255, 253, 249, 0.96);
+}
+
+.assistant-model-picker[hidden] {
+  display: none;
+}
+
+.assistant-model-picker button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 38px;
+  padding: 8px 9px;
+  border-radius: 10px;
+  color: #332f29;
+  text-align: left;
+}
+
+.assistant-model-picker button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistant-model-picker button b {
+  color: #8d6b31;
+  font-size: 12px;
+}
+
+.assistant-model-picker button.selected {
+  background: var(--surface-selected);
+  font-weight: 800;
 }
 
 .dialog-actions {

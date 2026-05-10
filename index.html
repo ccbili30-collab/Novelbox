@@ -52,7 +52,7 @@
         </section>
         <div class="roundtable-section-label roundtable-section-label-chat">
           <span>群聊讨论</span>
-          <small>@审稿 / @剧情师 / @设定师 / @文风师 / @写手</small>
+          <small>@世界观塑造者 / @事件管理 / @角色管理 / @伏笔管理 / @写手</small>
         </div>
         <div id="roundtableDiscussion" class="roundtable-discussion" aria-live="polite"></div>
       </section>
@@ -135,6 +135,30 @@
         <input id="streamInput" type="checkbox" />
         <span>流式输出</span>
       </label>
+      <div class="settings-section">
+        <div class="section-title">
+          <strong>本会话外观</strong>
+          <span class="muted">只影响当前会话</span>
+        </div>
+        <label class="field">
+          <span>你的显示名</span>
+          <input id="userNameInput" type="text" placeholder="我" />
+        </label>
+        <div class="avatar-setting-row">
+          <div id="userAvatarPreview" class="avatar-preview">我</div>
+          <div class="avatar-setting-actions">
+            <button id="chooseUserAvatarButton" type="button">选择用户头像</button>
+            <button id="clearUserAvatarButton" type="button">清除</button>
+          </div>
+        </div>
+        <div class="background-setting-row">
+          <div id="sessionBackgroundPreview" class="background-preview"></div>
+          <div class="avatar-setting-actions">
+            <button id="chooseSessionBackgroundButton" type="button">选择背景</button>
+            <button id="clearSessionBackgroundButton" type="button">清除</button>
+          </div>
+        </div>
+      </div>
       <div class="settings-section">
         <div class="section-title">
           <strong>排版调试</strong>
@@ -238,18 +262,18 @@
         </section>
         <div class="roundtable-beta-copy">
           <span>创作会议入口</span>
-          <p>正文像一张纸放在桌面上，你可以让设定师、剧情师、审稿和自定义议员按顺序讨论，再 @写手 把意见续写成正文。</p>
+          <p>正文像一张纸放在桌面上，你可以让世界观塑造者、角色管理、伏笔管理、事件管理和自定义议员按顺序讨论，再 @写手 把意见续写成正文。</p>
         </div>
         <div class="roundtable-members" aria-label="圆桌成员示例">
-          <span class="member-chip selected">1 设定师</span>
-          <span class="member-chip selected">2 剧情师</span>
-          <span class="member-chip">审稿</span>
-          <span class="member-chip">文风师</span>
+          <span class="member-chip selected">1 世界观塑造者</span>
+          <span class="member-chip selected">2 角色管理</span>
+          <span class="member-chip">伏笔管理</span>
+          <span class="member-chip">事件管理</span>
           <button class="member-chip more-chip" type="button" data-command="toggle-roundtable">进入</button>
         </div>
         <div class="roundtable-chat-preview" aria-label="讨论预览">
-          <p><b>设定师</b><span>转折最好来自诅咒规则本身，这样不会像临时加戏。</span></p>
-          <p><b>剧情师</b><span>可以让妹妹的记忆第一次被夺走，冲突会更具体。</span></p>
+          <p><b>世界观塑造者</b><span>转折最好来自诅咒规则本身，这样不会像临时加戏。</span></p>
+          <p><b>事件管理</b><span>可以让妹妹的记忆第一次被夺走，冲突会更具体。</span></p>
           <p><b>写手</b><span class="writer-snippet">他终于明白，最先被夺走的不是名字，而是某个人在心里留下的声音。</span></p>
         </div>
       </div>
@@ -260,6 +284,9 @@
     </aside>
 
     <input id="assistantImportFile" type="file" accept=".json,application/json" hidden />
+    <input id="assistantAvatarFile" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+    <input id="userAvatarFile" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+    <input id="sessionBackgroundFile" type="file" accept="image/png,image/jpeg,image/webp" hidden />
 
     <dialog id="editDialog" class="edit-dialog">
       <form method="dialog">
@@ -289,6 +316,13 @@
           <span>显示名</span>
           <input id="assistantNameInput" type="text" />
         </label>
+        <div class="avatar-setting-row assistant-avatar-row">
+          <div id="assistantAvatarPreview" class="avatar-preview">议</div>
+          <div class="avatar-setting-actions">
+            <button id="chooseAssistantAvatarButton" value="default" type="button">选择本地头像</button>
+            <button id="clearAssistantAvatarButton" value="default" type="button">清除头像</button>
+          </div>
+        </div>
         <label class="field">
           <span>议员模板</span>
           <select id="assistantTemplateSelect">
@@ -299,15 +333,19 @@
           <summary>模型 / API</summary>
           <label class="field">
             <span>模型</span>
-            <input id="assistantModelInput" type="text" list="modelDatalist" placeholder="留空则使用当前会话模型" />
+            <input id="assistantModelInput" type="text" list="modelDatalist" placeholder="默认与当前会话模型一致，可直接改/切换" />
           </label>
+          <div class="panel-row">
+            <button id="fetchAssistantModelsButton" value="default" type="button">拉取此议员模型</button>
+            <span id="assistantModelStatus" class="muted">未拉取</span>
+          </div>
           <label class="field">
             <span>Base URL</span>
-            <input id="assistantBaseUrlInput" type="text" placeholder="留空则使用全局 Base URL" />
+            <input id="assistantBaseUrlInput" type="text" placeholder="默认与全局 Base URL 一致，可为此议员单独改" />
           </label>
           <label class="field">
             <span>API Key</span>
-            <input id="assistantApiKeyInput" type="password" placeholder="留空则使用全局 Key" />
+            <input id="assistantApiKeyInput" type="password" placeholder="默认与全局 Key 一致，可为此议员单独改" />
           </label>
           <label class="field">
             <span>最大输出 token</span>
@@ -317,6 +355,21 @@
             <span>温度 <b id="assistantTemperatureLabel">0.80</b></span>
             <input id="assistantTemperatureInput" type="range" min="0" max="2" step="0.05" />
           </label>
+        </details>
+        <details class="assistant-fold" open>
+          <summary>角色激活</summary>
+          <div class="assistant-context-head">
+            <strong id="assistantActivationStatus">未激活</strong>
+            <span class="muted">生成一个稳定扮演的参会人格</span>
+          </div>
+          <label class="field">
+            <span>演员身份卡</span>
+            <textarea id="assistantActivationProfileInput" rows="6" placeholder="点击激活后，AI 会结合当前正文、小说资料和圆桌记录，为这个议员生成现实感虚构身份。你也可以手动编辑。"></textarea>
+          </label>
+          <div class="dialog-actions assistant-activation-actions">
+            <button id="activateAssistantButton" value="default" type="button">激活</button>
+            <button id="clearAssistantActivationButton" value="default" type="button">清除身份</button>
+          </div>
         </details>
         <details class="assistant-fold">
           <summary>材料</summary>

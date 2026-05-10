@@ -11,6 +11,11 @@ export function createSettings() {
     stream: true,
     layout: createDefaultLayout(),
     layoutPresets: [],
+    appearance: {
+      userName: "我",
+      userAvatarDataUrl: "",
+      backgroundDataUrl: "",
+    },
   };
 }
 
@@ -18,5 +23,9 @@ export function hydrateSessionSettings(settings) {
   const next = { ...createSettings(), ...(settings || {}) };
   next.layout = hydrateLayout(next.layout);
   next.layoutPresets = Array.isArray(next.layoutPresets) ? next.layoutPresets : [];
+  next.appearance = {
+    ...createSettings().appearance,
+    ...(next.appearance || {}),
+  };
   return next;
 }

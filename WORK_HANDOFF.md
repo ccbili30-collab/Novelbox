@@ -674,6 +674,40 @@ Validation:
 - `git diff --check`
 - `android-app\gradlew.bat assembleDebug --offline --no-daemon`
 
+### Main Update: Generative-Agent Inspired Council Memory
+
+Implemented on `main`:
+
+- default council roles are now writer, worldbuilder, character manager, foreshadow manager, and event manager
+- internal ids were kept stable for migration safety: `setting`, `review`, `style`, `plot`, `writer`
+- council members stay dry professional modules until activated
+- activated non-writer members receive an actor identity card plus a short memory stream inspired by `joonspk-research/generative_agents`
+- after an activated member speaks, TBird asks the model for one short private memory and stores it under `assistantConfigs[id].memories`
+- future activated turns include the latest memories so the member can keep a stable stance
+- inactive members are explicitly told not to infer social meaning from member add/delete/sort/failure events
+- activated members may understand social tone and disagreement, but still cannot treat user configuration events as someone being "driven away" unless the user asks for dramatization
+
+Important code locations:
+
+- `src/main.js`
+  - `GENERATIVE_AGENT_MEMORY_LIMIT`
+  - `ROUND_ASSISTANTS`
+  - `normalizeAssistantMemories()`
+  - `isSociallyActivatedAssistant()`
+  - `buildAssistantActivationMessages()`
+  - `rememberActivatedAssistantTurn()`
+  - `buildAssistantMemoryPrompt()`
+  - `buildRoundtableMessages()`
+- `index.html`
+  - activated council labels and default member examples
+
+Validation:
+
+- `node --check src/main.js`
+- `node --check scripts/build-android-assets.mjs`
+- `node --check dev-server.mjs`
+- `git diff --check`
+
 ### Priority 1: Real device tuning
 
 Test in Android/WebView-like sizes and tune:
