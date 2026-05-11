@@ -1,140 +1,79 @@
-# Roundtable Novelbox / 圆桌小说盒子
+# TBird Roundtable Box / TBird 圆桌盒子
 
-A mobile-first AI workspace for long-form fiction writing.
+**Next-generation AI conversation and creation workspace.**
 
-One-line pitch: Roundtable Novelbox solves the problem that ordinary AI chat is hard to sustain for long novels by bringing conversation, manuscript memory, worldbuilding, plot lines, character notes, and a roundtable-style multi-assistant creation flow into one mobile writing desk.
+One-line pitch: **turn inspiration, emotions, and viewpoints into finished work through roundtable conversations with different AIs, different voices, and different souls.**
 
 Live demo: [https://ccbili30-collab.github.io/Novelbox/](https://ccbili30-collab.github.io/Novelbox/)
 
-## Inspired By Conversation, Built For Novels
+## New Direction
 
-Roundtable Novelbox is inspired by the immediacy of chat-based AI tools: open it, write, revise, continue, and ask again without ceremony.
+TBird Roundtable Box is moving beyond a Chatbox-like single-assistant writing tool.
 
-But it is not trying to be another generic chat client. Long-form fiction has different pain points: the manuscript grows too large, worldbuilding becomes scattered, character state drifts, and the model often loses track of what it should remember. Roundtable Novelbox keeps the directness of conversation while adding the writing memory a novel actually needs.
+The product is becoming a mobile-first AI roundtable workspace where the user can invite multiple AI participants into the same conversation, let them speak in order, challenge one another, respond to `@` mentions, and help turn scattered thoughts into concrete output.
 
-## Introducing Roundtable Co-Creation
+Fiction writing is still the first strong use case, but it is no longer the product boundary. A roundtable can discuss a novel, a product idea, a personal question, a design direction, a speech, an essay, a worldbuilding problem, or an emotional knot. The output can be prose, a summary, an article, a plan, a manuscript section, or a decision record.
 
-Roundtable co-creation is now the core product direction of Novelbox.
+The core idea is simple:
 
-Instead of forcing a long novel into a single chat thread, Novelbox lets the user gather several AI roles around the same manuscript:
+> The user does not just ask one AI for an answer.
+> The user brings several AIs into a room, lets them think together, and decides what becomes work.
 
-- By default, the user writes with the main writer assistant in a simple chat flow.
-- When discussion is needed, the user opens Roundtable Mode with the `圆` button.
-- The manuscript becomes a draggable paper window near the top, like a page placed on the table.
-- Below it, council members such as Worldbuilder, Plot Designer, Reviewer, Style Editor, and custom roles discuss the current draft.
-- Selected council members speak in order and can read earlier comments without mixing up who said what.
-- Council members can `@` one another, and mentioned members answer in sequence with loop protection.
-- Each council member can have its own prompt, model, API settings, temperature, and material reading range.
-- The user decides whether to adopt, rewrite, continue discussion, or `@Writer` to turn discussion back into prose.
-- Writer output appears as manuscript text and is synced into the manuscript library, instead of being treated like an ordinary chat bubble.
+## What Makes It Different
 
-This is the direction that makes Novelbox more than a chat UI: it becomes a personal post-AI writing room where different AI perspectives can argue, review, and help the human author keep control.
+- **Group conversation instead of single chat.** Participants can be selected, ordered, mentioned, and brought into the next round.
+- **AI roles are preferences, not cages.** A participant may prefer structure, emotion, criticism, worldbuilding, writing, or review, but the system should not force it into a narrow tool function.
+- **Writer as a flexible drafter.** The writer can write fiction when asked, but in ordinary discussion it can summarize views, shape an article, or organize language.
+- **Human keeps control.** AIs may argue, suggest, summarize, and draft; the user decides what to adopt.
+- **Mobile-first workflow.** The interface is designed for quick capture, long conversations, and focused creation on a phone.
+- **Creation memory.** Manuscript, notes, worldbuilding, outlines, character notes, and foreshadowing fields remain available as optional context material.
 
 ## Current Features
 
-### Mobile Writing Chat
+### Conversation Workspace
 
-- Conversation-first interface.
-- User messages on the right, AI messages on the left.
-- Fixed bottom composer for mobile use.
-- History, new session, duplicate session, and delete session.
-- Assistant response version switching.
+- Mobile-first chat interface.
+- Session history, new session, duplicate session, and delete session.
 - User message editing.
-- Real assistant output editing.
-
-Assistant output editing changes the assistant message itself. Later context uses the edited version instead of treating the edit as a new prompt.
+- Direct assistant output editing.
+- Assistant response version switching.
+- OpenAI-compatible API configuration.
+- Model list fetching.
+- Temperature, context count, unlimited context, and max output tokens.
+- Stop generation.
+- Low-flicker streaming: streaming updates are batched and only update the active message node.
 
 ### Roundtable Mode
 
-- One-tap switch between normal writing chat and Roundtable Mode.
-- Paper-like manuscript window placed above the discussion area.
-- Smooth drag to expand or fold the manuscript paper.
-- `参会人` panel for selecting and editing council members.
-- Built-in council members: Worldbuilder, Plot Designer, Reviewer, Style Editor, and Writer.
-- Add, modify, hide, and delete council members.
-- Ordered speaking: selected council members respond one by one.
-- Council-to-council `@` mentions with sequential follow-up replies.
-- Per-council-member prompts, models, API configuration, temperature, and material settings.
-- Global and per-member material scope: manuscript, main chat, roundtable history, plot line, characters, worldbuilding, outline, and foreshadowing.
-- Writer replies are displayed as manuscript blocks and synced to the manuscript library.
+- One-tap switch between normal conversation and Roundtable Mode.
+- Manuscript / draft paper window placed above the discussion area.
+- Draggable paper height and collapse behavior.
+- Participant settings panel attached to the bottom composer layer.
+- Select participants by ordered number.
+- Start a round and let selected participants speak in order.
+- `@` mention picker for bringing selected participants into the next turn sequence.
+- Mention queue behavior: multiple mentions can enqueue multiple participants.
+- Per-participant prompt, model, API base URL, API key, temperature, max tokens, and visible material scope.
+- Failure isolation: one participant failing should not kill the whole round.
+- Social activation layer for participants that should interpret meeting dynamics more naturally.
 
-### OpenAI-Compatible API
+### Creation Memory
 
-- Base URL.
-- API Key.
-- Model name input.
-- Model list fetching.
-- Temperature, context count, unlimited context, and max output tokens.
-- Streaming output.
-- Stop generation.
+The project still includes a creation material panel for long-form work:
 
-The app does not fake local generation. If the API is missing or invalid, it reports the error.
-
-### Novel Memory
-
-The novel panel stores:
-
-- Manuscript library.
+- Manuscript / body.
 - Plot line.
-- Character cards.
+- Character notes.
 - Worldbuilding.
 - Outline.
 - Foreshadowing notes.
+- TXT import and export.
+- AI-assisted material summaries.
+- Context preview with estimated tokens.
 
-These fields are not decorative. They are included in the context preview and sent to the real API request.
+These are now best understood as **optional meeting materials**, not proof that the whole product is only a novel tool.
 
-### Manuscript Import And Export
-
-- Import TXT manuscript.
-- Export TXT manuscript.
-- Use manuscript content as memory material.
-- Send tail excerpts by default to avoid overloading context.
-
-### AI Material Summaries
-
-Each material area can be filled by AI:
-
-- Plot line summary.
-- Character cards.
-- Worldbuilding.
-- Outline.
-- Foreshadowing notes.
-
-These features call the configured API. They are not mocked.
-
-### Context Preview
-
-Before sending, users can inspect:
-
-- System prompt.
-- Novel memory.
-- Recent conversation.
-- Current input.
-- Estimated tokens.
-- Model and temperature.
-
-For long-form writing, this matters because users need to know what the model can actually see.
-
-### Layout Tuning
-
-The app includes mobile layout tuning:
-
-- Composer height.
-- Composer font size.
-- Send button size.
-- Tool button size.
-- Message font size.
-- Line height.
-- Assistant left offset.
-- Message side padding.
-- Message gap.
-- User bubble padding.
-- Metadata font size.
-- More button size.
-
-Users can apply compact or comfortable presets, save custom presets, copy layout parameters, and reset defaults.
-
-## Android
+### Android
 
 The repository includes an Android WebView wrapper:
 
@@ -144,16 +83,9 @@ android-app/
 
 Build debug APK:
 
-```bash
-cd android-app
-./gradlew assembleDebug
-```
-
-Windows:
-
 ```powershell
 cd android-app
-.\gradlew.bat assembleDebug
+.\gradlew.bat assembleDebug --offline --no-daemon
 ```
 
 APK output:
@@ -174,31 +106,8 @@ Default URL:
 http://127.0.0.1:5177/
 ```
 
-## Status
+## Product Line
 
-Completed:
+**TBird Roundtable Box is an AI roundtable for turning inner material into outer work: inspiration, emotion, viewpoints, drafts, arguments, and decisions.**
 
-- Mobile-first writing chat.
-- OpenAI-compatible API.
-- Streaming and stop generation.
-- Session history.
-- Direct assistant output editing.
-- Context preview.
-- Novel material panel.
-- TXT import/export.
-- AI material summaries.
-- Android APK project.
-- Layout tuning and custom presets.
-- Roundtable Mode with manuscript paper, council members, ordered replies, per-member settings, and `@` follow-ups.
-
-Planned:
-
-- Finer chapter management.
-- Manuscript anchors.
-- Searchable manuscript memory.
-- Confirmation flow for generated materials.
-- Cleaner approval flow for accepting or rejecting council suggestions.
-
-## Final Line
-
-Roundtable Novelbox is not just a chat shell. It is a personal AI fiction creator where the writer, worldbuilder, plot designer, reviewer, and user can gather around the same manuscript.
+It is not just a chat shell. It is a place to think with different AIs and let the conversation become something you can keep.

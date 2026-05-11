@@ -9,14 +9,26 @@ export function createSettings() {
     unlimitedContext: false,
     maxTokens: 2048,
     stream: true,
+    streamTouched: false,
     layout: createDefaultLayout(),
     layoutPresets: [],
+    appearance: {
+      userName: "我",
+      userAvatarDataUrl: "",
+      backgroundDataUrl: "",
+    },
   };
 }
 
 export function hydrateSessionSettings(settings) {
   const next = { ...createSettings(), ...(settings || {}) };
+  next.stream = settings?.streamTouched ? Boolean(settings.stream) : true;
+  next.streamTouched = Boolean(settings?.streamTouched);
   next.layout = hydrateLayout(next.layout);
   next.layoutPresets = Array.isArray(next.layoutPresets) ? next.layoutPresets : [];
+  next.appearance = {
+    ...createSettings().appearance,
+    ...(next.appearance || {}),
+  };
   return next;
 }
