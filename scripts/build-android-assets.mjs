@@ -102,6 +102,7 @@ visit(entry);
 
 const bundle = `"use strict";\n(function () {\n${ordered.map(moduleBlock).join("\n")}\n})();\n`;
 const html = readFileSync(resolve(root, "index.html"), "utf8")
+  .replace(/\s*<a\b[^>]*\bdata-web-only\b[^>]*>[\s\S]*?<\/a>/g, "")
   .replace('<script type="module" src="./src/main.js"></script>', '<script src="./src/android-main.js"></script>');
 
 mkdirSync(join(outDir, "src"), { recursive: true });
