@@ -79,6 +79,12 @@ body.has-session-background .roundtable-workspace {
   background: rgba(32, 33, 36, 0.06);
 }
 
+.article-link {
+  border-color: rgba(141, 107, 49, 0.28);
+  color: #5f4520;
+  background: #fff7e6;
+}
+
 .icon-button,
 .round-button {
   display: inline-grid;

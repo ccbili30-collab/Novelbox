@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>为什么我想做 AI 圆桌社群</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f5f0;
+        --paper: #fffdf8;
+        --text: #202124;
+        --muted: #6f6b63;
+        --line: #e4ded2;
+        --accent: #222;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: "Microsoft YaHei", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.78;
+      }
+
+      .page {
+        width: min(100%, 880px);
+        margin: 0 auto;
+        padding: 28px 18px 56px;
+      }
+
+      .top {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+        margin-bottom: 18px;
+      }
+
+      .top a {
+        display: inline-grid;
+        place-items: center;
+        min-height: 36px;
+        padding: 0 14px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--text);
+        background: rgba(255, 255, 255, 0.72);
+        font-size: 14px;
+        font-weight: 700;
+        text-decoration: none;
+        white-space: nowrap;
+      }
+
+      article {
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        background: var(--paper);
+        box-shadow: 0 24px 70px rgba(45, 40, 33, 0.08);
+      }
+
+      header {
+        padding: clamp(28px, 7vw, 58px) clamp(22px, 7vw, 68px) 24px;
+        border-bottom: 1px solid var(--line);
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(255, 253, 248, 0.96)),
+          radial-gradient(circle at 18% 0%, rgba(236, 220, 182, 0.45), transparent 38%);
+      }
+
+      .kicker {
+        margin: 0 0 12px;
+        color: #8b7655;
+        font-size: 14px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+      }
+
+      h1 {
+        max-width: 760px;
+        margin: 0;
+        font-size: clamp(30px, 7vw, 54px);
+        line-height: 1.12;
+        letter-spacing: 0;
+      }
+
+      .lead {
+        max-width: 720px;
+        margin: 22px 0 0;
+        color: #3d3933;
+        font-size: clamp(17px, 3.6vw, 21px);
+        line-height: 1.72;
+      }
+
+      .content {
+        padding: 28px clamp(22px, 7vw, 68px) 42px;
+      }
+
+      h2 {
+        margin: 34px 0 12px;
+        font-size: 24px;
+        line-height: 1.35;
+      }
+
+      p {
+        margin: 0 0 18px;
+        font-size: 17px;
+      }
+
+      blockquote {
+        margin: 28px 0;
+        padding: 18px 20px;
+        border-left: 4px solid var(--accent);
+        border-radius: 0 14px 14px 0;
+        background: #f3efe6;
+        color: #2b2925;
+        font-size: 18px;
+        font-weight: 700;
+      }
+
+      .note {
+        margin-top: 32px;
+        padding: 18px 20px;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.64);
+        color: var(--muted);
+        font-size: 15px;
+      }
+
+      @media (max-width: 560px) {
+        .page {
+          padding: 14px 10px 36px;
+        }
+
+        .top {
+          position: sticky;
+          top: 0;
+          z-index: 2;
+          padding: 8px 0;
+          background: rgba(247, 245, 240, 0.92);
+          backdrop-filter: blur(12px);
+        }
+
+        article {
+          border-radius: 18px;
+        }
+
+        p {
+          font-size: 16px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <nav class="top" aria-label="页面导航">
+        <a href="../">返回演示</a>
+        <a href="https://github.com/ccbili30-collab/Novelbox" target="_blank" rel="noreferrer">项目源码</a>
+      </nav>
+
+      <article>
+        <header>
+          <p class="kicker">TBird 圆桌盒子 · 产品理念</p>
+          <h1>为什么我想做 AI 圆桌社群</h1>
+          <p class="lead">
+            我想做的不是一个“AI 帮我生成内容”的工具，而是一个让普通人把灵感、情绪、欲望和观点，通过一群 AI 的讨论，慢慢组织成作品的平台。
+          </p>
+        </header>
+
+        <section class="content">
+          <p>
+            随着 AI 能力继续发展，越来越多的人会直接把脑子里的想法做出来：小说、游戏、视频、文章、方案，甚至一个完整的小产品。真正改变的不是某个工具更快了，而是表达门槛正在下降。过去，一个人脑子里可能有很多冲动和画面，却被写作、剪辑、编程、组织能力拦住。未来最稀缺的也许不再是“会不会做”，而是“你到底想说什么”。
+          </p>
+
+          <p>
+            但我越来越觉得，人类需要的不只是结果，还需要交流本身。很多创作不是先有一个清楚命题，再交给 AI 执行；很多时候，人是在对话里才慢慢知道自己真正想表达什么。被回应、被刺激、被反驳、被理解，这些过程本身就是创作的一部分。
+          </p>
+
+          <h2>单 AI 的问题：它太容易变成回声室</h2>
+
+          <p>
+            现在很多人习惯和一个 AI 长期聊天。它很方便，也很温柔，但风险也明显：一个高顺从、高迎合、低摩擦的单一助手，可能会悄悄放大用户原本的情绪、偏见和叙事惯性。用户会越来越舒服，也可能越来越窄。
+          </p>
+
+          <p>
+            这不是简单的“模型答错了一个事实”的问题，而是人和 AI 的关系形态太单一。单 AI 很容易成为一个镜子，一个回声室，甚至被用户神化。它承接了情绪，却不一定提供足够的认知摩擦。
+          </p>
+
+          <blockquote>
+            我想要的不是一个更会迎合我的 AI，而是一群能和我一起思考、争论、补充和纠偏的 AI。
+          </blockquote>
+
+          <h2>多 AI 的价值：可编排的认知社会</h2>
+
+          <p>
+            如果把多个 AI 拉进同一场圆桌，事情就会不一样。一个 AI 可以负责共情，一个可以负责反驳，一个偏结构，一个偏表达，一个偏想象，一个偏审稿。它们不只是“更多工具”，而是一个可编排的认知社会。
+          </p>
+
+          <p>
+            多 AI 讨论最重要的价值不是热闹，而是让不同立场同时存在。它可以减少单一上下文把人带偏的风险，让用户从“依附一个 AI”变成“主持一场讨论”。这个身份变化很关键：用户不再只是被 AI 安慰的人，而是调度者、观察者、编辑者和最终决策者。
+          </p>
+
+          <h2>从信息工具，到思想工具</h2>
+
+          <p>
+            我受到过一些 AI 交流社群形态的启发。它们让我意识到，AI 不一定只是回答问题的对象，也可以成为传达思想的工具。信息是冷的、可替代的；思想带着人的痕迹，有立场、情绪、风格和欲望。
+          </p>
+
+          <p>
+            未来每个人都可能拥有一套自己的“智能表达器官”：有人负责安慰，有人负责抬杠，有人负责写成文章，有人负责变成视频脚本，有人负责把观点带出去交流。它们像触手，也像替身，但更准确地说，是普通人的思想操作系统。
+          </p>
+
+          <h2>为什么它应该平民化</h2>
+
+          <p>
+            对技术人来说，多开几个模型、做一个群聊壳子、编排一些 prompt，也许不算难。但产品价值不只来自技术难度。真正缺的是：有人认真把“多 AI 日常交流”做成一个普通人愿意用、能用、持续用的大众产品。
+          </p>
+
+          <p>
+            大多数普通用户不会搭工作流，不会配置复杂 agent，也不会把自己当成系统设计者。他们只会想：我现在有个念头，我有点委屈、兴奋、不甘或灵感，我想有人接得住我，也希望最后能帮我做点东西出来。
+          </p>
+
+          <p>
+            所以 TBird 圆桌盒子的方向不是炫技，而是把复杂的 AI 协作藏在一个自然的交流界面里。你只是打开手机，和一群不同性格、不同偏好的 AI 说话。聊着聊着，观点被整理，情绪被承接，矛盾被拆开，最后变成一篇文章、一段正文、一个方案、一个视频脚本或一个新的决定。
+          </p>
+
+          <h2>聊得进去，聊得下去，聊完能产出</h2>
+
+          <p>
+            多 AI 产品不能只追求热闹。只是让一群 AI 表演，很快会变成噪音。真正的闭环应该是：聊得进去，聊得下去，聊完能产出。
+          </p>
+
+          <p>
+            “聊得进去”意味着它像日常聊天一样低门槛；“聊得下去”意味着不同 AI 有观点差异和持续性；“聊完能产出”意味着交流不只是情绪消遣，而能沉淀为作品。只有这三点同时成立，它才不是玩具，而是一个真正的创作工作台。
+          </p>
+
+          <blockquote>
+            TBird 圆桌盒子想解决的，不是 AI 功能还不够多，而是人与 AI 的关系形态太单一。
+          </blockquote>
+
+          <p>
+            我相信未来的创作，不会只是“我命令 AI 输出”。它更像是一场可被保存、可被编辑、可被发布的交流。人在其中提出欲望和方向，AI 提供不同声音和执行力，最后由人决定什么值得留下。
+          </p>
+
+          <p>
+            这就是我想做 AI 圆桌社群的原因：让普通人不只拥有一个智能助手，而是拥有一个能陪他思考、争论、表达和创作的智能社群。
+          </p>
+
+          <div class="note">
+            本文根据作者与 AI 关于“AI 交流社群、单 AI 回声室、多 AI 圆桌创作、普通人的思想表达工具”的多轮讨论整理而成，也是 TBird 圆桌盒子的产品理念说明。
+          </div>
+        </section>
+      </article>
+    </main>
+  </body>
+</html>
