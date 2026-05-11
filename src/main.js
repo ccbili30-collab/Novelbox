@@ -253,7 +253,6 @@ let mentionPickerRange = null;
 let assistantActivating = false;
 let modelPickerOpen = false;
 let assistantModelPickerOpen = false;
-let streamShouldFollow = true;
 let toastTimer = null;
 let toastMotionTimer = null;
 let paperScrollPersistTimer = null;
@@ -267,6 +266,7 @@ const paperDrag = {
 };
 const bridgeCallbacks = new Map();
 const bridgeStreamCallbacks = new Map();
+const streamDomTimers = new Map();
 const panelManager = createPanelManager(els, {
   onShow: (name) => {
     els.body.dataset.activePanel = name;
@@ -639,6 +639,29 @@ function renderRoundtableRichText(text) {
   return html;
 }
 
+function cssEscape(value) {
+  return window.CSS?.escape ? CSS.escape(String(value)) : String(value).replace(/["\\]/g, "\\$&");
+}
+
+function scheduleStreamDomUpdate(key, callback, delay = 120) {
+  const existing = streamDomTimers.get(key);
+  if (existing) return;
+  const timer = window.setTimeout(() => {
+    streamDomTimers.delete(key);
+    callback();
+  }, delay);
+  streamDomTimers.set(key, timer);
+}
+
+function cancelStreamDomUpdate(key = null) {
+  const keys = key ? [key] : Array.from(streamDomTimers.keys());
+  keys.forEach((item) => {
+    const timer = streamDomTimers.get(item);
+    if (timer) window.clearTimeout(timer);
+    streamDomTimers.delete(item);
+  });
+}
+
 function getNode(id, session = activeSession()) {
   return getSessionNode(session, id);
 }
@@ -810,8 +833,9 @@ function shouldFollowBottom() {
   return els.messages.scrollHeight - els.messages.scrollTop - els.messages.clientHeight < 90;
 }
 
-function scrollBottom() {
+function scrollBottom(force = false) {
   requestAnimationFrame(() => {
+    if (!force && !shouldFollowBottom()) return;
     els.messages.scrollTop = els.messages.scrollHeight;
   });
 }
@@ -1977,7 +2001,6 @@ async function generateIntoAssistant(nodeId, userText, versionId, continueMode =
   abortController = new AbortController();
   streamRequestId = null;
   generatingNodeId = nodeId;
-  streamShouldFollow = shouldFollowBottom();
   activeMenuNodeId = nodeId;
   setAssistantVersionContent(node, version, "");
   version.usage = null;
@@ -1990,7 +2013,6 @@ async function generateIntoAssistant(nodeId, userText, versionId, continueMode =
   const contextCompression = getAutoContextCompressedInfo(continueMode ? CONTINUE_PROMPT : userText);
   if (contextCompression.compressed) showToast("上下文过长，已自动使用小说资料压缩续写");
   render();
-  scrollBottom();
   try {
     const result = sessionSettings().stream
       ? await callOpenAIStream((partial) => {
@@ -1998,6 +2020,7 @@ async function generateIntoAssistant(nodeId, userText, versionId, continueMode =
           renderStreamingNode(nodeId, versionId);
         }, nodeId, continueMode)
       : await callOpenAI(nodeId, continueMode);
+    cancelStreamDomUpdate(`main:${nodeId}`);
     setAssistantVersionContent(node, version, result.content);
     version.usage = result.usage || null;
     version.createdAt = Date.now();
@@ -2014,9 +2037,8 @@ async function generateIntoAssistant(nodeId, userText, versionId, continueMode =
     bridgeRequestId = null;
     streamRequestId = null;
     generatingNodeId = null;
-    streamShouldFollow = false;
+    cancelStreamDomUpdate(`main:${nodeId}`);
     render();
-    if (shouldFollowBottom()) scrollBottom();
   }
 }
 
@@ -2030,11 +2052,12 @@ function renderStreamingNode(nodeId, versionId) {
   }
   const contentElement = card.querySelector(".message-content");
   if (!contentElement) return render();
-  contentElement.textContent = version.content || "";
-  if (!card.querySelector(".stream-caret")) {
-    contentElement.insertAdjacentHTML("afterend", '<span class="stream-caret"></span>');
-  }
-  if (streamShouldFollow && shouldFollowBottom()) scrollBottom();
+  scheduleStreamDomUpdate(`main:${nodeId}`, () => {
+    contentElement.textContent = version.content || "";
+    if (!card.querySelector(".stream-caret")) {
+      contentElement.insertAdjacentHTML("afterend", '<span class="stream-caret"></span>');
+    }
+  });
 }
 
 function stopGeneration() {
@@ -2049,7 +2072,7 @@ function stopGeneration() {
   bridgeRequestId = null;
   streamRequestId = null;
   generatingNodeId = null;
-  streamShouldFollow = false;
+  cancelStreamDomUpdate();
   showToast("已停止生成");
   render();
 }
@@ -3065,7 +3088,6 @@ function addRoundtableMessage(speakerId, speakerName, content, extra = {}) {
   if (speakerId === "writer" && shouldFollowPaper) {
     scrollRoundtablePaperBottom();
   }
-  scrollRoundtableBottom();
   return message;
 }
 
@@ -3089,7 +3111,18 @@ function updateRoundtableMessageContent(message, content) {
   message.createdAt ||= Date.now();
   touchSession(activeSession());
   render();
-  scrollRoundtableBottom();
+}
+
+function renderStreamingRoundtableMessage(message) {
+  if (!message) return;
+  const selector = `[data-round-id="${cssEscape(message.id)}"]`;
+  const target = message.speakerId === "writer"
+    ? els.roundtableDiscussion?.querySelector(`${selector} .roundtable-writer-snippet`)
+    : els.roundtableDiscussion?.querySelector(`.roundtable-speech${selector}`);
+  if (!target) return;
+  scheduleStreamDomUpdate(`round:${message.id}`, () => {
+    target.innerHTML = `${renderRoundtableRichText(message.content || "")}<span class="stream-caret"></span>`;
+  });
 }
 
 async function streamAssistantRoundtableReply(assistant, instruction, extra = {}) {
@@ -3099,8 +3132,10 @@ async function streamAssistantRoundtableReply(assistant, instruction, extra = {}
   });
   const text = await callRoundtableAssistant(assistant, instruction, (partial) => {
     message.streaming = true;
-    updateRoundtableMessageContent(message, partial);
+    message.content = clean(partial);
+    renderStreamingRoundtableMessage(message);
   });
+  cancelStreamDomUpdate(`round:${message.id}`);
   message.streaming = false;
   updateRoundtableMessageContent(message, text);
   await rememberActivatedAssistantTurn(assistant, text, instruction);
@@ -3437,8 +3472,10 @@ async function regenerateRoundtableMessage(id) {
     message.streaming = Boolean(sessionSettings().stream);
     const text = await callRoundtableAssistant(assistant, `请重新回答你上一条圆桌聊天发言。不要写小说正文。上一条内容是：\n${message.content}`, (partial) => {
       message.streaming = true;
-      updateRoundtableMessageContent(message, partial);
+      message.content = clean(partial);
+      renderStreamingRoundtableMessage(message);
     });
+    cancelStreamDomUpdate(`round:${message.id}`);
     message.streaming = false;
     message.content = clean(text);
     message.createdAt = Date.now();
@@ -3453,14 +3490,6 @@ async function regenerateRoundtableMessage(id) {
     render();
     persistState(state);
   }
-}
-
-function scrollRoundtableBottom() {
-  requestAnimationFrame(() => {
-    if (els.roundtableWorkspace) {
-      els.roundtableWorkspace.scrollTop = els.roundtableWorkspace.scrollHeight;
-    }
-  });
 }
 
 function scrollRoundtablePaperBottom(options = {}) {
@@ -3685,8 +3714,10 @@ async function generateRoundtableWriter(userText) {
     });
     const text = await callRoundtableAssistant(writer, userText || "请根据圆桌讨论继续写正文。", (partial) => {
       message.streaming = true;
-      updateRoundtableMessageContent(message, partial);
+      message.content = clean(partial);
+      renderStreamingRoundtableMessage(message);
     });
+    cancelStreamDomUpdate(`round:${message.id}`);
     if (roundtableShouldStop) return;
     message.streaming = false;
     updateRoundtableMessageContent(message, text);

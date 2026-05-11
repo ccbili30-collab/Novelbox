@@ -914,15 +914,9 @@
   width: 8px;
   height: 1.1em;
   margin-left: 2px;
+  opacity: 0.45;
   vertical-align: -0.18em;
   background: #222;
-  animation: blink 0.9s steps(2, start) infinite;
-}
-
-@keyframes blink {
-  50% {
-    opacity: 0;
-  }
 }
 
 @media (min-width: 821px) {
