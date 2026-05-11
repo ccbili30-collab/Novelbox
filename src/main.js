@@ -589,13 +589,21 @@ function parseRoundtableMentions(text, options = {}) {
 function moveRoundtableMentionsAfter(progress, currentIndex, text) {
   if (!progress?.ids?.length) return [];
   const ids = progress.ids;
-  const completed = new Set(ids.slice(0, currentIndex + 1));
+  const currentSpeakerId = ids[currentIndex];
   const moved = [];
+  const queued = new Set();
+  let insertAt = currentIndex + 1;
   parseRoundtableMentions(text, { allowWriter: false }).forEach((assistant) => {
+    if (assistant.id === currentSpeakerId || queued.has(assistant.id)) return;
+    queued.add(assistant.id);
     const from = ids.indexOf(assistant.id);
-    if (from <= currentIndex || completed.has(assistant.id)) return;
-    const [id] = ids.splice(from, 1);
-    ids.splice(currentIndex + 1 + moved.length, 0, id);
+    if (from > currentIndex) {
+      const [id] = ids.splice(from, 1);
+      ids.splice(insertAt, 0, id);
+    } else {
+      ids.splice(insertAt, 0, assistant.id);
+    }
+    insertAt += 1;
     moved.push(assistant);
   });
   return moved;
@@ -3640,7 +3648,7 @@ async function runRoundtableProgress() {
         if (roundtableShouldStop) break;
         const moved = moveRoundtableMentionsAfter(progress, index, text);
         if (moved.length) {
-          showToast(`${moved.map((item) => item.name).join("、")}已插队到下一位`);
+          showToast(`${moved.map((item) => item.name).join("、")}已加入后续发言`);
         }
       } catch (error) {
         if (error.name === "AbortError" || roundtableShouldStop) break;

@@ -176,7 +176,7 @@
 }
 
 .roundtable-mode .composer-bottom {
-  grid-template-columns: minmax(56px, auto) var(--tool-button-size) minmax(46px, auto) minmax(0, 1fr) minmax(52px, auto) var(--send-button-size);
+  grid-template-columns: minmax(56px, auto) var(--tool-button-size) minmax(46px, auto) minmax(52px, auto) var(--send-button-size);
   gap: 5px;
 }
 
@@ -327,6 +327,11 @@
 
 .roundtable-mode .context-badge {
   max-width: 64px;
+}
+
+.roundtable-mode #modelSelect,
+.roundtable-mode .model-select-button {
+  display: none;
 }
 
 .roundtable-context-button,

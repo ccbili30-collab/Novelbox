@@ -47,7 +47,9 @@ Roundtable mention rules:
 - unselected council members are treated as unavailable for @ and should not be triggered by user or assistant messages
 - typing `@` in the roundtable composer opens a WeChat-like member picker instead of relying on manual name matching
 - AI mentions reorder the current round instead of triggering immediate extra replies: if the order is A/B/C and A mentions C, the remaining order becomes C/B
+- AI mentions can also enqueue members beyond the original round. If A mentions already-spoken B and C, B and C are inserted after A in mention order.
 - non-writer members must chat, critique, approve, question, or argue; they must not write prose or output novel-ready paragraphs
+- the global composer model selector is hidden in roundtable mode because roundtable members use their own model settings
 
 Streaming output:
 
