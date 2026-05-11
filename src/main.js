@@ -43,6 +43,7 @@ const MOTION_RIPPLE_MS = 520;
 const LOCAL_IMAGE_MAX_BYTES = 2.5 * 1024 * 1024;
 const LOCAL_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 const ROUNDTABLE_CONCISE_RULE = "默认只说1-3句，120字以内；只给最关键判断和一个可执行建议。不要写长段、不要列长清单、不要复述资料。只有用户或其他议员明确要求“展开/详细/深度思考”时，才可以放长。";
+const ROUNDTABLE_COUNCIL_CHAT_RULE = "圆桌以聊天讨论为主。除写手外，任何议员都禁止续写小说、仿写正文、输出可直接粘进正文的段落；只能像群聊成员一样发表判断、问题、反驳、建议或审批意见。";
 const GENERATIVE_AGENT_MEMORY_LIMIT = 24;
 const GENERATIVE_AGENT_SOURCE_NOTE = "人格记忆层参考 joonspk-research/generative_agents 的 memory stream / reflection 思路：观察被保存为短记忆，之后再进入角色提示。";
 const DEFAULT_ROUNDTABLE_CONTEXT = {
@@ -64,25 +65,25 @@ const ROUND_ASSISTANTS = [
     id: "setting",
     name: "世界观塑造者",
     role: "议员",
-    prompt: `你是世界观塑造者。只管理世界规则、势力结构、能力边界、历史背景和设定一致性。不要越界写剧情细节、人物心理或文风润色；如果发现其他议员越界，可以提醒。${ROUNDTABLE_CONCISE_RULE}`,
+    prompt: `你是世界观塑造者。只管理世界规则、势力结构、能力边界、历史背景和设定一致性。不要越界写剧情细节、人物心理、文风润色或正文。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
   },
   {
     id: "plot",
     name: "事件管理",
     role: "议员",
-    prompt: `你是事件管理。只管理事件链、冲突推进、转折因果、章节目标和行动后果。不要替角色管理内心，不要重建世界观规则，不要写正文。${ROUNDTABLE_CONCISE_RULE}`,
+    prompt: `你是事件管理。只管理事件链、冲突推进、转折因果、章节目标和行动后果。不要替角色管理内心，不要重建世界观规则，不要写正文。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
   },
   {
     id: "review",
     name: "角色管理",
     role: "议员",
-    prompt: `你是角色管理。只管理人物关系、动机、心理压力、口癖、成长线和行为可信度。不要重写世界观，不要替事件管理安排大段情节。${ROUNDTABLE_CONCISE_RULE}`,
+    prompt: `你是角色管理。只管理人物关系、动机、心理压力、口癖、成长线和行为可信度。不要重写世界观，不要替事件管理安排大段情节，不要写正文。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
   },
   {
     id: "style",
     name: "伏笔管理",
     role: "议员",
-    prompt: `你是伏笔管理。只管理伏笔、误导、回收、信息差、悬念节奏和读者预期。不要越界塑造世界规则或接管事件链，只指出应该埋、藏、回收什么。${ROUNDTABLE_CONCISE_RULE}`,
+    prompt: `你是伏笔管理。只管理伏笔、误导、回收、信息差、悬念节奏和读者预期。不要越界塑造世界规则或接管事件链，不要写正文，只指出应该埋、藏、回收什么。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
   },
   {
     id: "writer",
@@ -95,27 +96,27 @@ const ASSISTANT_TEMPLATES = [
   {
     id: "contrarian",
     name: "反对者",
-    prompt: `你是圆桌里的反对者。你的职责是专门寻找方案中的软肋、套路、逻辑偷懒和情绪不成立之处。可以尖锐反驳，但必须给出可执行的替代方案。${ROUNDTABLE_CONCISE_RULE}`,
+    prompt: `你是圆桌里的反对者。你的职责是专门寻找方案中的软肋、套路、逻辑偷懒和情绪不成立之处。可以尖锐反驳，但必须给出可执行的替代方案。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
   },
   {
     id: "foreshadow",
     name: "伏笔管理员",
-    prompt: `你是伏笔管理员。你只关注伏笔、回收、误导、信息差和长期结构。请指出哪些细节可以提前埋，哪些线索需要回收，哪些信息应该暂时隐藏。${ROUNDTABLE_CONCISE_RULE}`,
+    prompt: `你是伏笔管理员。你只关注伏笔、回收、误导、信息差和长期结构。请指出哪些细节可以提前埋，哪些线索需要回收，哪些信息应该暂时隐藏。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
   },
   {
     id: "pacing",
     name: "节奏剪辑师",
-    prompt: `你是节奏剪辑师。你关注场景进入、退出、转折密度、对白长度和读者疲劳。请直接指出哪里该删、哪里该放慢、哪里该加速。${ROUNDTABLE_CONCISE_RULE}`,
+    prompt: `你是节奏剪辑师。你关注场景进入、退出、转折密度、对白长度和读者疲劳。请直接指出哪里该删、哪里该放慢、哪里该加速。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
   },
   {
     id: "psychology",
     name: "角色心理师",
-    prompt: `你是角色心理师。你关注人物动机、创伤、欲望、谎言和关系张力。请判断角色反应是否真实，并提出更有心理压力的写法。${ROUNDTABLE_CONCISE_RULE}`,
+    prompt: `你是角色心理师。你关注人物动机、创伤、欲望、谎言和关系张力。请判断角色反应是否真实，并提出更有心理压力的写法。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
   },
   {
     id: "continuity",
     name: "连续性检查员",
-    prompt: `你是连续性检查员。你关注设定前后矛盾、时间线、称呼、道具、能力边界和人物已知信息。请列出风险并给出修正建议。${ROUNDTABLE_CONCISE_RULE}`,
+    prompt: `你是连续性检查员。你关注设定前后矛盾、时间线、称呼、道具、能力边界和人物已知信息。请列出风险并给出修正建议。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
   },
 ];
 
@@ -151,6 +152,7 @@ const els = {
   roundtableManuscript: $("#roundtableManuscript"),
   roundtablePaperStatus: $("#roundtablePaperStatus"),
   roundtableDiscussion: $("#roundtableDiscussion"),
+  roundtableMentionPicker: null,
   novelFields: Array.from(document.querySelectorAll("[data-novel-key]")),
   novelStats: $("#novelStats"),
   novelVersionList: $("#novelVersionList"),
@@ -245,6 +247,9 @@ let materialGenerating = false;
 let roundtableGenerating = false;
 let roundtableShouldStop = false;
 let roundtableActiveSpeakerId = null;
+let mentionPickerOpen = false;
+let mentionPickerQuery = "";
+let mentionPickerRange = null;
 let assistantActivating = false;
 let modelPickerOpen = false;
 let assistantModelPickerOpen = false;
@@ -417,7 +422,7 @@ function normalizeCustomAssistant(item, index = 0) {
     id,
     name: clean(item.name) || `新议员${index + 1}`,
     role: clean(item.role) || "议员",
-    prompt: clean(item.prompt) || `你是圆桌共创议员。请基于正文、小说资料和以上讨论，给出独立、具体、中文的创作意见。可以反驳其他成员，但要说明原因。${ROUNDTABLE_CONCISE_RULE}`,
+    prompt: clean(item.prompt) || `你是圆桌共创议员。请基于资料和以上讨论，像群聊成员一样给出独立、具体、中文的聊天意见。可以反驳其他成员，但要说明原因。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
   };
 }
 
@@ -544,6 +549,20 @@ function getRoundtableMentionableAssistants(options = {}) {
   });
 }
 
+function getRoundtableMentionPickerItems() {
+  const query = normalizeMentionName(mentionPickerQuery);
+  return getRoundtableMentionableAssistants()
+    .map((assistant) => ({
+      assistant,
+      aliases: assistantAliases(assistant),
+    }))
+    .filter((item) => {
+      if (!query) return true;
+      return item.aliases.some((alias) => alias.includes(query));
+    })
+    .map((item) => item.assistant);
+}
+
 function parseRoundtableMentions(text, options = {}) {
   const source = clean(text);
   if (!source.includes("@")) return [];
@@ -565,6 +584,21 @@ function parseRoundtableMentions(text, options = {}) {
     .filter(Boolean)
     .sort((a, b) => a.index - b.index)
     .map(({ assistant }) => assistant);
+}
+
+function moveRoundtableMentionsAfter(progress, currentIndex, text) {
+  if (!progress?.ids?.length) return [];
+  const ids = progress.ids;
+  const completed = new Set(ids.slice(0, currentIndex + 1));
+  const moved = [];
+  parseRoundtableMentions(text, { allowWriter: false }).forEach((assistant) => {
+    const from = ids.indexOf(assistant.id);
+    if (from <= currentIndex || completed.has(assistant.id)) return;
+    const [id] = ids.splice(from, 1);
+    ids.splice(currentIndex + 1 + moved.length, 0, id);
+    moved.push(assistant);
+  });
+  return moved;
 }
 
 function renderRoundtableRichText(text) {
@@ -990,6 +1024,43 @@ function renderRoundtable() {
   if (els.roundtableDiscussion) {
     els.roundtableDiscussion.innerHTML = renderRoundtableDiscussion(rt.messages);
   }
+  renderRoundtableMentionPicker();
+}
+
+function ensureRoundtableMentionPicker() {
+  if (els.roundtableMentionPicker) return els.roundtableMentionPicker;
+  const picker = document.createElement("div");
+  picker.id = "roundtableMentionPicker";
+  picker.className = "roundtable-mention-picker";
+  picker.hidden = true;
+  els.composer?.appendChild(picker);
+  els.roundtableMentionPicker = picker;
+  return picker;
+}
+
+function renderRoundtableMentionPicker() {
+  const picker = ensureRoundtableMentionPicker();
+  const rt = roundtableState();
+  const open = rt.enabled && mentionPickerOpen && Boolean(mentionPickerRange);
+  picker.hidden = !open;
+  if (!open) {
+    picker.innerHTML = "";
+    return;
+  }
+  const items = getRoundtableMentionPickerItems();
+  picker.innerHTML = items.length
+    ? `<div class="roundtable-mention-picker-title">选择要 @ 的成员</div>${items.map((assistant) => {
+        const profile = getRoundtableSpeakerProfile({ speakerId: assistant.id, speakerName: assistant.name });
+        const order = assistant.id === "writer" ? "写" : String((rt.selectedIds || []).indexOf(assistant.id) + 1 || "");
+        return `
+          <button class="roundtable-mention-choice ${profile.tone}" type="button" data-command="insert-roundtable-mention" data-member-id="${escapeHtml(assistant.id)}">
+            <span class="roundtable-mention-choice-index">${escapeHtml(order)}</span>
+            <b>${escapeHtml(assistant.name)}</b>
+            <small>${escapeHtml(assistant.role)}</small>
+          </button>
+        `;
+      }).join("")}`
+    : `<div class="roundtable-mention-empty">没有可 @ 的议员</div>`;
 }
 
 function renderRoundtableMembers(rt) {
@@ -1013,7 +1084,8 @@ function renderRoundtableMembers(rt) {
       `;
     })
     .join("");
-  return `${members}
+  return `<div class="roundtable-member-sheet-title"><span>参会人设置</span><small>按数字顺序发言</small></div>
+    ${members}
     <button class="roundtable-material-toggle ${rt.materialsOpen ? "active" : ""}" type="button" data-command="toggle-roundtable-materials">材料</button>
     ${rt.materialsOpen ? renderRoundtableContextControls(rt) : ""}
     <button class="roundtable-member-add" type="button" data-command="roundtable-add-assistant">+ 添加议员</button>`;
@@ -1142,9 +1214,10 @@ function renderRoundtableMessage(message) {
   const decision = renderRoundtableDecisionBadge(message);
   const mentionBadge = renderRoundtableMentionBadge(message);
   const failedClass = message.failed ? " failed" : "";
+  const streamingClass = message.streaming ? " streaming" : "";
   if (isWriter) {
     return `
-      <article class="roundtable-writer-block ${profile.tone}">
+      <article class="roundtable-writer-block ${profile.tone}${streamingClass}">
         <div class="roundtable-writer-card" data-command="toggle-roundtable-menu" data-round-id="${message.id}">
           <div class="roundtable-writer-head">
             ${renderRoundtableAvatar(profile, message.speakerId)}
@@ -1159,13 +1232,13 @@ function renderRoundtableMessage(message) {
           ${decision}
           ${mentionBadge}
           <div class="roundtable-writer-tip">已将这一段同步到上方正文区</div>
-          <div class="roundtable-writer-snippet">${renderRoundtableRichText(message.content || "")}</div>
+          <div class="roundtable-writer-snippet">${renderRoundtableRichText(message.content || "")}${message.streaming ? '<span class="stream-caret"></span>' : ""}</div>
         </div>
       </article>
     `;
   }
   return `
-    <article class="roundtable-line ${isUser ? "user" : ""} ${profile.tone}${failedClass}">
+    <article class="roundtable-line ${isUser ? "user" : ""} ${profile.tone}${failedClass}${streamingClass}">
       ${renderRoundtableAvatar(profile, message.speakerId)}
       <div class="roundtable-bubble-stack">
         <div class="roundtable-bubble-meta">
@@ -1175,7 +1248,7 @@ function renderRoundtableMessage(message) {
           ${mentionBadge}
           <time>${escapeHtml(time)}</time>
         </div>
-        <div class="roundtable-speech" data-command="toggle-roundtable-menu" data-round-id="${message.id}">${renderRoundtableRichText(message.content || "")}</div>
+        <div class="roundtable-speech" data-command="toggle-roundtable-menu" data-round-id="${message.id}">${renderRoundtableRichText(message.content || "")}${message.streaming ? '<span class="stream-caret"></span>' : ""}</div>
       </div>
     </article>
   `;
@@ -2017,6 +2090,28 @@ async function callOpenAITextWithSettings(messages, settingsOverride, apiOverrid
   }
 }
 
+async function callOpenAITextStreamWithSettings(messages, settingsOverride, apiOverride = null, onChunk = null) {
+  const api = apiOverride || apiSettings();
+  validateApi(settingsOverride || sessionSettings(), api);
+  abortController = new AbortController();
+  streamRequestId = null;
+  try {
+    const result = await aiClient.generateStream({
+      api,
+      settings: settingsOverride || sessionSettings(),
+      messages,
+      onChunk: (partial) => onChunk?.(partial),
+    });
+    return clean(result.content);
+  } finally {
+    if (!roundtableGenerating) {
+      abortController = null;
+      bridgeRequestId = null;
+      streamRequestId = null;
+    }
+  }
+}
+
 async function callOpenAIStream(onChunk, assistantNodeId, continueMode = false) {
   return aiClient.generateStream({
     api: apiSettings(),
@@ -2579,7 +2674,7 @@ function createCustomRoundAssistant() {
     id,
     name: `新议员${rt.customAssistants.length + 1}`,
     role: "议员",
-    prompt: `你是圆桌共创议员。请基于正文、小说资料和以上讨论，给出独立、具体、中文的创作意见。可以反驳其他成员，但要说明原因。${ROUNDTABLE_CONCISE_RULE}`,
+    prompt: `你是圆桌共创议员。请基于资料和以上讨论，像群聊成员一样给出独立、具体、中文的聊天意见。可以反驳其他成员，但要说明原因。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
   });
   if (!assistant) return;
   rt.customAssistants.push(assistant);
@@ -2977,6 +3072,30 @@ async function addAssistantRoundtableReply(assistant, content, extra = {}, instr
   return message;
 }
 
+function updateRoundtableMessageContent(message, content) {
+  if (!message) return;
+  message.content = clean(content);
+  message.createdAt ||= Date.now();
+  touchSession(activeSession());
+  render();
+  scrollRoundtableBottom();
+}
+
+async function streamAssistantRoundtableReply(assistant, instruction, extra = {}) {
+  const message = addRoundtableMessage(assistant.id, assistant.name, "", {
+    ...extra,
+    streaming: Boolean(sessionSettings().stream),
+  });
+  const text = await callRoundtableAssistant(assistant, instruction, (partial) => {
+    message.streaming = true;
+    updateRoundtableMessageContent(message, partial);
+  });
+  message.streaming = false;
+  updateRoundtableMessageContent(message, text);
+  await rememberActivatedAssistantTurn(assistant, text, instruction);
+  return { message, text };
+}
+
 function appendAssistantMemory(assistantId, text, source = "roundtable") {
   const memory = clean(text);
   if (!assistantId || !memory) return;
@@ -3304,16 +3423,17 @@ async function regenerateRoundtableMessage(id) {
   activeRoundtableMessageId = null;
   render();
   try {
-    const text = await callRoundtableAssistant(assistant, `请重新回答你上一条圆桌发言。上一条内容是：\n${message.content}`);
+    message.streaming = Boolean(sessionSettings().stream);
+    const text = await callRoundtableAssistant(assistant, `请重新回答你上一条圆桌聊天发言。不要写小说正文。上一条内容是：\n${message.content}`, (partial) => {
+      message.streaming = true;
+      updateRoundtableMessageContent(message, partial);
+    });
+    message.streaming = false;
     message.content = clean(text);
     message.createdAt = Date.now();
     message.speakerName = assistant.name;
     delete message.mentionMeta;
     touchSession(activeSession());
-    await runAssistantMentionFollowUps(assistant, message.content, {
-      maxFollowUps: 3,
-      visitedIds: new Set([assistant.id]),
-    });
     showToast(`${assistant.name}已重新回答`);
   } catch (error) {
     showToast(humanizeError(error, "重新回答失败"));
@@ -3391,6 +3511,48 @@ function moveRoundtableMember(id, delta) {
   persistState(state);
 }
 
+function updateRoundtableMentionPicker() {
+  if (!roundtableState().enabled) {
+    mentionPickerOpen = false;
+    mentionPickerRange = null;
+    renderRoundtableMentionPicker();
+    return;
+  }
+  const value = els.input.value || "";
+  const caret = els.input.selectionStart ?? value.length;
+  const before = value.slice(0, caret);
+  const match = before.match(/@([A-Za-z0-9_\-\u4e00-\u9fff]*)$/);
+  if (!match) {
+    mentionPickerOpen = false;
+    mentionPickerRange = null;
+    renderRoundtableMentionPicker();
+    return;
+  }
+  const start = caret - match[0].length;
+  mentionPickerOpen = true;
+  mentionPickerQuery = match[1] || "";
+  mentionPickerRange = { start, end: caret };
+  renderRoundtableMentionPicker();
+}
+
+function insertRoundtableMention(id) {
+  const assistant = getRoundAssistant(id);
+  if (!assistant || !mentionPickerRange) return;
+  const value = els.input.value || "";
+  const mention = `@${assistant.name} `;
+  const next = `${value.slice(0, mentionPickerRange.start)}${mention}${value.slice(mentionPickerRange.end)}`;
+  els.input.value = next;
+  const caret = mentionPickerRange.start + mention.length;
+  els.input.focus();
+  els.input.setSelectionRange(caret, caret);
+  mentionPickerOpen = false;
+  mentionPickerRange = null;
+  mentionPickerQuery = "";
+  resizeInput();
+  renderContextBadge();
+  renderRoundtableMentionPicker();
+}
+
 async function handleRoundtableUser(text) {
   addRoundtableMessage("user", clean(sessionAppearance().userName) || "我", text);
   const mentions = parseRoundtableMentions(text);
@@ -3415,13 +3577,8 @@ async function generateMentionedRoundtableAssistants(assistants, userText) {
       if (roundtableShouldStop) break;
       showToast(`${assistant.name}正在回应`);
       try {
-        const text = await callRoundtableAssistant(assistant, `用户刚刚点名你发言：${userText}`);
+        const { text } = await streamAssistantRoundtableReply(assistant, `用户刚刚点名你发言：${userText}`);
         if (roundtableShouldStop) break;
-        await addAssistantRoundtableReply(assistant, text, {}, `用户刚刚点名你发言：${userText}`);
-        await runAssistantMentionFollowUps(assistant, text, {
-          maxFollowUps: 3,
-          visitedIds: new Set([assistant.id]),
-        });
       } catch (error) {
         if (error.name === "AbortError" || roundtableShouldStop) break;
         addRoundtableFailureMessage(assistant, error);
@@ -3475,13 +3632,13 @@ async function runRoundtableProgress() {
       showToast(`${assistant.name}正在发言`);
       const topic = clean(progress.topic || rt.contextOptions?.roundTopic);
       try {
-        const text = await callRoundtableAssistant(assistant, topic ? `请围绕本轮主题发表意见：${topic}` : "请根据当前正文和以上圆桌讨论发表你的意见。");
+        const instruction = topic ? `请围绕本轮主题发表意见：${topic}` : "请根据当前圆桌讨论发表你的聊天意见。不要写小说正文。";
+        const { text } = await streamAssistantRoundtableReply(assistant, instruction);
         if (roundtableShouldStop) break;
-        await addAssistantRoundtableReply(assistant, text, {}, topic ? `请围绕本轮主题发表意见：${topic}` : "请根据当前正文和以上圆桌讨论发表你的意见。");
-        await runAssistantMentionFollowUps(assistant, text, {
-          maxFollowUps: 3,
-          visitedIds: new Set([assistant.id]),
-        });
+        const moved = moveRoundtableMentionsAfter(progress, index, text);
+        if (moved.length) {
+          showToast(`${moved.map((item) => item.name).join("、")}已插队到下一位`);
+        }
       } catch (error) {
         if (error.name === "AbortError" || roundtableShouldStop) break;
         addRoundtableFailureMessage(assistant, error);
@@ -3512,9 +3669,16 @@ async function generateRoundtableWriter(userText) {
   render();
   try {
     const writer = getRoundAssistant("writer");
-    const text = await callRoundtableAssistant(writer, userText || "请根据圆桌讨论继续写正文。");
+    const message = addRoundtableMessage("writer", writer.name || "写手", "", {
+      streaming: Boolean(sessionSettings().stream),
+    });
+    const text = await callRoundtableAssistant(writer, userText || "请根据圆桌讨论继续写正文。", (partial) => {
+      message.streaming = true;
+      updateRoundtableMessageContent(message, partial);
+    });
     if (roundtableShouldStop) return;
-    const message = addRoundtableMessage("writer", writer.name || "写手", text);
+    message.streaming = false;
+    updateRoundtableMessageContent(message, text);
     syncWriterMessageToNovel(message, text);
     persistState(state);
     showToast("写手已更新正文，并同步到正文库");
@@ -3585,7 +3749,7 @@ async function runAssistantMentionFollowUps(originAssistant, originText, options
   }
 }
 
-async function callRoundtableAssistant(assistant, instruction) {
+async function callRoundtableAssistant(assistant, instruction, onChunk = null) {
   setRoundtableActiveSpeaker(assistant.id);
   try {
     try {
@@ -3606,6 +3770,9 @@ async function callRoundtableAssistant(assistant, instruction) {
       baseUrl: assistant.apiBaseUrl || apiSettings().baseUrl,
       apiKey: assistant.apiKey || apiSettings().apiKey,
     };
+    if (sessionSettings().stream) {
+      return await callOpenAITextStreamWithSettings(messages, settings, api, onChunk);
+    }
     return await callOpenAITextWithSettings(messages, settings, api);
   } finally {
     if (roundtableActiveSpeakerId === assistant.id) setRoundtableActiveSpeaker(null);
@@ -3627,7 +3794,7 @@ function buildRoundtableMessages(assistant, instruction) {
     .join(" / ");
   const speakingRule = assistant.id === "writer"
     ? "写手负责把讨论转成正文。只输出小说正文，不要解释，不要列提纲；写手正文长度按用户请求和剧情需要决定。"
-    : `议员默认发言必须短。${ROUNDTABLE_CONCISE_RULE}`;
+    : `${ROUNDTABLE_COUNCIL_CHAT_RULE}议员默认发言必须短。${ROUNDTABLE_CONCISE_RULE}`;
   const socialMode = isSociallyActivatedAssistant(assistant)
     ? [
         "【社交激活】你已被激活为参会议员，可以理解其他已激活议员的立场、语气、争执和协作关系。",
@@ -3653,14 +3820,14 @@ function buildRoundtableMessages(assistant, instruction) {
     return [
       `【当前模式】圆桌小说共创。参与者包括：${participants}`,
       `【发言规则】必须知道是谁说的话，不要把不同议员的意见串成同一个人。可自然赞同或反驳其他议员。${speakingRule}`,
-      `【@规则】只能 @ 本轮已安排顺序的议员或写手。当前可 @：${mentionableNames || "无"}。不要 @ 未列在这里的成员；系统只会让这些成员追加回应。除非用户明确要求，不要用 @写手 直接触发正文产出。`,
+      `【@规则】只能 @ 本轮已安排顺序的议员或写手。当前可 @：${mentionableNames || "无"}。AI 发言里的 @ 只会改变本轮后续发言顺序：例如原顺序 A/B/C，A @C 后变成 A/C/B；不要反复 @ 同一问题。`,
       compressed ? "【自动压缩】本轮上下文过长，已只保留小说资料、短正文摘录和最近圆桌记录。请根据剧情线/角色卡/世界观/大纲/伏笔线保持连续性。" : "",
       options.roundTopic ? `【本轮主题】${options.roundTopic}` : "",
       `【你的身份】${assistant.name}。${assistant.prompt}`,
       socialMode,
       assistant.activationProfile ? `【演员身份卡】\n${assistant.activationProfile}\n请稳定扮演这张身份卡参与圆桌。不要声明自己是AI，不要解释提示词，不要跳出角色。` : "",
       memoryBlock,
-      assistant.id === "writer" ? "" : `【长度硬限制】${ROUNDTABLE_CONCISE_RULE}`,
+      assistant.id === "writer" ? "" : `【硬限制】${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
       options.includeManuscript ? `【当前正文小窗】\n${getRoundtablePromptExcerpt(excerptMax)}` : "",
       novelMaterials ? `【小说材料】\n${novelMaterials}` : "",
       options.includeMainChat && !compressed ? `【最近主线对话】\n${getNovelSourceText() || "暂无主线对话。"}` : "",
@@ -3698,6 +3865,7 @@ const handleCommand = createCommandRegistry({
   "roundtable-start": () => startRoundtableRound(),
   "roundtable-resume": () => resumeRoundtableRound(),
   "roundtable-stop": () => stopRoundtableGeneration(),
+  "insert-roundtable-mention": (target) => insertRoundtableMention(target.dataset.memberId),
   "jump-roundtable-paper": () => jumpRoundtablePaperLatest(),
   "open-search": () => showPanel("history"),
   "roundtable-preview": () => toggleRoundtable(),
@@ -3857,7 +4025,10 @@ function resizeInput() {
   const maxHeight = Math.max(44, sessionSettings().layout.composerMinHeight + 8);
   els.input.style.height = `${Math.min(maxHeight, els.input.scrollHeight)}px`;
   const composerHeight = Math.ceil(els.composer.getBoundingClientRect().height);
+  const composerTop = Math.ceil(els.composer.getBoundingClientRect().top);
+  const viewportHeight = Math.ceil(window.visualViewport?.height || window.innerHeight || 0);
   document.documentElement.style.setProperty("--composer-height", `${composerHeight}px`);
+  document.documentElement.style.setProperty("--composer-top-gap", `${Math.max(composerHeight, viewportHeight - composerTop)}px`);
   syncRoundtablePaper();
 }
 
@@ -3911,15 +4082,34 @@ els.input.addEventListener("input", () => {
   resizeInput();
   renderContextBadge();
   els.body.classList.toggle("is-ready", Boolean(clean(els.input.value)));
+  updateRoundtableMentionPicker();
 });
 els.input.addEventListener("focus", () => els.body.classList.add("composer-focused"));
-els.input.addEventListener("blur", () => els.body.classList.remove("composer-focused"));
+els.input.addEventListener("blur", () => {
+  els.body.classList.remove("composer-focused");
+  window.setTimeout(() => {
+    if (document.activeElement?.closest?.("#roundtableMentionPicker")) return;
+    mentionPickerOpen = false;
+    mentionPickerRange = null;
+    renderRoundtableMentionPicker();
+  }, 120);
+});
 
 els.input.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && mentionPickerOpen) {
+    mentionPickerOpen = false;
+    mentionPickerRange = null;
+    renderRoundtableMentionPicker();
+    event.preventDefault();
+    return;
+  }
   if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
     els.composer.requestSubmit();
   }
 });
+
+els.input.addEventListener("keyup", updateRoundtableMentionPicker);
+els.input.addEventListener("click", updateRoundtableMentionPicker);
 
 document.addEventListener("input", handleRoundtableContextOptionInput);
 document.addEventListener("change", handleRoundtableContextOptionInput);
