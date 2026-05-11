@@ -57,6 +57,15 @@ body.has-session-background .roundtable-workspace {
   gap: 6px;
 }
 
+.source-link {
+  border: 1px solid rgba(36, 36, 36, 0.12);
+  color: #1f2933;
+  background: rgba(255, 255, 255, 0.72);
+  font-size: 14px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
 .icon-button,
 .round-button {
   display: inline-grid;

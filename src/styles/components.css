@@ -523,6 +523,12 @@ body.roundtable-busy .send-button {
   font-size: 13px;
 }
 
+.source-action {
+  display: inline-grid;
+  place-items: center;
+  text-decoration: none;
+}
+
 .roundtable-busy .mode-actions button[data-command="roundtable-start"] {
   color: #fff;
   border-color: #2f281e;
