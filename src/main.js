@@ -977,6 +977,9 @@ function render() {
 function renderRoundtable() {
   if (!els.roundtableWorkspace) return;
   const rt = roundtableState();
+  if (rt.enabled && els.roundtableMembersPanel && els.composer && els.roundtableMembersPanel.parentElement !== els.composer) {
+    els.composer.insertBefore(els.roundtableMembersPanel, els.composer.firstChild);
+  }
   els.roundtableWorkspace.hidden = !rt.enabled;
   els.messages.hidden = rt.enabled;
   if (rt.enabled) {
