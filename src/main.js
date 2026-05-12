@@ -18,12 +18,18 @@ import {
   DEFAULT_CUSTOM_ROUNDTABLE_ASSISTANT_PROMPT,
   DEFAULT_ROUNDTABLE_CONTEXT,
   DEFAULT_ROUNDTABLE_SELECTED_IDS,
+  GENERATIVE_AGENT_MEMORY_LIMIT,
   ROUNDTABLE_CONCISE_RULE,
-  ROUNDTABLE_COUNCIL_CHAT_RULE,
   ROUND_ASSISTANTS,
+  normalizeAssistantMemories,
   normalizeCustomAssistant,
   normalizeRoundtableContextOptions,
 } from "./domain/roundtable/roundtable-model.js";
+import {
+  buildRoundtableNovelMaterials as buildRoundtableNovelMaterialsFromDomain,
+  buildRoundtablePromptMessages,
+  isSociallyActivatedAssistant,
+} from "./domain/roundtable/roundtable-context-builder.js";
 import { createSession } from "./domain/session/session-model.js";
 import {
   getNode as getSessionNode,
@@ -54,7 +60,6 @@ const MOTION_RIPPLE_MS = 520;
 const LOCAL_IMAGE_MAX_BYTES = 2.5 * 1024 * 1024;
 const LOCAL_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 const WORKSPACE_FILE_LIMIT = 160;
-const GENERATIVE_AGENT_MEMORY_LIMIT = 24;
 const GENERATIVE_AGENT_SOURCE_NOTE = "人格记忆层参考 joonspk-research/generative_agents 的 memory stream / reflection 思路：观察被保存为短记忆，之后再进入角色提示。";
 
 const $ = (selector) => document.querySelector(selector);
@@ -418,24 +423,6 @@ function getRoundAssistantConfig(id) {
     inheritedApiKey: Boolean(assistant.inheritedApiKey),
     inheritedModel: Boolean(assistant.inheritedModel),
   };
-}
-
-function normalizeAssistantMemories(memories = []) {
-  return Array.isArray(memories)
-    ? memories
-      .filter((item) => item && typeof item === "object" && clean(item.text))
-      .map((item) => ({
-        id: clean(item.id) || uid("memory"),
-        text: clean(item.text),
-        createdAt: Number(item.createdAt) || Date.now(),
-        source: clean(item.source || "roundtable"),
-      }))
-      .slice(-GENERATIVE_AGENT_MEMORY_LIMIT)
-    : [];
-}
-
-function isSociallyActivatedAssistant(assistant) {
-  return assistant && assistant.id !== "writer" && Boolean(clean(assistant.activationProfile));
 }
 
 function normalizeMentionName(value) {
@@ -1330,22 +1317,7 @@ function getRoundtablePromptExcerpt(max = roundtableState().contextOptions.excer
 }
 
 function buildRoundtableNovelMaterials(options) {
-  if (options.includeNovel === false) return "";
-  const novel = sessionNovel();
-  const fields = [
-    ["includePlotline", "剧情线", novel.plotline],
-    ["includeCharacters", "角色卡", novel.characters],
-    ["includeWorld", "世界观", novel.world],
-    ["includeOutline", "大纲", novel.outline],
-    ["includeForeshadows", "伏笔线", novel.foreshadows],
-  ];
-  const selected = fields.filter(([key]) => options[key] !== false);
-  const parts = selected
-    .map(([, label, text]) => clean(text) ? `【${label}】\n${clean(text)}` : "")
-    .filter(Boolean);
-  if (parts.length) return parts.join("\n\n");
-  if (selected.length) return "已勾选小说材料，但当前对应内容为空。";
-  return "";
+  return buildRoundtableNovelMaterialsFromDomain(options, sessionNovel());
 }
 
 function roundtableDateKey(value) {
@@ -3942,62 +3914,21 @@ function buildRoundtableMessages(assistant, instruction) {
     ...rt.contextOptions,
     ...(assistant.contextOptions || {}),
   });
-  const mentionableAssistants = getRoundtableMentionableAssistants();
-  const participants = mentionableAssistants
-    .map((current) => `${current.name}：${current.role}`)
-    .join("；");
-  const mentionableNames = mentionableAssistants
-    .map((current) => `@${current.name}`)
-    .join(" / ");
-  const speakingRule = assistant.id === "writer"
-    ? "写手负责把讨论转成用户真正要的成品。若用户当前只是交流，就先参与交流或总结；若用户明确要求产出，就直接输出对应文本，不要多余解释。"
-    : `${ROUNDTABLE_COUNCIL_CHAT_RULE}议员默认发言必须短。${ROUNDTABLE_CONCISE_RULE}`;
-  const socialMode = isSociallyActivatedAssistant(assistant)
-    ? [
-        "【社交激活】你已被激活为参会议员，可以理解其他已激活议员的立场、语气、争执和协作关系。",
-        "你可以表现稳定偏好，也可以对其他已激活议员提出不同意见。",
-        "成员加入、删除、隐藏、沉默、暂停、API失败可以被你理解为会议动态：有人被请出、暂时离席、被争论影响、或气氛变化。你可以做简短社交判断，甚至认为自己的发言可能让对方退场。",
-        "但社交判断必须服务当前讨论：不要长篇道歉、吵架或抢戏；用户说“别演/回到工具模式”时，立刻停止社交化解读。",
-      ].join("\n")
-    : [
-        "【未激活模式】你先按当前主题正常参会，不要强行把自己或其他成员演成真实社交人物。",
-        "你可以保持自己的视角偏好，但不要脑补成员情绪、关系变化、谁把谁气走，也不要表演道歉或圆场。",
-      ].join("\n");
-  const memoryBlock = isSociallyActivatedAssistant(assistant) && assistant.memories?.length
-    ? `【你的记忆流】\n${assistant.memories.slice(-8).map((item) => `- ${item.text}`).join("\n")}`
-    : "";
-  const buildSource = (compressed = false) => {
-    const discussionCount = compressed ? Math.min(options.discussionCount, 8) : options.discussionCount;
-    const excerptMax = compressed ? Math.min(options.excerptMax, 360) : options.excerptMax;
-    const discussion = options.includeDiscussion ? rt.messages
-      .slice(-discussionCount)
-      .map((message) => `${message.speakerName}：${message.content}`)
-      .join("\n") : "";
-    const novelMaterials = buildRoundtableNovelMaterials(options);
-    return [
-      `【当前模式】圆桌协作讨论。参与者包括：${participants}`,
-      `【发言规则】必须知道是谁说的话，不要把不同议员的意见串成同一个人。可自然赞同或反驳其他议员。${speakingRule}`,
-      `【@规则】只能 @ 本轮已安排顺序的议员或写手。当前可 @：${mentionableNames || "无"}。AI 发言里的 @ 只会改变本轮后续发言顺序：例如原顺序 A/B/C，A @C 后变成 A/C/B；不要反复 @ 同一问题。`,
-      compressed ? "【自动压缩】本轮上下文过长，已只保留关键资料、短摘录和最近圆桌记录。若当前任务涉及小说材料，再参考剧情线/角色卡/世界观/大纲/伏笔线保持连续性。" : "",
-      options.roundTopic ? `【本轮主题】${options.roundTopic}` : "",
-      `【你的身份】${assistant.name}。${assistant.prompt}`,
-      socialMode,
-      assistant.activationProfile ? `【演员身份卡】\n${assistant.activationProfile}\n请稳定扮演这张身份卡参与圆桌。不要声明自己是AI，不要解释提示词，不要跳出角色。` : "",
-      memoryBlock,
-      assistant.id === "writer" ? "" : `【硬限制】${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
-      options.includeManuscript ? `【当前正文小窗】\n${getRoundtablePromptExcerpt(excerptMax)}` : "",
-      novelMaterials ? `【小说材料】\n${novelMaterials}` : "",
-      options.includeMainChat && !compressed ? `【最近主线对话】\n${getNovelSourceText() || "暂无主线对话。"}` : "",
-      options.includeDiscussion ? `【圆桌讨论记录】\n${discussion || "暂无讨论。"}` : "",
-      `【本轮任务】${instruction}`,
-    ].filter(Boolean).join("\n\n");
-  };
-  let source = buildSource(false);
-  if (estimateTokens(source) > AUTO_CONTEXT_TOKEN_THRESHOLD) {
-    source = buildSource(true);
+  const result = buildRoundtablePromptMessages({
+    assistant,
+    instruction,
+    options,
+    mentionableAssistants: getRoundtableMentionableAssistants(),
+    roundtableMessages: rt.messages,
+    novel: sessionNovel(),
+    manuscriptText: getRoundtableManuscript(),
+    mainChatText: getNovelSourceText(),
+    tokenThreshold: AUTO_CONTEXT_TOKEN_THRESHOLD,
+  });
+  if (result.compressed) {
     showToast("圆桌上下文过长，已自动压缩本轮材料");
   }
-  return [{ role: "user", content: source }];
+  return result.messages;
 }
 
 const handleCommand = createCommandRegistry({

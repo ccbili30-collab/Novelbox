@@ -4,6 +4,7 @@ import { clean } from "../../utils/text.js";
 export const ROUNDTABLE_CONCISE_RULE = "默认只说1-3句，120字以内；只给最关键判断和一个可执行建议。不要写长段、不要列长清单、不要复述资料。只有用户或其他议员明确要求“展开/详细/深度思考”时，才可以放长。";
 export const ROUNDTABLE_COUNCIL_CHAT_RULE = "圆桌默认以聊天讨论、判断、反驳、建议和协作为主。除非用户明确点名要求某位成员直接起草成稿，否则议员应像群聊参会者一样发言，不要擅自进入长篇创作或代写模式。";
 export const DEFAULT_CUSTOM_ROUNDTABLE_ASSISTANT_PROMPT = `你是圆桌共创议员。请先理解当前讨论到底是在聊什么，再像群聊成员一样给出独立、具体、中文的意见。可以反驳其他成员，但要说明原因；除非被明确要求，不要擅自进入长篇创作。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`;
+export const GENERATIVE_AGENT_MEMORY_LIMIT = 24;
 
 export const DEFAULT_ROUNDTABLE_SELECTED_IDS = ["setting", "review", "style", "plot"];
 
@@ -116,4 +117,18 @@ export function normalizeCustomAssistant(item, index = 0) {
     role: clean(item.role) || "议员",
     prompt: clean(item.prompt) || DEFAULT_CUSTOM_ROUNDTABLE_ASSISTANT_PROMPT,
   };
+}
+
+export function normalizeAssistantMemories(memories = []) {
+  return Array.isArray(memories)
+    ? memories
+      .filter((item) => item && typeof item === "object" && clean(item.text))
+      .map((item) => ({
+        id: clean(item.id) || uid("memory"),
+        text: clean(item.text),
+        createdAt: Number(item.createdAt) || Date.now(),
+        source: clean(item.source || "roundtable"),
+      }))
+      .slice(-GENERATIVE_AGENT_MEMORY_LIMIT)
+    : [];
 }
