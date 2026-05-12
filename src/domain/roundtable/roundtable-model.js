@@ -218,6 +218,27 @@ export function createRoundAssistantConfigView(assistant, fallbackTemperature) {
   };
 }
 
+export function normalizeMentionName(value) {
+  return clean(value)
+    .replace(/^@+/, "")
+    .replace(/\s+/g, "")
+    .toLowerCase();
+}
+
+export function getRoundAssistantAliases(assistant, base = assistant) {
+  const names = new Set([
+    assistant.id,
+    assistant.name,
+    base.name,
+  ]);
+  if (assistant.id === "setting") ["世界观塑造者", "世界观", "设定师", "设定"].forEach((name) => names.add(name));
+  if (assistant.id === "plot") ["事件管理", "剧情", "剧情师", "编剧", "剧情大手"].forEach((name) => names.add(name));
+  if (assistant.id === "review") ["角色管理", "角色", "人物", "心理", "审稿", "审稿人", "审核", "编辑"].forEach((name) => names.add(name));
+  if (assistant.id === "style") ["伏笔管理", "伏笔", "悬念", "文风", "文风师", "润色", "风格"].forEach((name) => names.add(name));
+  if (assistant.id === "writer") ["写手", "writer", "作者", "正文"].forEach((name) => names.add(name));
+  return [...names].map(normalizeMentionName).filter(Boolean);
+}
+
 export function normalizeAssistantMemories(memories = []) {
   return Array.isArray(memories)
     ? memories
