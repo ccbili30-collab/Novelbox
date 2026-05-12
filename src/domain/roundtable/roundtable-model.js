@@ -119,6 +119,105 @@ export function normalizeCustomAssistant(item, index = 0) {
   };
 }
 
+export function hydrateRoundtableState(roundtable = {}) {
+  const rt = roundtable && typeof roundtable === "object" ? roundtable : {};
+  rt.enabled = Boolean(rt.enabled);
+  rt.membersOpen = Boolean(rt.membersOpen);
+  rt.materialsOpen = Boolean(rt.materialsOpen);
+  rt.contextOpen = Boolean(rt.contextOpen);
+  rt.customAssistants = Array.isArray(rt.customAssistants)
+    ? rt.customAssistants.map(normalizeCustomAssistant).filter(Boolean)
+    : [];
+  rt.hiddenAssistantIds = Array.isArray(rt.hiddenAssistantIds)
+    ? rt.hiddenAssistantIds.filter((id) => id && id !== "writer")
+    : [];
+  rt.selectedIds = Array.isArray(rt.selectedIds) && rt.selectedIds.length
+    ? rt.selectedIds.filter((id) => {
+        const assistant = getRoundAssistantBaseFromState(id, rt);
+        return assistant && assistant.id !== "writer";
+      })
+    : [...DEFAULT_ROUNDTABLE_SELECTED_IDS];
+  rt.messages = Array.isArray(rt.messages) ? rt.messages : [];
+  rt.assistantConfigs = rt.assistantConfigs && typeof rt.assistantConfigs === "object" ? rt.assistantConfigs : {};
+  rt.roundProgress = rt.roundProgress && typeof rt.roundProgress === "object" ? rt.roundProgress : null;
+  rt.contextOptions = normalizeRoundtableContextOptions(rt.contextOptions);
+  rt.paperReveal = clamp(Number.isFinite(Number(rt.paperReveal)) ? Number(rt.paperReveal) : 0.68, 0, 1);
+  rt.paperScrollTop = Math.max(0, Number(rt.paperScrollTop) || 0);
+  rt.paperAtBottom = rt.paperAtBottom !== false;
+  rt.paperTextLength = Math.max(0, Number(rt.paperTextLength) || 0);
+  rt.paperHasNewProse = Boolean(rt.paperHasNewProse);
+  return rt;
+}
+
+export function getRoundAssistantBasesFromState(roundtable = {}) {
+  const hidden = new Set(Array.isArray(roundtable.hiddenAssistantIds) ? roundtable.hiddenAssistantIds : []);
+  const custom = Array.isArray(roundtable.customAssistants)
+    ? roundtable.customAssistants.map(normalizeCustomAssistant).filter(Boolean)
+    : [];
+  return [...ROUND_ASSISTANTS, ...custom].filter((assistant) => !hidden.has(assistant.id));
+}
+
+export function getRoundAssistantBaseFromState(id, roundtable = {}) {
+  return getRoundAssistantBasesFromState(roundtable).find((assistant) => assistant.id === id) || null;
+}
+
+export function isCustomRoundAssistantInState(id, roundtable = {}) {
+  return Array.isArray(roundtable.customAssistants)
+    && roundtable.customAssistants.some((assistant) => assistant?.id === id);
+}
+
+export function resolveRoundAssistant(input) {
+  const base = input.base;
+  if (!base) return null;
+  const config = input.config || {};
+  const defaults = input.api || {};
+  const session = input.sessionSettings || {};
+  const contextOptions = normalizeRoundtableContextOptions({
+    ...(input.roundtableContextOptions || {}),
+    ...(config.contextOptions || {}),
+  });
+  return {
+    ...base,
+    ...config,
+    id: base.id,
+    role: base.role,
+    name: clean(config.name) || base.name,
+    prompt: clean(config.prompt) || base.prompt,
+    apiBaseUrl: clean(config.apiBaseUrl) || clean(defaults.baseUrl),
+    apiKey: clean(config.apiKey) || clean(defaults.apiKey),
+    model: clean(config.model) || clean(session.model),
+    maxTokens: Number(config.maxTokens) || 0,
+    temperature: Number.isFinite(Number(config.temperature)) ? Number(config.temperature) : session.temperature,
+    contextOptions,
+    activationProfile: clean(config.activationProfile),
+    memories: normalizeAssistantMemories(config.memories),
+    avatarDataUrl: clean(config.avatarDataUrl),
+    inheritedApiBaseUrl: !clean(config.apiBaseUrl),
+    inheritedApiKey: !clean(config.apiKey),
+    inheritedModel: !clean(config.model),
+  };
+}
+
+export function createRoundAssistantConfigView(assistant, fallbackTemperature) {
+  if (!assistant) return null;
+  return {
+    name: assistant.name,
+    prompt: assistant.prompt,
+    apiBaseUrl: assistant.apiBaseUrl || "",
+    apiKey: assistant.apiKey || "",
+    model: assistant.model || "",
+    maxTokens: Number(assistant.maxTokens) || 0,
+    temperature: Number.isFinite(Number(assistant.temperature)) ? Number(assistant.temperature) : fallbackTemperature,
+    contextOptions: assistant.contextOptions || normalizeRoundtableContextOptions(),
+    activationProfile: assistant.activationProfile || "",
+    memories: normalizeAssistantMemories(assistant.memories),
+    avatarDataUrl: assistant.avatarDataUrl || "",
+    inheritedApiBaseUrl: Boolean(assistant.inheritedApiBaseUrl),
+    inheritedApiKey: Boolean(assistant.inheritedApiKey),
+    inheritedModel: Boolean(assistant.inheritedModel),
+  };
+}
+
 export function normalizeAssistantMemories(memories = []) {
   return Array.isArray(memories)
     ? memories

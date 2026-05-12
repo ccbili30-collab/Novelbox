@@ -17,13 +17,17 @@ import {
   ASSISTANT_TEMPLATES,
   DEFAULT_CUSTOM_ROUNDTABLE_ASSISTANT_PROMPT,
   DEFAULT_ROUNDTABLE_CONTEXT,
-  DEFAULT_ROUNDTABLE_SELECTED_IDS,
   GENERATIVE_AGENT_MEMORY_LIMIT,
   ROUNDTABLE_CONCISE_RULE,
-  ROUND_ASSISTANTS,
+  createRoundAssistantConfigView,
+  getRoundAssistantBaseFromState,
+  getRoundAssistantBasesFromState,
+  hydrateRoundtableState,
+  isCustomRoundAssistantInState,
   normalizeAssistantMemories,
   normalizeCustomAssistant,
   normalizeRoundtableContextOptions,
+  resolveRoundAssistant,
 } from "./domain/roundtable/roundtable-model.js";
 import {
   buildRoundtableNovelMaterials as buildRoundtableNovelMaterialsFromDomain,
@@ -318,34 +322,8 @@ function sessionWorkspace(session = activeSession()) {
 }
 
 function roundtableState(session = activeSession()) {
-  session.roundtable ||= {};
-  const rt = session.roundtable;
-  rt.enabled = Boolean(rt.enabled);
-  rt.membersOpen = Boolean(rt.membersOpen);
-  rt.materialsOpen = Boolean(rt.materialsOpen);
-  rt.contextOpen = Boolean(rt.contextOpen);
-  rt.customAssistants = Array.isArray(rt.customAssistants)
-    ? rt.customAssistants.map(normalizeCustomAssistant).filter(Boolean)
-    : [];
-  rt.hiddenAssistantIds = Array.isArray(rt.hiddenAssistantIds)
-    ? rt.hiddenAssistantIds.filter((id) => id && id !== "writer")
-    : [];
-  rt.selectedIds = Array.isArray(rt.selectedIds) && rt.selectedIds.length
-    ? rt.selectedIds.filter((id) => {
-        const assistant = getRoundAssistantBase(id, session);
-        return assistant && assistant.id !== "writer";
-      })
-    : [...DEFAULT_ROUNDTABLE_SELECTED_IDS];
-  rt.messages = Array.isArray(rt.messages) ? rt.messages : [];
-  rt.assistantConfigs = rt.assistantConfigs && typeof rt.assistantConfigs === "object" ? rt.assistantConfigs : {};
-  rt.roundProgress = rt.roundProgress && typeof rt.roundProgress === "object" ? rt.roundProgress : null;
-  rt.contextOptions = normalizeRoundtableContextOptions(rt.contextOptions);
-  rt.paperReveal = clamp(Number.isFinite(Number(rt.paperReveal)) ? Number(rt.paperReveal) : 0.68, 0, 1);
-  rt.paperScrollTop = Math.max(0, Number(rt.paperScrollTop) || 0);
-  rt.paperAtBottom = rt.paperAtBottom !== false;
-  rt.paperTextLength = Math.max(0, Number(rt.paperTextLength) || 0);
-  rt.paperHasNewProse = Boolean(rt.paperHasNewProse);
-  return rt;
+  session.roundtable = hydrateRoundtableState(session.roundtable);
+  return session.roundtable;
 }
 
 function clamp(value, min, max) {
@@ -353,15 +331,11 @@ function clamp(value, min, max) {
 }
 
 function getRoundAssistantBases(session = activeSession()) {
-  const hidden = new Set(Array.isArray(session?.roundtable?.hiddenAssistantIds) ? session.roundtable.hiddenAssistantIds : []);
-  const custom = Array.isArray(session?.roundtable?.customAssistants)
-    ? session.roundtable.customAssistants.map(normalizeCustomAssistant).filter(Boolean)
-    : [];
-  return [...ROUND_ASSISTANTS, ...custom].filter((assistant) => !hidden.has(assistant.id));
+  return getRoundAssistantBasesFromState(session?.roundtable);
 }
 
 function getRoundAssistantBase(id, session = activeSession()) {
-  return getRoundAssistantBases(session).find((assistant) => assistant.id === id) || null;
+  return getRoundAssistantBaseFromState(id, session?.roundtable);
 }
 
 function getRoundAssistants() {
@@ -369,60 +343,24 @@ function getRoundAssistants() {
 }
 
 function isCustomRoundAssistant(id) {
-  return roundtableState().customAssistants.some((assistant) => assistant.id === id);
+  return isCustomRoundAssistantInState(id, roundtableState());
 }
 
 function getRoundAssistant(id) {
   const base = getRoundAssistantBase(id);
-  if (!base) return null;
-  const config = roundtableState().assistantConfigs[id] || {};
-  const defaults = apiSettings();
-  const session = sessionSettings();
-  const contextOptions = normalizeRoundtableContextOptions({
-    ...roundtableState().contextOptions,
-    ...(config.contextOptions || {}),
+  const rt = roundtableState();
+  return resolveRoundAssistant({
+    base,
+    config: rt.assistantConfigs[id],
+    api: apiSettings(),
+    sessionSettings: sessionSettings(),
+    roundtableContextOptions: rt.contextOptions,
   });
-  return {
-    ...base,
-    ...config,
-    id: base.id,
-    role: base.role,
-    name: clean(config.name) || base.name,
-    prompt: clean(config.prompt) || base.prompt,
-    apiBaseUrl: clean(config.apiBaseUrl) || clean(defaults.baseUrl),
-    apiKey: clean(config.apiKey) || clean(defaults.apiKey),
-    model: clean(config.model) || clean(session.model),
-    maxTokens: Number(config.maxTokens) || 0,
-    temperature: Number.isFinite(Number(config.temperature)) ? Number(config.temperature) : session.temperature,
-    contextOptions,
-    activationProfile: clean(config.activationProfile),
-    memories: normalizeAssistantMemories(config.memories),
-    avatarDataUrl: clean(config.avatarDataUrl),
-    inheritedApiBaseUrl: !clean(config.apiBaseUrl),
-    inheritedApiKey: !clean(config.apiKey),
-    inheritedModel: !clean(config.model),
-  };
 }
 
 function getRoundAssistantConfig(id) {
   const assistant = getRoundAssistant(id);
-  if (!assistant) return null;
-  return {
-    name: assistant.name,
-    prompt: assistant.prompt,
-    apiBaseUrl: assistant.apiBaseUrl || "",
-    apiKey: assistant.apiKey || "",
-    model: assistant.model || "",
-    maxTokens: Number(assistant.maxTokens) || 0,
-    temperature: Number.isFinite(Number(assistant.temperature)) ? Number(assistant.temperature) : sessionSettings().temperature,
-    contextOptions: assistant.contextOptions || normalizeRoundtableContextOptions(),
-    activationProfile: assistant.activationProfile || "",
-    memories: normalizeAssistantMemories(assistant.memories),
-    avatarDataUrl: assistant.avatarDataUrl || "",
-    inheritedApiBaseUrl: Boolean(assistant.inheritedApiBaseUrl),
-    inheritedApiKey: Boolean(assistant.inheritedApiKey),
-    inheritedModel: Boolean(assistant.inheritedModel),
-  };
+  return createRoundAssistantConfigView(assistant, sessionSettings().temperature);
 }
 
 function normalizeMentionName(value) {
