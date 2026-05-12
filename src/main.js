@@ -32,6 +32,7 @@ import {
 } from "./domain/roundtable/roundtable-model.js";
 import {
   buildAssistantMentionInstruction,
+  buildAssistantMemoryPrompt as buildAssistantMemoryPromptFromDomain,
   buildRoundtableNovelMaterials as buildRoundtableNovelMaterialsFromDomain,
   buildRoundtablePromptMessages,
   isSociallyActivatedAssistant,
@@ -42,6 +43,15 @@ import {
   findMentionedRoundtableAssistants,
   moveMentionedAssistantsAfter,
 } from "./domain/roundtable/roundtable-flow.js";
+import {
+  appendRoundtableMessage,
+  createFailureRoundtableMessage,
+  findRoundtableMessage,
+  getAdoptedRoundtableMessages,
+  removeRoundtableMessage,
+  toggleRoundtableDecision,
+  updateRoundtableMessageText,
+} from "./domain/roundtable/roundtable-message-model.js";
 import { createSession } from "./domain/session/session-model.js";
 import {
   getNode as getSessionNode,
@@ -3058,16 +3068,8 @@ function addRoundtableMessage(speakerId, speakerName, content, extra = {}) {
   const shouldFollowPaper = speakerId === "writer" && els.roundtablePaperViewport
     ? els.roundtablePaperViewport.scrollHeight - els.roundtablePaperViewport.scrollTop - els.roundtablePaperViewport.clientHeight < 72
     : false;
-  const message = {
-    id: uid("round"),
-    speakerId,
-    speakerName,
-    content: clean(content),
-    createdAt: Date.now(),
-    ...extra,
-  };
-  rt.messages.push(message);
-  rt.messages = rt.messages.slice(-80);
+  const { messages, message } = appendRoundtableMessage(rt.messages, speakerId, speakerName, content, extra);
+  rt.messages = messages;
   touchSession(activeSession());
   render();
   if (speakerId === "writer" && shouldFollowPaper) {
@@ -3077,10 +3079,13 @@ function addRoundtableMessage(speakerId, speakerName, content, extra = {}) {
 }
 
 function addRoundtableFailureMessage(assistant, error) {
-  const message = humanizeError(error, `${assistant.name}发言失败`);
-  addRoundtableMessage(assistant.id, assistant.name, `请求失败：${message}`, {
-    failed: true,
-    errorMessage: message,
+  const errorMessage = humanizeError(error, `${assistant.name}发言失败`);
+  const message = createFailureRoundtableMessage(assistant, errorMessage);
+  addRoundtableMessage(message.speakerId, message.speakerName, message.content, {
+    id: message.id,
+    createdAt: message.createdAt,
+    failed: message.failed,
+    errorMessage: message.errorMessage,
   });
 }
 
@@ -3092,8 +3097,7 @@ async function addAssistantRoundtableReply(assistant, content, extra = {}, instr
 
 function updateRoundtableMessageContent(message, content) {
   if (!message) return;
-  message.content = clean(content);
-  message.createdAt ||= Date.now();
+  updateRoundtableMessageText(message, content);
   touchSession(activeSession());
   render();
 }
@@ -3145,26 +3149,13 @@ function appendAssistantMemory(assistantId, text, source = "roundtable") {
 }
 
 function buildAssistantMemoryPrompt(assistant, reply, instruction) {
-  const recent = roundtableState().messages
-    .slice(-10)
-    .map((message, index) => `${index + 1}. ${message.speakerName}：${message.content}`)
-    .join("\n");
-  return [{
-    role: "user",
-    content: [
-      GENERATIVE_AGENT_SOURCE_NOTE,
-      "你要为已激活的小说圆桌议员写一条“自我记忆”。",
-      "这条记忆用于下次发言时保持立场连续，而不是写给用户看的。",
-      "只输出一句中文，45字以内。写成该议员会记住的偏好、警惕、关系判断或创作坚持。",
-      "激活议员可以把成员删除、离席、沉默、失败理解为会议动态并形成短记忆；但不要把未激活议员当成真实社交对象，不要长篇情绪表演。",
-      `【议员】${assistant.name}`,
-      `【身份卡】${assistant.activationProfile}`,
-      assistant.memories?.length ? `【已有记忆】\n${assistant.memories.map((item) => `- ${item.text}`).join("\n")}` : "",
-      recent ? `【最近圆桌】\n${recent}` : "",
-      `【本轮任务】${instruction}`,
-      `【刚才发言】${reply}`,
-    ].filter(Boolean).join("\n\n"),
-  }];
+  return buildAssistantMemoryPromptFromDomain({
+    assistant,
+    reply,
+    instruction,
+    roundtableMessages: roundtableState().messages,
+    sourceNote: GENERATIVE_AGENT_SOURCE_NOTE,
+  });
 }
 
 async function rememberActivatedAssistantTurn(assistant, reply, instruction = "") {
@@ -3189,7 +3180,7 @@ async function rememberActivatedAssistantTurn(assistant, reply, instruction = ""
 }
 
 function getRoundtableMessage(id) {
-  return roundtableState().messages.find((message) => message.id === id) || null;
+  return findRoundtableMessage(roundtableState().messages, id);
 }
 
 function toggleRoundtableMenu(id) {
@@ -3201,9 +3192,9 @@ function toggleRoundtableMenu(id) {
 function deleteRoundtableMessage(id) {
   if (roundtableGenerating || isGenerating) return showToast("生成中不能删除圆桌消息");
   const rt = roundtableState();
-  const before = rt.messages.length;
-  rt.messages = rt.messages.filter((message) => message.id !== id);
-  if (rt.messages.length === before) return;
+  const result = removeRoundtableMessage(rt.messages, id);
+  if (!result.removed) return;
+  rt.messages = result.messages;
   activeRoundtableMessageId = null;
   touchSession(activeSession());
   render();
@@ -3219,9 +3210,7 @@ function copyRoundtableMessage(id) {
 
 function markRoundtableDecision(id, status) {
   const message = getRoundtableMessage(id);
-  if (!message || message.speakerId === "user") return;
-  message.decisionStatus = message.decisionStatus === status ? "" : status;
-  message.decidedAt = message.decisionStatus ? Date.now() : null;
+  if (!toggleRoundtableDecision(message, status)) return;
   activeRoundtableMessageId = null;
   touchSession(activeSession());
   render();
@@ -3361,7 +3350,7 @@ function hideWriterMessageKeepText(id) {
   const rt = roundtableState();
   const message = getRoundtableMessage(id);
   if (!message || message.speakerId !== "writer" || !message.manuscriptSync?.active) return;
-  rt.messages = rt.messages.filter((item) => item.id !== id);
+  rt.messages = removeRoundtableMessage(rt.messages, id).messages;
   activeRoundtableMessageId = null;
   touchSession(activeSession());
   render();
@@ -3393,9 +3382,7 @@ async function adoptRoundtableMessage(id) {
 }
 
 async function writeFromAdoptedRoundtableMessages() {
-  const adopted = roundtableState().messages
-    .filter((message) => message.decisionStatus === "adopted" && clean(message.content))
-    .slice(-12);
+  const adopted = getAdoptedRoundtableMessages(roundtableState().messages);
   if (!adopted.length) return showToast("还没有标记采纳的圆桌意见");
   const instruction = [
     "请只采纳以下已标记采纳的圆桌意见来续写正文。未列出的意见不要主动混入。",

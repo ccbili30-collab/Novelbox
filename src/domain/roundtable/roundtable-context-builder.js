@@ -109,3 +109,27 @@ export function buildAssistantMentionInstruction(sourceAssistant, targetAssistan
     `【你的任务】请作为${targetAssistant.name}回应这次点名。`,
   ].join("\n\n");
 }
+
+export function buildAssistantMemoryPrompt(input) {
+  const assistant = input.assistant;
+  const recent = (Array.isArray(input.roundtableMessages) ? input.roundtableMessages : [])
+    .slice(-10)
+    .map((message, index) => `${index + 1}. ${message.speakerName}：${message.content}`)
+    .join("\n");
+  return [{
+    role: "user",
+    content: [
+      input.sourceNote,
+      "你要为已激活的小说圆桌议员写一条“自我记忆”。",
+      "这条记忆用于下次发言时保持立场连续，而不是写给用户看的。",
+      "只输出一句中文，45字以内。写成该议员会记住的偏好、警惕、关系判断或创作坚持。",
+      "激活议员可以把成员删除、离席、沉默、失败理解为会议动态并形成短记忆；但不要把未激活议员当成真实社交对象，不要长篇情绪表演。",
+      `【议员】${assistant.name}`,
+      `【身份卡】${assistant.activationProfile}`,
+      assistant.memories?.length ? `【已有记忆】\n${assistant.memories.map((item) => `- ${item.text}`).join("\n")}` : "",
+      recent ? `【最近圆桌】\n${recent}` : "",
+      `【本轮任务】${input.instruction}`,
+      `【刚才发言】${input.reply}`,
+    ].filter(Boolean).join("\n\n"),
+  }];
+}
