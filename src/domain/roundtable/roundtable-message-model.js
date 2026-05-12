@@ -59,3 +59,26 @@ export function getAdoptedRoundtableMessages(messages, limit = 12) {
     .filter((message) => message.decisionStatus === "adopted" && clean(message.content))
     .slice(-limit);
 }
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+export function stripRoundtableSpeakerPrefix(content, speakerName, aliases = []) {
+  let text = clean(content);
+  const names = Array.from(new Set([
+    speakerName,
+    ...aliases,
+  ].map(clean).filter(Boolean))).sort((a, b) => b.length - a.length);
+  if (!names.length) return text;
+  for (let index = 0; index < 3; index += 1) {
+    const before = text;
+    for (const name of names) {
+      const pattern = new RegExp(`^\\s*${escapeRegExp(name)}\\s*[：:]\\s*`, "i");
+      text = text.replace(pattern, "");
+      if (text !== before) break;
+    }
+    if (text === before) break;
+  }
+  return clean(text);
+}

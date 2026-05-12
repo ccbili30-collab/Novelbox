@@ -49,6 +49,7 @@ import {
   findRoundtableMessage,
   getAdoptedRoundtableMessages,
   removeRoundtableMessage,
+  stripRoundtableSpeakerPrefix,
   toggleRoundtableDecision,
   updateRoundtableMessageText,
 } from "./domain/roundtable/roundtable-message-model.js";
@@ -391,6 +392,10 @@ function getRoundAssistantConfig(id) {
 function assistantAliases(assistant) {
   const base = getRoundAssistantBase(assistant.id) || assistant;
   return getRoundAssistantAliases(assistant, base);
+}
+
+function cleanRoundtableAssistantOutput(assistant, content) {
+  return stripRoundtableSpeakerPrefix(content, assistant?.name, assistant ? assistantAliases(assistant) : []);
 }
 
 function getRoundtableMentionableAssistants(options = {}) {
@@ -3081,8 +3086,9 @@ function addRoundtableFailureMessage(assistant, error) {
 }
 
 async function addAssistantRoundtableReply(assistant, content, extra = {}, instruction = "") {
-  const message = addRoundtableMessage(assistant.id, assistant.name, content, extra);
-  await rememberActivatedAssistantTurn(assistant, content, instruction);
+  const text = cleanRoundtableAssistantOutput(assistant, content);
+  const message = addRoundtableMessage(assistant.id, assistant.name, text, extra);
+  await rememberActivatedAssistantTurn(assistant, text, instruction);
   return message;
 }
 
@@ -3112,14 +3118,15 @@ async function streamAssistantRoundtableReply(assistant, instruction, extra = {}
   });
   const text = await callRoundtableAssistant(assistant, instruction, (partial) => {
     message.streaming = true;
-    message.content = clean(partial);
+    message.content = cleanRoundtableAssistantOutput(assistant, partial);
     renderStreamingRoundtableMessage(message);
   });
   cancelStreamDomUpdate(`round:${message.id}`);
   message.streaming = false;
-  updateRoundtableMessageContent(message, text);
-  await rememberActivatedAssistantTurn(assistant, text, instruction);
-  return { message, text };
+  const cleanText = cleanRoundtableAssistantOutput(assistant, text);
+  updateRoundtableMessageContent(message, cleanText);
+  await rememberActivatedAssistantTurn(assistant, cleanText, instruction);
+  return { message, text: cleanText };
 }
 
 function appendAssistantMemory(assistantId, text, source = "roundtable") {
@@ -3323,7 +3330,7 @@ async function rewriteWriterManuscriptSync(id) {
     const writer = getRoundAssistant("writer");
     const text = await callRoundtableAssistant(writer, `请重写下面这段正文。保留创作意图，但改善表达、节奏和画面。只输出重写后的正文：\n${message.content}`);
     if (roundtableShouldStop) return;
-    const next = clean(text);
+    const next = cleanRoundtableAssistantOutput(writer, text);
     if (!next) return showToast("写手没有返回可替换正文");
     if (!replaceSyncedWriterSegment(message, next)) {
       return showToast("正文已被修改，无法自动替换这一段");
@@ -3606,14 +3613,15 @@ async function generateRoundtableWriter(userText) {
     });
     const text = await callRoundtableAssistant(writer, userText || "请根据圆桌讨论继续完成用户要的产出。", (partial) => {
       message.streaming = true;
-      message.content = clean(partial);
+      message.content = cleanRoundtableAssistantOutput(writer, partial);
       renderStreamingRoundtableMessage(message);
     });
     cancelStreamDomUpdate(`round:${message.id}`);
     if (roundtableShouldStop) return;
+    const cleanText = cleanRoundtableAssistantOutput(writer, text);
     message.streaming = false;
-    updateRoundtableMessageContent(message, text);
-    syncWriterMessageToNovel(message, text);
+    updateRoundtableMessageContent(message, cleanText);
+    syncWriterMessageToNovel(message, cleanText);
     persistState(state);
     showToast("写手已更新正文，并同步到正文库");
   } catch (error) {
