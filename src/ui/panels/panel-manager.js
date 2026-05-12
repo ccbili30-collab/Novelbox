@@ -8,6 +8,7 @@ export function createPanelManager(els, hooks = {}) {
     els.settingsPanel.hidden = name !== "settings";
     els.novelPanel.hidden = name !== "novel";
     els.contextPanel.hidden = name !== "context";
+    if (els.workspacePanel) els.workspacePanel.hidden = name !== "workspace";
     if (els.roundtablePanel) els.roundtablePanel.hidden = name !== "roundtable";
     hooks.onShow?.(name);
   }
@@ -19,6 +20,7 @@ export function createPanelManager(els, hooks = {}) {
     els.settingsPanel.hidden = true;
     els.novelPanel.hidden = true;
     els.contextPanel.hidden = true;
+    if (els.workspacePanel) els.workspacePanel.hidden = true;
     if (els.roundtablePanel) els.roundtablePanel.hidden = true;
     hooks.onClose?.();
   }

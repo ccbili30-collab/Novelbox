@@ -25,5 +25,8 @@ export function hydrateLayout(layout) {
     const value = Number(next[key]);
     next[key] = Number.isFinite(value) ? value : defaults[key];
   });
+  next.userBubblePadding = Math.min(12, Math.max(0, next.userBubblePadding));
+  next.messageGap = Math.min(28, Math.max(6, next.messageGap));
+  next.messageLineHeight = Math.min(175, Math.max(130, next.messageLineHeight));
   return next;
 }

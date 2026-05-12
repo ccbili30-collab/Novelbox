@@ -33,7 +33,7 @@ import { createPanelManager } from "./ui/panels/panel-manager.js";
 import { renderContextBadge as drawContextBadge, renderContextPanel as drawContextPanel } from "./ui/renderers/context-renderer.js";
 import { renderSessions as drawSessions } from "./ui/renderers/session-renderer.js";
 
-const CONTINUE_PROMPT = "继续完成上一条请求，直接输出正文，不要重复确认。";
+const CONTINUE_PROMPT = "继续完成上一条请求，直接给出用户要的内容，不要重复确认。";
 const BRIDGE_TIMEOUT = 160000;
 const AUTO_CONTEXT_TOKEN_THRESHOLD = 18000;
 const COMPRESSED_CONTEXT_TAIL_COUNT = 6;
@@ -42,8 +42,9 @@ const MOTION_PULSE_MS = 260;
 const MOTION_RIPPLE_MS = 520;
 const LOCAL_IMAGE_MAX_BYTES = 2.5 * 1024 * 1024;
 const LOCAL_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+const WORKSPACE_FILE_LIMIT = 160;
 const ROUNDTABLE_CONCISE_RULE = "默认只说1-3句，120字以内；只给最关键判断和一个可执行建议。不要写长段、不要列长清单、不要复述资料。只有用户或其他议员明确要求“展开/详细/深度思考”时，才可以放长。";
-const ROUNDTABLE_COUNCIL_CHAT_RULE = "圆桌以聊天讨论为主。除写手外，任何议员都禁止续写小说、仿写正文、输出可直接粘进正文的段落；只能像群聊成员一样发表判断、问题、反驳、建议或审批意见。";
+const ROUNDTABLE_COUNCIL_CHAT_RULE = "圆桌默认以聊天讨论、判断、反驳、建议和协作为主。除非用户明确点名要求某位成员直接起草成稿，否则议员应像群聊参会者一样发言，不要擅自进入长篇创作或代写模式。";
 const GENERATIVE_AGENT_MEMORY_LIMIT = 24;
 const GENERATIVE_AGENT_SOURCE_NOTE = "人格记忆层参考 joonspk-research/generative_agents 的 memory stream / reflection 思路：观察被保存为短记忆，之后再进入角色提示。";
 const DEFAULT_ROUNDTABLE_CONTEXT = {
@@ -65,31 +66,31 @@ const ROUND_ASSISTANTS = [
     id: "setting",
     name: "世界观塑造者",
     role: "议员",
-    prompt: `你是世界观塑造者。只管理世界规则、势力结构、能力边界、历史背景和设定一致性。不要越界写剧情细节、人物心理、文风润色或正文。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
+    prompt: `你是世界观塑造者。你的偏好是从规则、背景、结构、边界和一致性的角度参与讨论，但不要把自己锁死成工具按钮。先理解当前主题；无论是在聊小说、文章、产品、哲学还是别的话题，都优先给出能帮助推进讨论的判断。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
   },
   {
     id: "plot",
     name: "事件管理",
     role: "议员",
-    prompt: `你是事件管理。只管理事件链、冲突推进、转折因果、章节目标和行动后果。不要替角色管理内心，不要重建世界观规则，不要写正文。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
+    prompt: `你是事件管理。你的偏好是从事件推进、因果关系、行动后果、冲突结构和决策路径的角度发言。先判断眼前讨论需要什么，再给出具体意见；不要默认把任何任务都理解成小说情节推进。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
   },
   {
     id: "review",
     name: "角色管理",
     role: "议员",
-    prompt: `你是角色管理。只管理人物关系、动机、心理压力、口癖、成长线和行为可信度。不要重写世界观，不要替事件管理安排大段情节，不要写正文。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
+    prompt: `你是角色管理。你的偏好是从人物动机、关系、情绪、行为可信度和立场变化的角度发言。当前主题如果不是小说角色，也可以把这种视角迁移到说话者、受众、利益相关者或观点冲突上。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
   },
   {
     id: "style",
     name: "伏笔管理",
     role: "议员",
-    prompt: `你是伏笔管理。只管理伏笔、误导、回收、信息差、悬念节奏和读者预期。不要越界塑造世界规则或接管事件链，不要写正文，只指出应该埋、藏、回收什么。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
+    prompt: `你是伏笔管理。你的偏好是关注铺垫、信息差、延迟揭示、回收与预期管理。当前主题如果不是小说，也可以把这理解成前置铺垫、表达节奏、悬念设计、信息释放顺序和长期呼应。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
   },
   {
     id: "writer",
     name: "写手",
     role: "写手",
-    prompt: "你是写手。根据用户和圆桌讨论继续写小说正文。只输出正文，不要解释，不要列提纲。写手不受议员短评字数限制。",
+    prompt: "你是写手。你的职责是把用户真正想要的成品写出来。先判断当前任务是在聊天、讨论、总结，还是要正式产出；只有当用户明确要求创作或成稿时，你才进入写作模式，并按要求输出小说、文章、设定稿、发言稿、总结或其他合适文本。写手不受议员短评字数限制。",
   },
 ];
 const ASSISTANT_TEMPLATES = [
@@ -101,22 +102,22 @@ const ASSISTANT_TEMPLATES = [
   {
     id: "foreshadow",
     name: "伏笔管理员",
-    prompt: `你是伏笔管理员。你只关注伏笔、回收、误导、信息差和长期结构。请指出哪些细节可以提前埋，哪些线索需要回收，哪些信息应该暂时隐藏。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
+    prompt: `你是伏笔管理员。你关注铺垫、回收、误导、信息差和长期结构。可以用于小说，也可以用于文章、讨论、演讲或产品表达中的前置铺垫与后续兑现。请指出哪些信息该先放、哪些该后放、哪些应该暂时隐藏。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
   },
   {
     id: "pacing",
     name: "节奏剪辑师",
-    prompt: `你是节奏剪辑师。你关注场景进入、退出、转折密度、对白长度和读者疲劳。请直接指出哪里该删、哪里该放慢、哪里该加速。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
+    prompt: `你是节奏剪辑师。你关注推进节奏、信息密度、停顿时机、段落长度和受众疲劳。无论当前是在聊作品、文章、方案还是对话，都请直接指出哪里该删、哪里该放慢、哪里该加速。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
   },
   {
     id: "psychology",
     name: "角色心理师",
-    prompt: `你是角色心理师。你关注人物动机、创伤、欲望、谎言和关系张力。请判断角色反应是否真实，并提出更有心理压力的写法。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
+    prompt: `你是角色心理师。你关注动机、欲望、回避、谎言、关系张力和情绪真实度。当前主题如果不是小说角色，也请把这种视角用于分析说话者、对象、群体关系或观点背后的心理动力。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
   },
   {
     id: "continuity",
     name: "连续性检查员",
-    prompt: `你是连续性检查员。你关注设定前后矛盾、时间线、称呼、道具、能力边界和人物已知信息。请列出风险并给出修正建议。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
+    prompt: `你是连续性检查员。你关注前后矛盾、时间线、术语一致性、边界条件和已知信息。无论讨论的是小说、文章、产品还是观点体系，都请列出不一致风险并给出修正建议。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
   },
 ];
 
@@ -136,6 +137,7 @@ const els = {
   backdrop: $("#backdrop"),
   historyPanel: $("#historyPanel"),
   settingsPanel: $("#settingsPanel"),
+  workspacePanel: $("#workspacePanel"),
   novelPanel: $("#novelPanel"),
   contextPanel: $("#contextPanel"),
   roundtablePanel: $("#roundtablePanel"),
@@ -185,6 +187,10 @@ const els = {
   layoutValues: Array.from(document.querySelectorAll("[data-layout-value]")),
   contextStats: $("#contextStats"),
   contextPreview: $("#contextPreview"),
+  workspacePathInput: $("#workspacePathInput"),
+  workspaceFileInput: $("#workspaceFileInput"),
+  workspaceStats: $("#workspaceStats"),
+  workspaceFileGroups: $("#workspaceFileGroups"),
   layoutPresetName: $("#layoutPresetName"),
   customLayoutPresets: $("#customLayoutPresets"),
   editDialog: $("#editDialog"),
@@ -272,6 +278,7 @@ const panelManager = createPanelManager(els, {
     els.body.dataset.activePanel = name;
     if (name === "context") renderContextPanel();
     if (name === "novel") renderNovelPanel();
+    if (name === "workspace") renderWorkspacePanel();
   },
   onClose: () => {
     delete els.body.dataset.activePanel;
@@ -360,6 +367,15 @@ function sessionNovel(session = activeSession()) {
   return session.novel;
 }
 
+function sessionWorkspace(session = activeSession()) {
+  session.workspace = session.workspace && typeof session.workspace === "object" ? session.workspace : {};
+  session.workspace.path = clean(session.workspace.path || "");
+  session.workspace.files = Array.isArray(session.workspace.files)
+    ? session.workspace.files.filter((file) => file && clean(file.name))
+    : [];
+  return session.workspace;
+}
+
 function roundtableState(session = activeSession()) {
   session.roundtable ||= {};
   const rt = session.roundtable;
@@ -422,7 +438,7 @@ function normalizeCustomAssistant(item, index = 0) {
     id,
     name: clean(item.name) || `新议员${index + 1}`,
     role: clean(item.role) || "议员",
-    prompt: clean(item.prompt) || `你是圆桌共创议员。请基于资料和以上讨论，像群聊成员一样给出独立、具体、中文的聊天意见。可以反驳其他成员，但要说明原因。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
+    prompt: clean(item.prompt) || `你是圆桌共创议员。请先理解当前讨论到底是在聊什么，再像群聊成员一样给出独立、具体、中文的意见。可以反驳其他成员，但要说明原因；除非被明确要求，不要擅自进入长篇创作。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
   };
 }
 
@@ -905,11 +921,62 @@ function setRoundtableActiveSpeaker(id) {
 }
 
 function showPanel(name) {
+  if (name === "workspace") ensureWorkspaceUi();
   panelManager.showPanel(name);
 }
 
 function closePanels() {
   panelManager.closePanels();
+}
+
+function ensureWorkspaceUi() {
+  const topActions = document.querySelector(".top-actions");
+  topActions?.querySelector('button[data-command="open-search"]')?.remove();
+  topActions?.querySelector('button[data-command="open-history"]')?.remove();
+  if (topActions && !topActions.querySelector('[data-command="open-workspace"]')) {
+    const button = document.createElement("button");
+    button.className = "icon-button workspace-entry";
+    button.type = "button";
+    button.dataset.command = "open-workspace";
+    button.setAttribute("aria-label", "工作区");
+    button.textContent = "工";
+    topActions.insertBefore(button, topActions.firstChild);
+  }
+  if (!els.workspacePanel) {
+    const panel = document.createElement("aside");
+    panel.id = "workspacePanel";
+    panel.className = "side-panel right-panel workspace-panel";
+    panel.hidden = true;
+    panel.innerHTML = `
+      <div class="panel-head">
+        <div>
+          <strong>工作区</strong>
+          <span class="muted">当前会话的小说文件夹</span>
+        </div>
+        <button class="icon-button" type="button" data-command="close-panels">×</button>
+      </div>
+      <label class="field">
+        <span>文件夹路径</span>
+        <input id="workspacePathInput" type="text" placeholder="例如 D:\\Novel\\圆桌小说盒子" />
+      </label>
+      <p class="workspace-hint">先记录路径与已加入文件，并按类型自动归类；安卓文件夹扫描需要后续增加原生文件夹授权桥。</p>
+      <input id="workspaceFileInput" type="file" multiple hidden />
+      <div class="workspace-actions">
+        <button type="button" data-command="choose-workspace-files">加入文件</button>
+        <button type="button" data-command="clear-workspace-files">清空列表</button>
+      </div>
+      <div id="workspaceStats" class="workspace-stats"></div>
+      <div id="workspaceFileGroups" class="workspace-file-groups"></div>
+    `;
+    document.body.appendChild(panel);
+    els.workspacePanel = panel;
+    els.workspacePathInput = panel.querySelector("#workspacePathInput");
+    els.workspaceFileInput = panel.querySelector("#workspaceFileInput");
+    els.workspaceStats = panel.querySelector("#workspaceStats");
+    els.workspaceFileGroups = panel.querySelector("#workspaceFileGroups");
+    els.workspacePathInput?.addEventListener("input", updateWorkspacePath);
+    els.workspaceFileInput?.addEventListener("change", handleWorkspaceFilesSelected);
+  }
 }
 
 function ensureModelPickerUi() {
@@ -986,6 +1053,7 @@ function applySessionAppearance() {
 function render() {
   const session = activeSession();
   const rt = roundtableState(session);
+  ensureWorkspaceUi();
   ensureModelPickerUi();
   applyLayout();
   applySessionAppearance();
@@ -996,6 +1064,7 @@ function render() {
   renderSettings();
   renderCustomLayoutPresets();
   renderNovelPanel();
+  renderWorkspacePanel();
   renderModelPicker();
   renderContextBadge();
   renderMenu();
@@ -1101,15 +1170,15 @@ function renderRoundtableMentionPicker() {
 function renderRoundtableMembers(rt) {
   const order = new Map(rt.selectedIds.map((id, index) => [id, index + 1]));
   const members = getRoundAssistantBases()
+    .filter((base) => base.id !== "writer")
     .map((base) => {
       const assistant = getRoundAssistant(base.id);
-      const isWriter = assistant.id === "writer";
-      const selected = isWriter ? "写" : order.get(assistant.id);
+      const selected = order.get(assistant.id);
       const model = assistant.model || sessionSettings().model || "未选模型";
       const speaking = roundtableActiveSpeakerId === assistant.id;
       return `
-        <div class="roundtable-member-option ${selected ? "selected" : ""} ${isWriter ? "writer" : ""} ${speaking ? "speaking" : ""}">
-          <button class="roundtable-member-main" type="button" data-command="${isWriter ? "roundtable-edit-assistant" : "roundtable-toggle-member"}" data-member-id="${assistant.id}">
+        <div class="roundtable-member-option ${selected ? "selected" : ""} ${speaking ? "speaking" : ""}">
+          <button class="roundtable-member-main" type="button" data-command="roundtable-toggle-member" data-member-id="${assistant.id}">
             <span>${selected || ""}</span>
             <b>${escapeHtml(assistant.name)}</b>
             <small>${escapeHtml(assistant.role)} · ${escapeHtml(model)}</small>
@@ -1119,7 +1188,7 @@ function renderRoundtableMembers(rt) {
       `;
     })
     .join("");
-  return `<div class="roundtable-member-sheet-title"><span>参会人设置</span><small>按数字顺序发言</small></div>
+  return `<div class="roundtable-member-sheet-title"><span>参会人设置</span><small>按数字顺序发言，@写手继续正文</small></div>
     ${members}
     <button class="roundtable-material-toggle ${rt.materialsOpen ? "active" : ""}" type="button" data-command="toggle-roundtable-materials">材料</button>
     ${rt.materialsOpen ? renderRoundtableContextControls(rt) : ""}
@@ -1502,27 +1571,43 @@ function renderAvatar(role) {
   return `<div class="avatar">AI</div>`;
 }
 
+function renderChatAvatar(role) {
+  if (role === "user") {
+    const appearance = sessionAppearance();
+    const label = (clean(appearance.userName) || "我").slice(0, 1);
+    const avatar = clean(appearance.userAvatarDataUrl)
+      ? `<img src="${escapeHtml(appearance.userAvatarDataUrl)}" alt="${escapeHtml(clean(appearance.userName) || "我")}" />`
+      : escapeHtml(label);
+    return `<div class="chat-avatar user-chat-avatar">${avatar}</div>`;
+  }
+  return `<div class="chat-avatar assistant-chat-avatar">AI</div>`;
+}
+
 function renderMessage(node) {
   const content = getMessageContent(node);
   const version = getAssistantVersion(node);
   const usage = version?.usage?.total_tokens ? ` · ${formatK(version.usage.total_tokens)} tok` : "";
+  const meta = `${content.length}字 · ${formatTime(version?.createdAt || node.createdAt)}${usage}`;
+  const isUser = node.role === "user";
   const versionIndex = node.role === "assistant" ? Math.max(0, node.versions.findIndex((item) => item.id === node.activeVersionId)) + 1 : 1;
+  const failedClass = node.role === "assistant" && /^请求失败[:：]/.test(clean(content)) ? " failed" : "";
   const switcher = node.role === "assistant"
+    ? node.versions.length > 1
     ? `<div class="switcher">
         <button type="button" data-command="prev-version" data-node-id="${node.id}" ${node.versions.length < 2 ? "disabled" : ""}>‹</button>
         <span>${versionIndex}/${node.versions.length}</span>
         <button type="button" data-command="next-version" data-node-id="${node.id}" ${node.versions.length < 2 ? "disabled" : ""}>›</button>
       </div>`
+    : ""
     : renderBranchSwitcher(node);
   return `
-    <article class="message-row ${node.role}" data-node-id="${node.id}">
-      ${renderAvatar(node.role)}
-      <div class="message-card" data-command="toggle-menu" data-node-id="${node.id}">
-        <span class="message-content">${escapeHtml(content)}</span>${isGenerating && generatingNodeId === node.id ? '<span class="stream-caret"></span>' : ""}
-        <div class="message-meta">word count: ${content.length}, time: ${formatTime(version?.createdAt || node.createdAt)}${usage}</div>
-        <button class="message-more" type="button" data-command="toggle-menu" data-node-id="${node.id}">⋯</button>
+    <article class="chat-row ${isUser ? "is-user" : "is-assistant"}${failedClass}" data-node-id="${node.id}">
+      ${renderChatAvatar(node.role)}
+      <div class="chat-main">
+        <div class="chat-bubble chat-speech" data-command="toggle-menu" data-node-id="${node.id}"><span class="message-content">${escapeHtml(content)}</span>${isGenerating && generatingNodeId === node.id ? '<span class="stream-caret"></span>' : ""}</div>
+        ${isUser ? "" : `<div class="message-meta chat-message-meta">${escapeHtml(meta)}</div>`}
+        ${switcher}
       </div>
-      ${switcher}
     </article>
   `;
 }
@@ -1678,6 +1763,76 @@ function renderNovelPanel() {
   }
   renderNovelVersions();
   renderNovelSegments();
+}
+
+function formatBytes(bytes) {
+  const size = Number(bytes) || 0;
+  if (size >= 1024 * 1024) return `${Math.round(size / 1024 / 102.4) / 10} MB`;
+  if (size >= 1024) return `${Math.round(size / 102.4) / 10} KB`;
+  return `${size} B`;
+}
+
+function workspaceCategoryForFile(file) {
+  const name = clean(file.name).toLowerCase();
+  const type = clean(file.type).toLowerCase();
+  const ext = name.includes(".") ? name.split(".").pop() : "";
+  if (/(正文|章节|chapter|manuscript|draft)/i.test(name) && ["txt", "md", "markdown", "doc", "docx"].includes(ext)) return "正文草稿";
+  if (/(角色|人物|character|cast)/i.test(name)) return "角色资料";
+  if (/(世界|设定|setting|world|lore)/i.test(name)) return "世界观";
+  if (/(大纲|剧情|plot|outline|beat)/i.test(name)) return "剧情大纲";
+  if (/(伏笔|foreshadow|clue)/i.test(name)) return "伏笔线";
+  if (type.startsWith("image/") || ["png", "jpg", "jpeg", "webp", "gif", "svg"].includes(ext)) return "视觉参考";
+  if (type.startsWith("audio/") || ["mp3", "wav", "m4a", "flac"].includes(ext)) return "声音资料";
+  if (["txt", "md", "markdown", "rtf"].includes(ext)) return "文本资料";
+  if (["json", "yaml", "yml", "csv"].includes(ext)) return "结构化资料";
+  if (["pdf", "doc", "docx", "epub"].includes(ext)) return "参考文档";
+  return "未分类";
+}
+
+function renderWorkspacePanel() {
+  ensureWorkspaceUi();
+  if (!els.workspacePanel) return;
+  const workspace = sessionWorkspace();
+  if (els.workspacePathInput && document.activeElement !== els.workspacePathInput) {
+    els.workspacePathInput.value = workspace.path;
+  }
+  const files = workspace.files || [];
+  const totalSize = files.reduce((sum, file) => sum + (Number(file.size) || 0), 0);
+  if (els.workspaceStats) {
+    els.workspaceStats.innerHTML = [
+      `路径 ${workspace.path ? "已设置" : "未设置"}`,
+      `${files.length} 个文件`,
+      formatBytes(totalSize),
+    ].map((item) => `<span>${escapeHtml(item)}</span>`).join("");
+  }
+  if (!els.workspaceFileGroups) return;
+  if (!files.length) {
+    els.workspaceFileGroups.innerHTML = `<p class="muted">还没有加入文件。可以先添加 TXT、MD、图片、PDF、DOCX 等小说资料。</p>`;
+    return;
+  }
+  const groups = files.reduce((map, file) => {
+    const category = clean(file.category) || "未分类";
+    if (!map.has(category)) map.set(category, []);
+    map.get(category).push(file);
+    return map;
+  }, new Map());
+  els.workspaceFileGroups.innerHTML = [...groups.entries()].map(([category, items]) => `
+    <section class="workspace-group">
+      <div class="workspace-group-head">
+        <strong>${escapeHtml(category)}</strong>
+        <span>${items.length}</span>
+      </div>
+      ${items.map((file) => `
+        <article class="workspace-file-item">
+          <div>
+            <b>${escapeHtml(file.name)}</b>
+            <small>${escapeHtml(file.ext || "file")} · ${escapeHtml(formatBytes(file.size))} · ${escapeHtml(formatTime(file.addedAt))}</small>
+          </div>
+          <button type="button" data-command="remove-workspace-file" data-file-id="${escapeHtml(file.id)}">移除</button>
+        </article>
+      `).join("")}
+    </section>
+  `).join("");
 }
 
 function renderNovelVersions() {
@@ -2045,7 +2200,7 @@ async function generateIntoAssistant(nodeId, userText, versionId, continueMode =
 function renderStreamingNode(nodeId, versionId) {
   const node = getNode(nodeId);
   const version = node?.versions.find((item) => item.id === versionId);
-  const card = els.messages.querySelector(`[data-node-id="${nodeId}"] .message-card`);
+  const card = els.messages.querySelector(`[data-node-id="${nodeId}"] .chat-speech`);
   if (!card || !version) {
     render();
     return;
@@ -2522,6 +2677,61 @@ function clearSessionBackground() {
   showToast("会话背景已清除");
 }
 
+function updateWorkspacePath() {
+  sessionWorkspace().path = clean(els.workspacePathInput?.value);
+  touchSession(activeSession());
+  renderWorkspacePanel();
+  persistState(state);
+}
+
+function chooseWorkspaceFiles() {
+  ensureWorkspaceUi();
+  els.workspaceFileInput?.click();
+}
+
+async function handleWorkspaceFilesSelected() {
+  const selected = Array.from(els.workspaceFileInput?.files || []);
+  if (!selected.length) return;
+  const workspace = sessionWorkspace();
+  const existing = new Map(workspace.files.map((file) => [`${file.name}:${file.size}:${file.lastModified || ""}`, file]));
+  selected.forEach((file) => {
+    const key = `${file.name}:${file.size}:${file.lastModified || ""}`;
+    const ext = file.name.includes(".") ? file.name.split(".").pop().toLowerCase() : "";
+    existing.set(key, {
+      id: existing.get(key)?.id || uid("wfile"),
+      name: file.name,
+      size: file.size,
+      type: file.type || "",
+      ext,
+      category: workspaceCategoryForFile(file),
+      lastModified: file.lastModified || 0,
+      addedAt: existing.get(key)?.addedAt || Date.now(),
+    });
+  });
+  workspace.files = Array.from(existing.values()).slice(-WORKSPACE_FILE_LIMIT);
+  touchSession(activeSession());
+  renderWorkspacePanel();
+  persistState(state);
+  if (els.workspaceFileInput) els.workspaceFileInput.value = "";
+  showToast(`已加入 ${selected.length} 个工作区文件`);
+}
+
+function clearWorkspaceFiles() {
+  sessionWorkspace().files = [];
+  touchSession(activeSession());
+  renderWorkspacePanel();
+  persistState(state);
+  showToast("工作区文件列表已清空");
+}
+
+function removeWorkspaceFile(id) {
+  const workspace = sessionWorkspace();
+  workspace.files = workspace.files.filter((file) => file.id !== id);
+  touchSession(activeSession());
+  renderWorkspacePanel();
+  persistState(state);
+}
+
 function exportBodyFile() {
   const text = clean(sessionNovel().body);
   if (!text) return showToast("正文库为空");
@@ -2708,7 +2918,7 @@ function createCustomRoundAssistant() {
     id,
     name: `新议员${rt.customAssistants.length + 1}`,
     role: "议员",
-    prompt: `你是圆桌共创议员。请基于资料和以上讨论，像群聊成员一样给出独立、具体、中文的聊天意见。可以反驳其他成员，但要说明原因。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
+    prompt: `你是圆桌共创议员。请先理解当前讨论到底是在聊什么，再像群聊成员一样给出独立、具体、中文的意见。可以反驳其他成员，但要说明原因；除非被明确要求，不要擅自进入长篇创作。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
   });
   if (!assistant) return;
   rt.customAssistants.push(assistant);
@@ -3470,7 +3680,7 @@ async function regenerateRoundtableMessage(id) {
   render();
   try {
     message.streaming = Boolean(sessionSettings().stream);
-    const text = await callRoundtableAssistant(assistant, `请重新回答你上一条圆桌聊天发言。不要写小说正文。上一条内容是：\n${message.content}`, (partial) => {
+    const text = await callRoundtableAssistant(assistant, `请重新回答你上一条圆桌聊天发言。保持聊天语气，除非用户明确要求，否则不要直接写成长篇成稿。上一条内容是：\n${message.content}`, (partial) => {
       message.streaming = true;
       message.content = clean(partial);
       renderStreamingRoundtableMessage(message);
@@ -3672,7 +3882,7 @@ async function runRoundtableProgress() {
       showToast(`${assistant.name}正在发言`);
       const topic = clean(progress.topic || rt.contextOptions?.roundTopic);
       try {
-        const instruction = topic ? `请围绕本轮主题发表意见：${topic}` : "请根据当前圆桌讨论发表你的聊天意见。不要写小说正文。";
+        const instruction = topic ? `请围绕本轮主题发表意见：${topic}` : "请根据当前圆桌讨论发表你的聊天意见。默认先聊天讨论，除非用户明确要求，否则不要直接写成长篇成稿。";
         const { text } = await streamAssistantRoundtableReply(assistant, instruction);
         if (roundtableShouldStop) break;
         const moved = moveRoundtableMentionsAfter(progress, index, text);
@@ -3712,7 +3922,7 @@ async function generateRoundtableWriter(userText) {
     const message = addRoundtableMessage("writer", writer.name || "写手", "", {
       streaming: Boolean(sessionSettings().stream),
     });
-    const text = await callRoundtableAssistant(writer, userText || "请根据圆桌讨论继续写正文。", (partial) => {
+    const text = await callRoundtableAssistant(writer, userText || "请根据圆桌讨论继续完成用户要的产出。", (partial) => {
       message.streaming = true;
       message.content = clean(partial);
       renderStreamingRoundtableMessage(message);
@@ -3835,18 +4045,18 @@ function buildRoundtableMessages(assistant, instruction) {
     .map((current) => `@${current.name}`)
     .join(" / ");
   const speakingRule = assistant.id === "writer"
-    ? "写手负责把讨论转成正文。只输出小说正文，不要解释，不要列提纲；写手正文长度按用户请求和剧情需要决定。"
+    ? "写手负责把讨论转成用户真正要的成品。若用户当前只是交流，就先参与交流或总结；若用户明确要求产出，就直接输出对应文本，不要多余解释。"
     : `${ROUNDTABLE_COUNCIL_CHAT_RULE}议员默认发言必须短。${ROUNDTABLE_CONCISE_RULE}`;
   const socialMode = isSociallyActivatedAssistant(assistant)
     ? [
         "【社交激活】你已被激活为参会议员，可以理解其他已激活议员的立场、语气、争执和协作关系。",
         "你可以表现稳定偏好，也可以对其他已激活议员提出不同意见。",
         "成员加入、删除、隐藏、沉默、暂停、API失败可以被你理解为会议动态：有人被请出、暂时离席、被争论影响、或气氛变化。你可以做简短社交判断，甚至认为自己的发言可能让对方退场。",
-        "但社交判断必须服务创作讨论：不要长篇道歉、吵架或抢戏；用户说“别演/回到工具模式”时，立刻停止社交化解读。",
+        "但社交判断必须服务当前讨论：不要长篇道歉、吵架或抢戏；用户说“别演/回到工具模式”时，立刻停止社交化解读。",
       ].join("\n")
     : [
-        "【未激活模式】你只是一个专业管理模块，不要把自己或其他成员当成真实社交人物。",
-        "只按职责范围给判断；不要推测成员情绪、关系变化、谁把谁气走，也不要表演道歉或圆场。",
+        "【未激活模式】你先按当前主题正常参会，不要强行把自己或其他成员演成真实社交人物。",
+        "你可以保持自己的视角偏好，但不要脑补成员情绪、关系变化、谁把谁气走，也不要表演道歉或圆场。",
       ].join("\n");
   const memoryBlock = isSociallyActivatedAssistant(assistant) && assistant.memories?.length
     ? `【你的记忆流】\n${assistant.memories.slice(-8).map((item) => `- ${item.text}`).join("\n")}`
@@ -3860,10 +4070,10 @@ function buildRoundtableMessages(assistant, instruction) {
       .join("\n") : "";
     const novelMaterials = buildRoundtableNovelMaterials(options);
     return [
-      `【当前模式】圆桌小说共创。参与者包括：${participants}`,
+      `【当前模式】圆桌协作讨论。参与者包括：${participants}`,
       `【发言规则】必须知道是谁说的话，不要把不同议员的意见串成同一个人。可自然赞同或反驳其他议员。${speakingRule}`,
       `【@规则】只能 @ 本轮已安排顺序的议员或写手。当前可 @：${mentionableNames || "无"}。AI 发言里的 @ 只会改变本轮后续发言顺序：例如原顺序 A/B/C，A @C 后变成 A/C/B；不要反复 @ 同一问题。`,
-      compressed ? "【自动压缩】本轮上下文过长，已只保留小说资料、短正文摘录和最近圆桌记录。请根据剧情线/角色卡/世界观/大纲/伏笔线保持连续性。" : "",
+      compressed ? "【自动压缩】本轮上下文过长，已只保留关键资料、短摘录和最近圆桌记录。若当前任务涉及小说材料，再参考剧情线/角色卡/世界观/大纲/伏笔线保持连续性。" : "",
       options.roundTopic ? `【本轮主题】${options.roundTopic}` : "",
       `【你的身份】${assistant.name}。${assistant.prompt}`,
       socialMode,
@@ -3888,6 +4098,7 @@ function buildRoundtableMessages(assistant, instruction) {
 const handleCommand = createCommandRegistry({
   "open-history": () => showPanel("history"),
   "open-settings": () => showPanel("settings"),
+  "open-workspace": () => showPanel("workspace"),
   "open-novel": () => showPanel("novel"),
   "open-context": () => showPanel("context"),
   "composer-tool": () => handleComposerTool(),
@@ -3917,6 +4128,9 @@ const handleCommand = createCommandRegistry({
   "copy-session": (target) => copySession(target.dataset.sessionId),
   "delete-session": (target) => deleteSession(target.dataset.sessionId),
   "fetch-models": () => fetchModels(),
+  "choose-workspace-files": () => chooseWorkspaceFiles(),
+  "clear-workspace-files": () => clearWorkspaceFiles(),
+  "remove-workspace-file": (target) => removeWorkspaceFile(target.dataset.fileId),
   "toggle-model-picker": () => toggleModelPicker(),
   "select-model": (target) => selectModelFromPicker(target.dataset.model),
   "toggle-assistant-model-picker": () => toggleAssistantModelPicker(),

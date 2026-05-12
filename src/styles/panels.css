@@ -246,6 +246,111 @@
   font-size: 13px;
 }
 
+.workspace-hint {
+  margin: -2px 0 14px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.workspace-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.workspace-actions button {
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f7f7f7;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.workspace-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 10px 0 14px;
+}
+
+.workspace-stats span {
+  padding: 5px 8px;
+  border: 1px solid rgba(82, 116, 129, 0.15);
+  border-radius: 999px;
+  color: #41545b;
+  background: #eef7f8;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.workspace-file-groups {
+  display: grid;
+  gap: 12px;
+}
+
+.workspace-group {
+  display: grid;
+  gap: 7px;
+}
+
+.workspace-group-head,
+.workspace-file-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.workspace-group-head {
+  color: #4b4035;
+  font-size: 13px;
+}
+
+.workspace-group-head span {
+  color: var(--muted);
+}
+
+.workspace-file-item {
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.workspace-file-item div {
+  min-width: 0;
+}
+
+.workspace-file-item b,
+.workspace-file-item small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-file-item b {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.workspace-file-item small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.workspace-file-item button {
+  flex: 0 0 auto;
+  padding: 6px 8px;
+  border-radius: 8px;
+  color: #85623a;
+  background: rgba(141, 107, 49, 0.08);
+  font-size: 12px;
+}
+
 .avatar-setting-row,
 .background-setting-row {
   display: grid;
