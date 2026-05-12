@@ -52,6 +52,13 @@ import {
   toggleRoundtableDecision,
   updateRoundtableMessageText,
 } from "./domain/roundtable/roundtable-message-model.js";
+import {
+  appendWriterSync,
+  buildWriterManuscriptSegments,
+  locateWriterSyncStart,
+  removeWriterSyncedSegment,
+  replaceWriterSyncedSegment,
+} from "./domain/roundtable/roundtable-writer-sync.js";
 import { createSession } from "./domain/session/session-model.js";
 import {
   getNode as getSessionNode,
@@ -1648,23 +1655,7 @@ function renderNovelVersions() {
 }
 
 function getWriterManuscriptSegments() {
-  const body = sessionNovel().body || "";
-  return roundtableState().messages
-    .filter((message) => message.speakerId === "writer" && message.manuscriptSync?.active)
-    .map((message) => {
-      const sync = message.manuscriptSync;
-      const start = Number.isFinite(sync.start) ? sync.start : body.indexOf(sync.segment || sync.content || "");
-      const end = Number.isFinite(sync.end) ? sync.end : start + clean(sync.segment || sync.content).length;
-      const stillLinked = start >= 0 && end > start && body.slice(start, end) === sync.segment;
-      return {
-        message,
-        start,
-        end,
-        stillLinked,
-        content: clean(sync.content || message.content),
-      };
-    })
-    .filter((segment) => segment.content);
+  return buildWriterManuscriptSegments(roundtableState().messages, sessionNovel().body);
 }
 
 function renderNovelSegments() {
@@ -3219,102 +3210,31 @@ function markRoundtableDecision(id, status) {
   showToast(labels[status] || "已更新标记");
 }
 
-function createWriterSyncSegment(previousBody, text) {
-  const previous = clean(previousBody);
-  const content = clean(text);
-  const separator = previous ? "\n\n" : "";
-  const segment = `${separator}${content}`;
-  return {
-    body: `${previous}${segment}`,
-    segment,
-    start: previous.length,
-    end: previous.length + segment.length,
-    content,
-  };
-}
-
 function syncWriterMessageToNovel(message, text) {
-  const segment = createWriterSyncSegment(sessionNovel().body, text);
-  sessionNovel().body = segment.body;
+  const result = appendWriterSync(sessionNovel().body, text);
+  sessionNovel().body = result.body;
   recordManuscriptVersion("写手续写");
-  message.manuscriptSync = {
-    active: true,
-    start: segment.start,
-    end: segment.end,
-    segment: segment.segment,
-    content: segment.content,
-    updatedAt: Date.now(),
-  };
+  message.manuscriptSync = result.manuscriptSync;
 }
 
 function replaceSyncedWriterSegment(message, nextText) {
   const novel = sessionNovel();
-  const body = novel.body || "";
-  const sync = message?.manuscriptSync;
-  const content = clean(nextText);
-  if (!content) return false;
-  if (sync?.active && Number.isFinite(sync.start) && Number.isFinite(sync.end)) {
-    const currentSegment = body.slice(sync.start, sync.end);
-    if (currentSegment === sync.segment) {
-      const replacement = `${sync.start > 0 ? "\n\n" : ""}${content}`;
-      novel.body = `${body.slice(0, sync.start)}${replacement}${body.slice(sync.end)}`;
-      recordManuscriptVersion("写手替换");
-      message.manuscriptSync = {
-        active: true,
-        start: sync.start,
-        end: sync.start + replacement.length,
-        segment: replacement,
-        content,
-        updatedAt: Date.now(),
-      };
-      return true;
-    }
-  }
-  const oldContent = clean(sync?.content || message?.content);
-  const trimmedBody = clean(body);
-  if (!oldContent || !trimmedBody.endsWith(oldContent)) return false;
-  const previousBody = clean(trimmedBody.slice(0, -oldContent.length));
-  const fallback = createWriterSyncSegment(previousBody, content);
-  novel.body = fallback.body;
+  const result = replaceWriterSyncedSegment(novel.body, message?.manuscriptSync, message?.content, nextText);
+  if (!result.ok) return false;
+  novel.body = result.body;
   recordManuscriptVersion("写手替换");
-  message.manuscriptSync = {
-    active: true,
-    start: fallback.start,
-    end: fallback.end,
-    segment: fallback.segment,
-    content: fallback.content,
-    updatedAt: Date.now(),
-  };
+  message.manuscriptSync = result.manuscriptSync;
   return true;
 }
 
 function removeSyncedWriterSegment(message) {
   const novel = sessionNovel();
-  const body = novel.body || "";
-  const sync = message?.manuscriptSync;
-  if (sync?.active && Number.isFinite(sync.start) && Number.isFinite(sync.end)) {
-    const currentSegment = body.slice(sync.start, sync.end);
-    if (currentSegment === sync.segment) {
-      novel.body = clean(`${body.slice(0, sync.start)}${body.slice(sync.end)}`);
-      recordManuscriptVersion("撤回写手正文");
-      message.manuscriptSync = { ...sync, active: false, removedAt: Date.now() };
-      return true;
-    }
-  }
-  const content = clean(sync?.content || message?.content);
-  const trimmedBody = clean(body);
-  if (content && trimmedBody.endsWith(content)) {
-    novel.body = clean(trimmedBody.slice(0, -content.length));
-    recordManuscriptVersion("撤回写手正文");
-    message.manuscriptSync = {
-      ...(sync || {}),
-      active: false,
-      content,
-      removedAt: Date.now(),
-    };
-    return true;
-  }
-  return false;
+  const result = removeWriterSyncedSegment(novel.body, message?.manuscriptSync, message?.content);
+  if (!result.ok) return false;
+  novel.body = result.body;
+  recordManuscriptVersion("撤回写手正文");
+  message.manuscriptSync = result.manuscriptSync;
+  return true;
 }
 
 function locateWriterSegment(id) {
@@ -3322,7 +3242,7 @@ function locateWriterSegment(id) {
   const sync = message?.manuscriptSync;
   if (!message || message.speakerId !== "writer" || !sync?.active) return showToast("找不到这段写手正文");
   const body = sessionNovel().body || "";
-  const start = Number.isFinite(sync.start) ? sync.start : body.indexOf(sync.segment || sync.content || "");
+  const start = locateWriterSyncStart(body, sync);
   if (start < 0) return showToast("正文已被修改，无法定位这段");
   const rt = roundtableState();
   rt.enabled = true;
