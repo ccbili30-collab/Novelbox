@@ -99,3 +99,13 @@ export function buildRoundtablePromptMessages(input) {
     messages: [{ role: "user", content: source }],
   };
 }
+
+export function buildAssistantMentionInstruction(sourceAssistant, targetAssistant, sourceText) {
+  return [
+    `${sourceAssistant.name}刚刚在圆桌讨论里 @ 了你，请只回应与你相关的部分。`,
+    `你可以补充、反驳、澄清，但必须短而明确。${ROUNDTABLE_CONCISE_RULE}`,
+    "为了避免自动改正文，不要通过 @写手 直接要求系统产出正文；如果需要写手介入，请用自然语言提出建议。",
+    `【点名发言】\n${sourceAssistant.name}：${sourceText}`,
+    `【你的任务】请作为${targetAssistant.name}回应这次点名。`,
+  ].join("\n\n");
+}

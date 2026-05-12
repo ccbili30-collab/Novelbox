@@ -18,7 +18,6 @@ import {
   DEFAULT_CUSTOM_ROUNDTABLE_ASSISTANT_PROMPT,
   DEFAULT_ROUNDTABLE_CONTEXT,
   GENERATIVE_AGENT_MEMORY_LIMIT,
-  ROUNDTABLE_CONCISE_RULE,
   createRoundAssistantConfigView,
   getRoundAssistantBaseFromState,
   getRoundAssistantBasesFromState,
@@ -32,10 +31,17 @@ import {
   resolveRoundAssistant,
 } from "./domain/roundtable/roundtable-model.js";
 import {
+  buildAssistantMentionInstruction,
   buildRoundtableNovelMaterials as buildRoundtableNovelMaterialsFromDomain,
   buildRoundtablePromptMessages,
   isSociallyActivatedAssistant,
 } from "./domain/roundtable/roundtable-context-builder.js";
+import {
+  buildRoundProgressInstruction,
+  createRoundProgress,
+  findMentionedRoundtableAssistants,
+  moveMentionedAssistantsAfter,
+} from "./domain/roundtable/roundtable-flow.js";
 import { createSession } from "./domain/session/session-model.js";
 import {
   getNode as getSessionNode,
@@ -395,49 +401,18 @@ function getRoundtableMentionPickerItems() {
 }
 
 function parseRoundtableMentions(text, options = {}) {
-  const source = clean(text);
-  if (!source.includes("@")) return [];
-  const normalized = normalizeMentionName(source);
-  const excludeIds = options.excludeIds instanceof Set ? options.excludeIds : new Set(options.excludeIds || []);
   const allowWriter = options.allowWriter !== false;
-  return getRoundtableMentionableAssistants({ allowWriter })
-    .map((assistant) => {
-      if ((!allowWriter && assistant.id === "writer") || excludeIds.has(assistant.id)) return null;
-      const index = assistantAliases(assistant)
-        .reduce((best, alias) => {
-          const current = normalized.indexOf(`@${alias}`);
-          if (current < 0) return best;
-          return best < 0 ? current : Math.min(best, current);
-        }, -1);
-      if (index < 0) return null;
-      return { assistant, index };
-    })
-    .filter(Boolean)
-    .sort((a, b) => a.index - b.index)
-    .map(({ assistant }) => assistant);
+  const assistants = getRoundtableMentionableAssistants({ allowWriter })
+    .map((assistant) => ({
+      ...assistant,
+      aliases: assistantAliases(assistant),
+    }));
+  return findMentionedRoundtableAssistants(text, assistants, options);
 }
 
 function moveRoundtableMentionsAfter(progress, currentIndex, text) {
-  if (!progress?.ids?.length) return [];
-  const ids = progress.ids;
-  const currentSpeakerId = ids[currentIndex];
-  const moved = [];
-  const queued = new Set();
-  let insertAt = currentIndex + 1;
-  parseRoundtableMentions(text, { allowWriter: false }).forEach((assistant) => {
-    if (assistant.id === currentSpeakerId || queued.has(assistant.id)) return;
-    queued.add(assistant.id);
-    const from = ids.indexOf(assistant.id);
-    if (from > currentIndex) {
-      const [id] = ids.splice(from, 1);
-      ids.splice(insertAt, 0, id);
-    } else {
-      ids.splice(insertAt, 0, assistant.id);
-    }
-    insertAt += 1;
-    moved.push(assistant);
-  });
-  return moved;
+  const assistants = parseRoundtableMentions(text, { allowWriter: false });
+  return moveMentionedAssistantsAfter(progress, currentIndex, assistants);
 }
 
 function renderRoundtableRichText(text) {
@@ -3650,7 +3625,7 @@ async function startRoundtableRound() {
   const rt = roundtableState();
   if (roundtableGenerating || isGenerating || materialGenerating) return showToast("已有生成任务进行中");
   if (!rt.selectedIds.length) return showToast("先在参会人里选择至少一个议员");
-  rt.roundProgress = { ids: [...rt.selectedIds], nextIndex: 0, topic: clean(rt.contextOptions?.roundTopic), updatedAt: Date.now() };
+  rt.roundProgress = createRoundProgress(rt.selectedIds, rt.contextOptions?.roundTopic);
   await runRoundtableProgress();
 }
 
@@ -3682,7 +3657,7 @@ async function runRoundtableProgress() {
       showToast(`${assistant.name}正在发言`);
       const topic = clean(progress.topic || rt.contextOptions?.roundTopic);
       try {
-        const instruction = topic ? `请围绕本轮主题发表意见：${topic}` : "请根据当前圆桌讨论发表你的聊天意见。默认先聊天讨论，除非用户明确要求，否则不要直接写成长篇成稿。";
+        const instruction = buildRoundProgressInstruction(topic);
         const { text } = await streamAssistantRoundtableReply(assistant, instruction);
         if (roundtableShouldStop) break;
         const moved = moveRoundtableMentionsAfter(progress, index, text);
@@ -3744,16 +3719,6 @@ async function generateRoundtableWriter(userText) {
     roundtableShouldStop = false;
     render();
   }
-}
-
-function buildAssistantMentionInstruction(sourceAssistant, targetAssistant, sourceText) {
-  return [
-    `${sourceAssistant.name}刚刚在圆桌讨论里 @ 了你，请只回应与你相关的部分。`,
-    `你可以补充、反驳、澄清，但必须短而明确。${ROUNDTABLE_CONCISE_RULE}`,
-    "为了避免自动改正文，不要通过 @写手 直接要求系统产出正文；如果需要写手介入，请用自然语言提出建议。",
-    `【点名发言】\n${sourceAssistant.name}：${sourceText}`,
-    `【你的任务】请作为${targetAssistant.name}回应这次点名。`,
-  ].join("\n\n");
 }
 
 async function runAssistantMentionFollowUps(originAssistant, originText, options = {}) {
