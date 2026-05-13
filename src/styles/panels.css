@@ -1090,6 +1090,43 @@
   content: "收起";
 }
 
+.assistant-inline-fold {
+  margin: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.assistant-inline-fold summary {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 10px;
+  color: var(--text-soft);
+  cursor: pointer;
+  list-style: none;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.assistant-inline-fold summary::-webkit-details-marker {
+  display: none;
+}
+
+.assistant-inline-fold summary::after {
+  content: "+";
+  margin-left: auto;
+  color: var(--muted);
+}
+
+.assistant-inline-fold[open] summary::after {
+  content: "-";
+}
+
+.assistant-inline-fold .field {
+  margin: 7px 10px 10px;
+}
+
 .assistant-config-dialog .assistant-fold > .field,
 .assistant-config-dialog .assistant-fold > .assistant-context-head,
 .assistant-config-dialog .assistant-fold > .assistant-context-options,
@@ -1097,6 +1134,7 @@
 .assistant-config-dialog .assistant-fold > .assistant-activation-actions,
 .assistant-config-dialog .assistant-fold > .assistant-model-picker-row,
 .assistant-config-dialog .assistant-fold > .checkbox-line,
+.assistant-config-dialog .assistant-fold > .assistant-inline-fold,
 .assistant-config-dialog .assistant-fold > .muted,
 .assistant-config-dialog .assistant-fold > .assistant-model-picker {
   margin-inline: 10px;
