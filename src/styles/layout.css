@@ -10,18 +10,17 @@
 
 body.has-session-background {
   background:
-    linear-gradient(rgba(248, 246, 241, 0.72), rgba(248, 246, 241, 0.72)),
     var(--session-bg-image) center / cover fixed,
-    var(--bg);
+    #fff;
 }
 
 body.has-session-background .app,
 body.has-session-background .messages,
 body.has-session-background .roundtable-workspace {
   background:
-    linear-gradient(rgba(255, 253, 250, 0.82), rgba(255, 253, 250, 0.82)),
+    linear-gradient(rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.72)),
     var(--session-bg-image) center / cover fixed,
-    var(--bg);
+    #fff;
 }
 
 .topbar {
