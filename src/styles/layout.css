@@ -26,11 +26,11 @@ body.has-session-background .roundtable-workspace {
 .topbar {
   z-index: 5;
   display: grid;
-  grid-template-columns: 38px 1fr auto;
-  gap: 8px;
+  grid-template-columns: 34px 1fr auto;
+  gap: 6px;
   align-items: center;
-  min-height: 54px;
-  padding: max(env(safe-area-inset-top), 7px) 10px 7px;
+  min-height: 48px;
+  padding: max(env(safe-area-inset-top), 5px) 8px 5px;
   border-bottom: 1px solid var(--line);
   background: rgba(255, 253, 250, 0.94);
   backdrop-filter: blur(18px);
@@ -44,7 +44,7 @@ body.has-session-background .roundtable-workspace {
   min-width: 0;
   margin: 0;
   overflow: hidden;
-  font-size: 21px;
+  font-size: 18px;
   font-weight: 500;
   line-height: 1.2;
   text-overflow: ellipsis;
@@ -53,20 +53,20 @@ body.has-session-background .roundtable-workspace {
 
 .top-actions {
   display: flex;
-  gap: 6px;
+  gap: 4px;
 }
 
 .source-link {
   display: inline-grid;
   place-items: center;
-  min-width: 74px;
-  height: 34px;
-  padding: 0 12px;
+  min-width: 42px;
+  height: 30px;
+  padding: 0 8px;
   border: 1px solid rgba(36, 36, 36, 0.12);
   border-radius: 999px;
   color: #1f2933;
   background: rgba(255, 255, 255, 0.72);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
   line-height: 1;
   text-decoration: none;
@@ -88,11 +88,11 @@ body.has-session-background .roundtable-workspace {
 .round-button {
   display: inline-grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   color: #242424;
-  font-size: 21px;
+  font-size: 18px;
   transform-origin: center;
 }
 
@@ -113,7 +113,7 @@ body.has-session-background .roundtable-workspace {
   border: 1px solid #d8c8a9;
   color: #2f2b24;
   background: #fff7e6;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
 }
 
@@ -121,7 +121,7 @@ body.has-session-background .roundtable-workspace {
   border: 1px solid rgba(82, 116, 129, 0.22);
   color: #263840;
   background: #eef7f8;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 800;
 }
 

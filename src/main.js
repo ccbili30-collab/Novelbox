@@ -3816,7 +3816,7 @@ const handleCommand = createCommandRegistry({
     const nodeId = target.dataset.nodeId;
     activeRoundtableMessageId = null;
     activeMenuNodeId = activeMenuNodeId === nodeId ? null : nodeId;
-    return render();
+    renderMenu();
   },
   "edit-user": (target) => openEditor(target.dataset.nodeId),
   "edit-ai": (target) => openEditor(target.dataset.nodeId),

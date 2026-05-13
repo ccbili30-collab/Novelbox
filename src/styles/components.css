@@ -2355,22 +2355,21 @@ body.paper-dragging .paper-grip {
 }
 
 .paper-grip {
-  bottom: -19px;
-  min-width: 150px;
-  min-height: 38px;
-  padding: 7px 10px;
+  bottom: -14px;
+  min-width: 86px;
+  min-height: 28px;
+  padding: 4px 6px;
   touch-action: none;
 }
 
 .paper-grip-copy {
-  display: inline;
-  max-width: 76px;
-  color: var(--text-soft);
-  font-size: 11px;
+  display: none;
 }
 
 .paper-grip-meter {
-  min-width: 40px;
+  min-width: 34px;
+  padding: 2px 6px;
+  font-size: 11px;
 }
 
 .roundtable-discussion {
@@ -2444,7 +2443,7 @@ body.paper-dragging .paper-grip {
   }
 
   .paper-grip {
-    min-width: 138px;
+    min-width: 82px;
   }
 
   .roundtable-discussion {
