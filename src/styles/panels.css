@@ -552,6 +552,52 @@
   line-height: 1.45;
 }
 
+.assistant-private-chat-list {
+  display: grid;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 2px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.assistant-private-message {
+  display: grid;
+  gap: 4px;
+  max-width: 92%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px 13px 13px 13px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.assistant-private-message.user {
+  justify-self: end;
+  border-radius: 13px 10px 13px 13px;
+  background: rgba(238, 241, 239, 0.92);
+}
+
+.assistant-private-message b,
+.assistant-private-message time {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.1;
+}
+
+.assistant-private-message p {
+  margin: 0;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.48;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.assistant-private-chat-actions {
+  justify-content: flex-end;
+  margin-top: -4px;
+}
+
 .primary-button,
 .panel-row button,
 .dialog-actions button {

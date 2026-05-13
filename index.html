@@ -404,6 +404,17 @@
           <div id="assistantParticipationList" class="assistant-participation-list"></div>
         </details>
         <details class="assistant-fold">
+          <summary>私聊</summary>
+          <div id="assistantPrivateChatList" class="assistant-private-chat-list"></div>
+          <label class="field">
+            <span>给这个议员</span>
+            <textarea id="assistantPrivateChatInput" rows="3" placeholder="这段不会进入主线对话。"></textarea>
+          </label>
+          <div class="dialog-actions assistant-private-chat-actions">
+            <button id="sendAssistantPrivateChatButton" value="default" type="button" data-command="send-assistant-private-chat">发送</button>
+          </div>
+        </details>
+        <details class="assistant-fold">
           <summary>材料</summary>
           <div class="assistant-context-head">
             <strong>阅读范围</strong>

@@ -209,6 +209,9 @@ const els = {
   assistantActivationStatus: $("#assistantActivationStatus"),
   assistantActivationProfileInput: $("#assistantActivationProfileInput"),
   assistantParticipationList: $("#assistantParticipationList"),
+  assistantPrivateChatList: $("#assistantPrivateChatList"),
+  assistantPrivateChatInput: $("#assistantPrivateChatInput"),
+  sendAssistantPrivateChat: $("#sendAssistantPrivateChatButton"),
   activateAssistant: $("#activateAssistantButton"),
   clearAssistantActivation: $("#clearAssistantActivationButton"),
   assistantAvatarFile: $("#assistantAvatarFile"),
@@ -473,6 +476,20 @@ function rememberCouncilParticipation(assistant, message, instruction = "") {
     roleState: getRoundtableRoleState(roundtableState().selectedIds, assistant.id) || "participant",
   });
   state.councilParticipationRecords = result.records;
+}
+
+function normalizeAssistantPrivateMessages(messages = []) {
+  return Array.isArray(messages)
+    ? messages
+      .filter((message) => message && ["user", "assistant"].includes(message.role) && clean(message.content))
+      .map((message) => ({
+        id: clean(message.id) || uid("private"),
+        role: message.role,
+        content: clean(message.content),
+        createdAt: Number(message.createdAt) || Date.now(),
+      }))
+      .slice(-40)
+    : [];
 }
 
 function getRoundtableMentionableAssistants(options = {}) {
@@ -3210,6 +3227,8 @@ function openAssistantConfig(id) {
   if (els.assistantModelStatus) els.assistantModelStatus.textContent = config.model ? `当前：${config.model}` : "未拉取";
   renderAssistantModelPicker();
   renderAssistantParticipationRecords(id);
+  renderAssistantPrivateChat(id);
+  if (els.assistantPrivateChatInput) els.assistantPrivateChatInput.value = "";
   els.assistantPromptInput.value = config.prompt;
   if (els.deleteAssistant) {
     els.deleteAssistant.hidden = id === "writer";
@@ -3249,6 +3268,7 @@ function currentAssistantFormConfig() {
     contextOptions: currentAssistantContextOptions(),
     activationProfile: clean(els.assistantActivationProfileInput?.value),
     memories: normalizeAssistantMemories(previous.memories),
+    privateMessages: normalizeAssistantPrivateMessages(previous.privateMessages),
     avatarDataUrl: clean(els.assistantAvatarPreview?.dataset.avatarDataUrl),
     prompt: clean(els.assistantPromptInput.value),
   };
@@ -3471,6 +3491,107 @@ function renderAssistantParticipationRecords(assistantId) {
   }).join("");
 }
 
+function getAssistantPrivateMessages(assistantId) {
+  const config = roundtableState().assistantConfigs?.[assistantId] || {};
+  return normalizeAssistantPrivateMessages(config.privateMessages);
+}
+
+function renderAssistantPrivateChat(assistantId = assistantConfigTargetId) {
+  if (!els.assistantPrivateChatList) return;
+  if (!assistantId || assistantId === "writer") {
+    els.assistantPrivateChatList.innerHTML = `<p class="assistant-participation-empty">写手是输出通道，不开启议员私聊。</p>`;
+    if (els.assistantPrivateChatInput) els.assistantPrivateChatInput.disabled = true;
+    if (els.sendAssistantPrivateChat) els.sendAssistantPrivateChat.disabled = true;
+    return;
+  }
+  if (els.assistantPrivateChatInput) els.assistantPrivateChatInput.disabled = false;
+  if (els.sendAssistantPrivateChat) els.sendAssistantPrivateChat.disabled = false;
+  const messages = getAssistantPrivateMessages(assistantId);
+  if (!messages.length) {
+    els.assistantPrivateChatList.innerHTML = `<p class="assistant-participation-empty">还没有私聊。</p>`;
+    return;
+  }
+  els.assistantPrivateChatList.innerHTML = messages.slice(-12).map((message) => `
+    <article class="assistant-private-message ${message.role}">
+      <b>${message.role === "user" ? escapeHtml(clean(sessionAppearance().userName) || "我") : "议员"}</b>
+      <p>${escapeHtml(message.content)}</p>
+      <time>${escapeHtml(formatTime(message.createdAt))}</time>
+    </article>
+  `).join("");
+  els.assistantPrivateChatList.scrollTop = els.assistantPrivateChatList.scrollHeight;
+}
+
+function buildAssistantPrivateChatMessages(assistant, config, userText, history = null) {
+  const records = getCouncilParticipationRecords(state.councilParticipationRecords, assistant.id, { limit: 8 })
+    .map((record) => `- ${formatTime(record.createdAt)}｜${record.topic || "无主题"}｜${record.content}`)
+    .join("\n");
+  const privateMessages = normalizeAssistantPrivateMessages(history || roundtableState().assistantConfigs[assistant.id]?.privateMessages)
+    .slice(-12)
+    .map((message) => ({ role: message.role, content: message.content }));
+  const context = [
+    `你正在和用户进行议员私聊。你是${assistant.name}，这段私聊不会自动进入主线对话。`,
+    "请保持你的主创人格和独立判断。默认短答，除非用户要求展开。",
+    clean(config.activationProfile) ? `【身份卡】\n${clean(config.activationProfile)}` : "",
+    clean(assistant.prompt) ? `【角色提示】\n${clean(assistant.prompt)}` : "",
+    records ? `【最近参会记录】\n${records}` : "",
+  ].filter(Boolean).join("\n\n");
+  return [
+    { role: "system", content: context },
+    ...privateMessages,
+    { role: "user", content: userText },
+  ];
+}
+
+async function sendAssistantPrivateChat() {
+  const id = assistantConfigTargetId;
+  const base = getRoundAssistantBase(id);
+  if (!id || id === "writer" || !base) return;
+  const userText = clean(els.assistantPrivateChatInput?.value);
+  if (!userText) return;
+  if (isGenerating || roundtableGenerating || materialGenerating || assistantActivating) return showToast("已有生成任务进行中");
+  const formConfig = currentAssistantFormConfig();
+  const assistant = {
+    ...base,
+    ...formConfig,
+    id: base.id,
+    role: base.role,
+    name: clean(formConfig.name) || base.name,
+    prompt: clean(formConfig.prompt) || base.prompt,
+  };
+  const settings = {
+    ...sessionSettings(),
+    model: formConfig.model || sessionSettings().model,
+    maxTokens: Math.min(Number(formConfig.maxTokens) || sessionSettings().maxTokens || 700, 900),
+    temperature: Number.isFinite(Number(formConfig.temperature)) ? Number(formConfig.temperature) : sessionSettings().temperature,
+  };
+  const api = apiForAssistantConfig(formConfig);
+  try {
+    validateApi(settings, api);
+    const rt = roundtableState();
+    rt.assistantConfigs[id] ||= {};
+    const history = normalizeAssistantPrivateMessages(rt.assistantConfigs[id].privateMessages);
+    rt.assistantConfigs[id].privateMessages = [...history, { id: uid("private"), role: "user", content: userText, createdAt: Date.now() }].slice(-40);
+    if (els.assistantPrivateChatInput) els.assistantPrivateChatInput.value = "";
+    renderAssistantPrivateChat(id);
+    if (els.sendAssistantPrivateChat) els.sendAssistantPrivateChat.disabled = true;
+    const reply = await callOpenAITextWithSettings(buildAssistantPrivateChatMessages(assistant, formConfig, userText, history), settings, api);
+    const cleanReply = clean(reply);
+    if (cleanReply) {
+      rt.assistantConfigs[id].privateMessages = normalizeAssistantPrivateMessages([
+        ...rt.assistantConfigs[id].privateMessages,
+        { id: uid("private"), role: "assistant", content: cleanReply, createdAt: Date.now() },
+      ]);
+    }
+    touchSession(activeSession());
+    renderAssistantPrivateChat(id);
+    persistState(state);
+  } catch (error) {
+    showToast(humanizeError(error, "议员私聊失败"));
+  } finally {
+    if (els.sendAssistantPrivateChat && id === assistantConfigTargetId) els.sendAssistantPrivateChat.disabled = false;
+  }
+}
+
 function getAssistantPersonaPayload(id) {
   const assistant = getRoundAssistant(id);
   if (!assistant || assistant.id === "writer") return null;
@@ -3686,6 +3807,7 @@ function saveAssistantConfigFromForm(options = {}) {
     contextOptions: currentAssistantContextOptions(),
     activationProfile: clean(els.assistantActivationProfileInput?.value),
     memories: normalizeAssistantMemories(rt.assistantConfigs[id]?.memories),
+    privateMessages: normalizeAssistantPrivateMessages(rt.assistantConfigs[id]?.privateMessages),
     avatarDataUrl: clean(els.assistantAvatarPreview?.dataset.avatarDataUrl),
     prompt: clean(els.assistantPromptInput.value) || base.prompt,
   };
@@ -4444,6 +4566,7 @@ const handleCommand = createCommandRegistry({
   "roundtable-add-assistant": () => createCustomRoundAssistant(),
   "roundtable-import-personas": () => importRoundtablePersonas(),
   "roundtable-export-personas": () => exportRoundtablePersonas(),
+  "send-assistant-private-chat": () => sendAssistantPrivateChat(),
   "roundtable-toggle-member": (target) => toggleRoundtableMember(target.dataset.memberId),
   "roundtable-member-up": (target) => moveRoundtableMember(target.dataset.memberId, -1),
   "roundtable-member-down": (target) => moveRoundtableMember(target.dataset.memberId, 1),
