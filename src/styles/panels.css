@@ -180,6 +180,69 @@
   border-top: 0;
 }
 
+.settings-model-picker-button {
+  width: 100%;
+  margin: -4px 0 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: #4c4237;
+  background: #faf8f4;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.settings-model-picker-button.active {
+  border-color: rgba(141, 107, 49, 0.34);
+  background: var(--surface-selected);
+}
+
+.settings-model-picker {
+  display: grid;
+  gap: 5px;
+  max-height: min(34dvh, 260px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  margin: -4px 0 10px;
+  padding: 7px;
+  border: 1px solid rgba(226, 220, 211, 0.95);
+  border-radius: 12px;
+  background: rgba(255, 253, 249, 0.96);
+}
+
+.settings-model-picker[hidden] {
+  display: none;
+}
+
+.settings-model-picker button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 38px;
+  padding: 8px 9px;
+  border-radius: 10px;
+  color: #332f29;
+  text-align: left;
+}
+
+.settings-model-picker button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-model-picker button b {
+  color: #8d6b31;
+  font-size: 12px;
+}
+
+.settings-model-picker button.selected {
+  background: var(--surface-selected);
+  font-weight: 800;
+}
+
 .layout-debug-section {
   padding-bottom: 2px;
 }
@@ -759,10 +822,15 @@
 }
 
 .history-new-session-button {
-  border-color: #1f2933;
-  color: #fff;
-  background: #1f2933;
+  border-color: #1f2933 !important;
+  color: #fff !important;
+  background: #1f2933 !important;
   box-shadow: 0 8px 20px rgba(31, 41, 51, 0.14);
+}
+
+.history-panel .history-new-session-button {
+  color: #fff !important;
+  background: #1f2933 !important;
 }
 
 .session-list {

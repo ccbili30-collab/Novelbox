@@ -155,6 +155,8 @@ const els = {
   modelInput: $("#modelInput"),
   modelDatalist: $("#modelDatalist"),
   modelStatus: $("#modelStatus"),
+  settingsModelPickerButton: $("#settingsModelPickerButton"),
+  settingsModelPicker: $("#settingsModelPicker"),
   userNameInput: $("#userNameInput"),
   userAvatarFile: $("#userAvatarFile"),
   userAvatarPreview: $("#userAvatarPreview"),
@@ -254,6 +256,7 @@ let mentionPickerRange = null;
 let assistantActivating = false;
 let assistantImportMode = "single";
 let modelPickerOpen = false;
+let settingsModelPickerOpen = false;
 let assistantModelPickerOpen = false;
 let activeSettingsPage = "home";
 let panelHistoryOpen = false;
@@ -931,12 +934,15 @@ function showPanel(name) {
 
 function openSettingsPanel() {
   activeSettingsPage = "home";
+  settingsModelPickerOpen = false;
   showPanel("settings");
   renderSettingsPage();
 }
 
 function closePanels(options = {}) {
   const hadPanel = Boolean(panelManager.getActivePanel());
+  activeSettingsPage = "home";
+  settingsModelPickerOpen = false;
   panelManager.closePanels();
   if (options.fromHistory) {
     panelHistoryOpen = false;
@@ -1177,9 +1183,9 @@ function renderRoundtable() {
     els.input.placeholder = "在这里输入你的问题...";
   }
   if (els.composerToolButton) {
-    els.composerToolButton.textContent = rt.enabled ? "参会人" : "写";
-    els.composerToolButton.setAttribute("aria-label", rt.enabled ? "参会人" : "写手设置");
-    els.composerToolButton.setAttribute("title", rt.enabled ? "参会人" : "写手设置");
+    els.composerToolButton.textContent = rt.enabled ? "参会人" : "主";
+    els.composerToolButton.setAttribute("aria-label", rt.enabled ? "参会人" : "主创设置");
+    els.composerToolButton.setAttribute("title", rt.enabled ? "参会人" : "主创设置");
     els.composerToolButton.classList.toggle("is-roundtable-members", rt.enabled);
     els.composerToolButton.classList.toggle("is-writer-settings", !rt.enabled);
   }
@@ -1917,6 +1923,7 @@ function renderSettingsPage() {
 function openSettingsPage(page) {
   if (!settingsPageMeta[page]) return;
   activeSettingsPage = page;
+  settingsModelPickerOpen = false;
   renderSettingsPage();
 }
 
@@ -1962,6 +1969,7 @@ function renderSettings() {
     const key = value.dataset.layoutValue;
     value.textContent = formatLayoutValue(key, s.layout[key]);
   });
+  renderSettingsModelPicker();
   renderSettingsPage();
 }
 
@@ -2170,7 +2178,25 @@ function renderModelPicker() {
     `;
   }
   els.modelDatalist.innerHTML = models.map((model) => `<option value="${escapeHtml(model)}"></option>`).join("");
+  renderSettingsModelPicker(models);
   renderAssistantModelPicker();
+}
+
+function renderSettingsModelPicker(models = null) {
+  if (!els.settingsModelPicker || !els.settingsModelPickerButton) return;
+  const settings = sessionSettings();
+  const list = models || Array.from(new Set([settings.model, ...apiSettings().models].filter(Boolean)));
+  els.settingsModelPickerButton.classList.toggle("active", settingsModelPickerOpen);
+  els.settingsModelPickerButton.setAttribute("aria-expanded", String(settingsModelPickerOpen));
+  els.settingsModelPicker.hidden = !settingsModelPickerOpen;
+  els.settingsModelPicker.innerHTML = list.length
+    ? list.map((model) => `
+        <button class="${model === settings.model ? "selected" : ""}" type="button" data-command="select-settings-model" data-model="${escapeHtml(model)}">
+          <span>${escapeHtml(model)}</span>
+          ${model === settings.model ? "<b>当前</b>" : ""}
+        </button>
+      `).join("")
+    : `<p class="muted">还没有模型。先拉取模型列表，或直接手动输入。</p>`;
 }
 
 function renderAssistantModelPicker(models = null) {
@@ -2225,9 +2251,21 @@ function toggleModelPicker(force) {
   renderModelPicker();
 }
 
+function toggleSettingsModelPicker(force) {
+  settingsModelPickerOpen = typeof force === "boolean" ? force : !settingsModelPickerOpen;
+  renderSettingsModelPicker();
+}
+
 function selectModelFromPicker(model) {
   setActiveModel(model);
   modelPickerOpen = false;
+  render();
+  persistState(state);
+}
+
+function selectSettingsModelFromPicker(model) {
+  setActiveModel(model);
+  settingsModelPickerOpen = false;
   render();
   persistState(state);
 }
@@ -2630,7 +2668,9 @@ async function fetchModels() {
     syncApiFromProvider(api);
     if (!settings.model) settings.model = models[0];
     els.modelStatus.textContent = `已拉取 ${models.length} 个`;
+    settingsModelPickerOpen = true;
     render();
+    persistState(state);
   } catch (error) {
     const message = humanizeError(error, "模型拉取失败");
     els.modelStatus.textContent = message;
@@ -3255,7 +3295,14 @@ function handleComposerTool() {
     toggleRoundtableMembers();
     return;
   }
-  openAssistantConfig("writer");
+  openAssistantConfig(getPrimaryCreatorId());
+}
+
+function getPrimaryCreatorId() {
+  const rt = roundtableState();
+  const selected = (Array.isArray(rt.selectedIds) ? rt.selectedIds : [])
+    .find((id) => id && id !== "writer" && getRoundAssistant(id));
+  return selected || "plot";
 }
 
 function toggleRoundtableRound() {
@@ -4824,6 +4871,8 @@ const handleCommand = createCommandRegistry({
   "remove-workspace-file": (target) => removeWorkspaceFile(target.dataset.fileId),
   "toggle-model-picker": () => toggleModelPicker(),
   "select-model": (target) => selectModelFromPicker(target.dataset.model),
+  "toggle-settings-model-picker": () => toggleSettingsModelPicker(),
+  "select-settings-model": (target) => selectSettingsModelFromPicker(target.dataset.model),
   "toggle-assistant-model-picker": () => toggleAssistantModelPicker(),
   "select-assistant-model": (target) => selectAssistantModelFromPicker(target.dataset.model),
   "save-novel": () => saveNovel(),
@@ -5165,8 +5214,11 @@ els.modelSelect.addEventListener("change", () => {
 document.addEventListener("click", (event) => {
   if (roundtableState().membersOpen) {
     const target = event.target;
-    const insideMembers = target.closest?.("#roundtableMembersPanel");
-    const onToggle = target.closest?.("#composerToolButton");
+    const path = typeof event.composedPath === "function" ? event.composedPath() : [];
+    const insideMembers = target.closest?.("#roundtableMembersPanel")
+      || path.some((item) => item?.id === "roundtableMembersPanel");
+    const onToggle = target.closest?.("#composerToolButton")
+      || path.some((item) => item?.id === "composerToolButton");
     if (!insideMembers && !onToggle) closeRoundtableMembers();
   }
 });
@@ -5176,6 +5228,13 @@ document.addEventListener("click", (event) => {
   if (event.target.closest("#modelPickerPanel, #modelSelectButton")) return;
   modelPickerOpen = false;
   renderModelPicker();
+});
+
+document.addEventListener("click", (event) => {
+  if (!settingsModelPickerOpen) return;
+  if (event.target.closest("#settingsModelPicker, #settingsModelPickerButton, #modelInput")) return;
+  settingsModelPickerOpen = false;
+  renderSettingsModelPicker();
 });
 
 document.addEventListener("click", (event) => {
@@ -5207,6 +5266,11 @@ document.addEventListener("keydown", (event) => {
     event.preventDefault();
     return;
   }
+  if (panelManager.getActivePanel() === "settings" && activeSettingsPage !== "home") {
+    openSettingsPage("home");
+    event.preventDefault();
+    return;
+  }
   if (panelManager.getActivePanel()) {
     closePanels();
     event.preventDefault();
@@ -5220,6 +5284,16 @@ window.addEventListener("popstate", () => {
   }
   if (roundtableState().membersOpen) {
     closeRoundtableMembers({ fromHistory: true });
+    return;
+  }
+  if (panelManager.getActivePanel() === "settings" && activeSettingsPage !== "home") {
+    openSettingsPage("home");
+    try {
+      history.pushState({ ...(history.state || {}), tbirdPanelOpen: true }, "");
+      panelHistoryOpen = true;
+    } catch {
+      panelHistoryOpen = false;
+    }
     return;
   }
   if (!panelManager.getActivePanel()) return;

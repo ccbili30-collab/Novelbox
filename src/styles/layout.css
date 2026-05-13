@@ -161,7 +161,10 @@ body.has-session-background .roundtable-workspace {
   overflow-y: auto;
   padding: 10px 10px calc(var(--composer-height) + 92px);
   background: var(--bg);
+  overscroll-behavior-y: contain;
   scroll-behavior: smooth;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
 }
 
 .roundtable-workspace:not([hidden]) {

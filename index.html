@@ -60,7 +60,7 @@
         <div id="chatAttachmentList" class="chat-attachment-list" hidden></div>
         <textarea id="chatInput" rows="1" placeholder="在这里输入你的问题..."></textarea>
         <div class="composer-bottom">
-          <button id="composerToolButton" class="round-button composer-tool-button" type="button" data-command="composer-tool" aria-label="写手设置">写</button>
+          <button id="composerToolButton" class="round-button composer-tool-button" type="button" data-command="composer-tool" aria-label="主创设置">主</button>
           <button class="round-button composer-add-button" type="button" data-command="choose-chat-image" aria-label="添加图片">+</button>
           <select id="modelSelect" aria-label="选择模型"></select>
           <button id="roundtableCycleButton" class="roundtable-cycle-button" type="button" data-command="roundtable-cycle" aria-label="开始本轮">轮</button>
@@ -150,6 +150,8 @@
             <span>主线模型</span>
             <input id="modelInput" type="text" list="modelDatalist" placeholder="gpt-4o-mini" />
           </label>
+          <button id="settingsModelPickerButton" class="settings-model-picker-button" type="button" data-command="toggle-settings-model-picker">选择已拉取模型</button>
+          <div id="settingsModelPicker" class="settings-model-picker" hidden></div>
           <div class="panel-row">
             <button type="button" data-command="fetch-models">拉取模型列表</button>
             <span id="modelStatus" class="muted">未拉取</span>
