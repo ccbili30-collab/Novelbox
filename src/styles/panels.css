@@ -955,6 +955,140 @@
   font-size: 13px;
 }
 
+.assistant-config-dialog {
+  width: min(94vw, 560px);
+  padding: 12px;
+}
+
+.assistant-config-dialog .panel-head {
+  top: -12px;
+  margin: -12px -12px 8px;
+  padding: 10px 12px 8px;
+}
+
+.assistant-config-dialog .panel-head strong {
+  font-size: 15px;
+}
+
+.assistant-config-dialog .panel-head .muted {
+  font-size: 11px;
+}
+
+.assistant-config-dialog .field {
+  gap: 5px;
+  margin: 9px 0;
+  font-size: 13px;
+}
+
+.assistant-config-dialog input[type="text"],
+.assistant-config-dialog input[type="password"],
+.assistant-config-dialog input[type="number"],
+.assistant-config-dialog select,
+.assistant-config-dialog .field textarea {
+  padding: 8px 10px;
+  border-radius: 9px;
+  font-size: 13px;
+}
+
+.assistant-config-dialog textarea {
+  min-height: 132px;
+}
+
+#assistantActivationProfileInput {
+  min-height: 118px;
+}
+
+#assistantPromptInput {
+  min-height: 142px;
+}
+
+.assistant-config-dialog .assistant-fold {
+  margin: 7px 0;
+  border-radius: 11px;
+}
+
+.assistant-config-dialog .assistant-fold summary {
+  min-height: 36px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
+.assistant-config-dialog .assistant-fold summary::after {
+  content: "展开";
+  font-size: 11px;
+}
+
+.assistant-config-dialog .assistant-fold[open] summary::after {
+  content: "收起";
+}
+
+.assistant-config-dialog .assistant-fold > .field,
+.assistant-config-dialog .assistant-fold > .assistant-context-head,
+.assistant-config-dialog .assistant-fold > .assistant-context-options,
+.assistant-config-dialog .assistant-fold > .assistant-context-numbers,
+.assistant-config-dialog .assistant-fold > .assistant-activation-actions,
+.assistant-config-dialog .assistant-fold > .assistant-model-picker-row,
+.assistant-config-dialog .assistant-fold > .checkbox-line,
+.assistant-config-dialog .assistant-fold > .muted,
+.assistant-config-dialog .assistant-fold > .assistant-model-picker {
+  margin-inline: 10px;
+}
+
+.assistant-config-dialog .assistant-fold > .field:first-of-type,
+.assistant-config-dialog .assistant-fold > .assistant-context-head {
+  margin-top: 9px;
+}
+
+.assistant-config-dialog .assistant-fold > .field:last-child,
+.assistant-config-dialog .assistant-fold > .assistant-context-numbers,
+.assistant-config-dialog .assistant-fold > .assistant-activation-actions,
+.assistant-config-dialog .assistant-fold > .assistant-model-picker {
+  margin-bottom: 10px;
+}
+
+.assistant-config-dialog .assistant-avatar-row {
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 9px;
+  margin: 9px 0;
+}
+
+.assistant-config-dialog .avatar-preview {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  font-size: 14px;
+}
+
+.assistant-config-dialog .avatar-setting-actions {
+  gap: 6px;
+}
+
+.assistant-config-dialog .avatar-setting-actions button,
+.assistant-config-dialog #fetchAssistantModelsButton {
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.assistant-config-dialog > form > .dialog-actions {
+  bottom: -12px;
+  gap: 5px;
+  margin: 10px -12px -12px;
+  padding: 8px 12px 10px;
+}
+
+.assistant-config-dialog > form > .dialog-actions button,
+.assistant-config-dialog .assistant-activation-actions button {
+  min-width: 42px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.assistant-config-dialog > form > .dialog-actions .primary-button {
+  min-width: 54px;
+}
+
 @media (max-width: 420px) {
   .assistant-context-options,
   .assistant-context-numbers {

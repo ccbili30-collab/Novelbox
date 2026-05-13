@@ -2961,7 +2961,7 @@ function openAssistantConfig(id) {
     els.deleteAssistant.hidden = id === "writer";
   }
   els.assistantConfigDialog.showModal();
-  requestAnimationFrame(() => els.assistantPromptInput.focus());
+  requestAnimationFrame(() => els.assistantNameInput?.focus());
 }
 
 function currentAssistantContextOptions() {

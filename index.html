@@ -372,7 +372,7 @@
             <input id="assistantTemperatureInput" type="range" min="0" max="2" step="0.05" />
           </label>
         </details>
-        <details class="assistant-fold" open>
+        <details class="assistant-fold">
           <summary>角色激活</summary>
           <div class="assistant-context-head">
             <strong id="assistantActivationStatus">未激活</strong>
@@ -414,15 +414,18 @@
             </label>
           </div>
         </details>
-        <label class="field">
-          <span>角色提示词</span>
-          <textarea id="assistantPromptInput" rows="8"></textarea>
-        </label>
+        <details class="assistant-fold">
+          <summary>提示词</summary>
+          <label class="field">
+            <span>角色提示词</span>
+            <textarea id="assistantPromptInput" rows="8"></textarea>
+          </label>
+        </details>
         <div class="dialog-actions">
           <button id="importAssistantButton" value="default" type="button">导入</button>
           <button id="exportAssistantButton" value="default" type="button">导出</button>
-          <button id="resetAssistantConfigButton" value="default" type="button">恢复默认</button>
-          <button id="deleteAssistantButton" value="default" type="button">删除议员</button>
+          <button id="resetAssistantConfigButton" value="default" type="button">默认</button>
+          <button id="deleteAssistantButton" value="default" type="button">删除</button>
           <button id="saveAssistantConfigButton" class="primary-button" value="default" type="button">保存</button>
         </div>
       </form>
