@@ -1458,6 +1458,41 @@ function getRoundtablePromptExcerpt(max = roundtableState().contextOptions.excer
   return value.length > max ? `...${value.slice(-max)}` : value;
 }
 
+function renderPaperTextBlock(text) {
+  const value = normalizePaperText(text);
+  return value ? `<p>${escapeHtml(value)}</p>` : "";
+}
+
+function renderRoundtablePaperManuscript(text) {
+  const sourceText = getRoundtablePaperSource().text || "";
+  const sourceBody = sessionNovel().body || "";
+  const segments = getWriterManuscriptSegments()
+    .filter((segment) => segment.stillLinked && segment.start >= 0 && segment.end > segment.start)
+    .sort((a, b) => a.start - b.start);
+  if (!segments.length || clean(sourceText) !== clean(sourceBody)) {
+    return renderPaperTextBlock(text);
+  }
+  let cursor = 0;
+  const parts = [];
+  segments.forEach((segment, index) => {
+    const before = sourceBody.slice(cursor, segment.start);
+    if (clean(before)) parts.push(renderPaperTextBlock(before));
+    parts.push(`
+      <article class="paper-segment-card">
+        <div class="paper-segment-meta">
+          <span>写手正文 ${index + 1}</span>
+          <time>${escapeHtml(formatTime(segment.message.createdAt))}</time>
+        </div>
+        <p>${escapeHtml(segment.content)}</p>
+      </article>
+    `);
+    cursor = Math.max(cursor, segment.end);
+  });
+  const after = sourceBody.slice(cursor);
+  if (clean(after)) parts.push(renderPaperTextBlock(after));
+  return parts.join("");
+}
+
 function buildRoundtableNovelMaterials(options) {
   return buildRoundtableNovelMaterialsFromDomain(options, sessionNovel());
 }
@@ -1505,11 +1540,12 @@ function isRoundtablePaperNearBottom() {
 function syncRoundtablePaperContent(rt = roundtableState()) {
   if (!els.roundtableManuscript) return;
   const nextText = getRoundtableManuscript();
-  const previousText = els.roundtableManuscript.textContent || "";
+  const previousText = els.roundtableManuscript.dataset.paperText || "";
   const wasNearBottom = isRoundtablePaperNearBottom() || rt.paperAtBottom;
   if (previousText !== nextText) {
     const grew = nextText.length > Math.max(previousText.length, rt.paperTextLength || 0);
-    els.roundtableManuscript.textContent = nextText;
+    els.roundtableManuscript.innerHTML = renderRoundtablePaperManuscript(nextText);
+    els.roundtableManuscript.dataset.paperText = nextText;
     rt.paperTextLength = nextText.length;
     if (grew && !wasNearBottom) {
       rt.paperHasNewProse = true;
