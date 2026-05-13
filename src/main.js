@@ -43,6 +43,7 @@ import {
   findMentionedRoundtableAssistants,
   moveMentionedAssistantsAfter,
 } from "./domain/roundtable/roundtable-flow.js";
+import { appendCouncilParticipationRecord } from "./domain/roundtable/council-participation-memory.js";
 import {
   appendRoundtableMessage,
   createFailureRoundtableMessage,
@@ -396,6 +397,20 @@ function assistantAliases(assistant) {
 
 function cleanRoundtableAssistantOutput(assistant, content) {
   return stripRoundtableSpeakerPrefix(content, assistant?.name, assistant ? assistantAliases(assistant) : []);
+}
+
+function rememberCouncilParticipation(assistant, message, instruction = "") {
+  if (!assistant || assistant.id === "writer" || !message || !clean(message.content)) return;
+  const result = appendCouncilParticipationRecord(state.councilParticipationRecords, {
+    councilId: assistant.id,
+    sessionId: activeSession()?.id,
+    roundtableMessageId: message.id,
+    topic: clean(roundtableState().contextOptions?.roundTopic || instruction),
+    speakerName: assistant.name,
+    content: message.content,
+    roleState: "creator",
+  });
+  state.councilParticipationRecords = result.records;
 }
 
 function getRoundtableMentionableAssistants(options = {}) {
@@ -1064,12 +1079,7 @@ function renderRoundtableContextControls(rt) {
 }
 
 function renderRoundtableEmpty() {
-  return `
-    <div class="roundtable-empty">
-      <strong>把正文放到桌上，再让群里开始聊。</strong>
-      <span>你可以先说一句需求，或点“开始本轮”让设定师、剧情师、审稿依次发言。</span>
-    </div>
-  `;
+  return "";
 }
 
 function renderRoundtableDiscussion(messages) {
@@ -3088,6 +3098,7 @@ function addRoundtableFailureMessage(assistant, error) {
 async function addAssistantRoundtableReply(assistant, content, extra = {}, instruction = "") {
   const text = cleanRoundtableAssistantOutput(assistant, content);
   const message = addRoundtableMessage(assistant.id, assistant.name, text, extra);
+  rememberCouncilParticipation(assistant, message, instruction);
   await rememberActivatedAssistantTurn(assistant, text, instruction);
   return message;
 }
@@ -3125,6 +3136,7 @@ async function streamAssistantRoundtableReply(assistant, instruction, extra = {}
   message.streaming = false;
   const cleanText = cleanRoundtableAssistantOutput(assistant, text);
   updateRoundtableMessageContent(message, cleanText);
+  rememberCouncilParticipation(assistant, message, instruction);
   await rememberActivatedAssistantTurn(assistant, cleanText, instruction);
   return { message, text: cleanText };
 }
@@ -3498,10 +3510,13 @@ async function handleRoundtableUser(text) {
   if (!mentions.length && clean(text).includes("@")) {
     showToast("只能 @ 已安排顺序的议员，或 @写手");
   }
-  if (!mentions.length) return;
+  if (!mentions.length) {
+    persistState(state);
+    return;
+  }
   const writer = mentions.find((assistant) => assistant.id === "writer");
   if (writer) return generateRoundtableWriter(text);
-  await generateMentionedRoundtableAssistants(mentions, text);
+  return generateMentionedRoundtableAssistants(mentions, text);
 }
 
 async function generateMentionedRoundtableAssistants(assistants, userText) {
@@ -3532,6 +3547,7 @@ async function generateMentionedRoundtableAssistants(assistants, userText) {
     abortController = null;
     roundtableShouldStop = false;
     render();
+    persistState(state);
   }
 }
 

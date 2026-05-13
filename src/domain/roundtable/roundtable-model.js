@@ -7,6 +7,7 @@ export const DEFAULT_CUSTOM_ROUNDTABLE_ASSISTANT_PROMPT = `你是圆桌共创议
 export const GENERATIVE_AGENT_MEMORY_LIMIT = 24;
 
 export const DEFAULT_ROUNDTABLE_SELECTED_IDS = ["setting", "review", "style", "plot"];
+export const DEFAULT_ROUNDTABLE_PAPER_REVEAL = 0.1;
 
 export const DEFAULT_ROUNDTABLE_CONTEXT = {
   includeManuscript: true,
@@ -141,7 +142,7 @@ export function hydrateRoundtableState(roundtable = {}) {
   rt.assistantConfigs = rt.assistantConfigs && typeof rt.assistantConfigs === "object" ? rt.assistantConfigs : {};
   rt.roundProgress = rt.roundProgress && typeof rt.roundProgress === "object" ? rt.roundProgress : null;
   rt.contextOptions = normalizeRoundtableContextOptions(rt.contextOptions);
-  rt.paperReveal = clamp(Number.isFinite(Number(rt.paperReveal)) ? Number(rt.paperReveal) : 0.68, 0, 1);
+  rt.paperReveal = clamp(Number.isFinite(Number(rt.paperReveal)) ? Number(rt.paperReveal) : DEFAULT_ROUNDTABLE_PAPER_REVEAL, 0, 1);
   rt.paperScrollTop = Math.max(0, Number(rt.paperScrollTop) || 0);
   rt.paperAtBottom = rt.paperAtBottom !== false;
   rt.paperTextLength = Math.max(0, Number(rt.paperTextLength) || 0);

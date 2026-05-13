@@ -1,6 +1,7 @@
 import { createApiSettings, hydrateApiSettings } from "../domain/settings/api-settings.js";
 import { createDefaultNovel } from "../domain/novel/novel-model.js";
 import { createSession, hydrateSession } from "../domain/session/session-model.js";
+import { normalizeCouncilParticipationRecords } from "../domain/roundtable/council-participation-memory.js";
 
 export const STORAGE_KEY = "tbird-chatbox-v1";
 
@@ -10,6 +11,7 @@ export function defaultState() {
     activeSessionId: session.id,
     sessions: [session],
     api: createApiSettings(),
+    councilParticipationRecords: [],
   };
 }
 
@@ -19,6 +21,7 @@ export function hydrate(next) {
   const legacySettings = next.settings || {};
   const legacyNovel = next.novel || null;
   next.api = hydrateApiSettings(next.api || legacySettings);
+  next.councilParticipationRecords = normalizeCouncilParticipationRecords(next.councilParticipationRecords);
   next.sessions = Array.isArray(next.sessions) && next.sessions.length ? next.sessions : fallback.sessions;
   next.sessions.forEach((session) => hydrateSession(session, legacySettings));
   if (!next.sessions.some((session) => session.id === next.activeSessionId)) {
