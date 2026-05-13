@@ -261,6 +261,14 @@ const paperDrag = {
   startY: 0,
   startReveal: 0.68,
 };
+const roundtableGesture = {
+  pinchActive: false,
+  pinchTriggered: false,
+  pinchStartDistance: 0,
+  paperLastTapAt: 0,
+  paperTouchStartX: 0,
+  paperTouchStartY: 0,
+};
 const bridgeCallbacks = new Map();
 const bridgeStreamCallbacks = new Map();
 const streamDomTimers = new Map();
@@ -3044,6 +3052,20 @@ function toggleRoundtable() {
   if (rt.enabled) showToast("已进入圆桌共创模式");
 }
 
+function setRoundtableEnabled(enabled, toastText = "") {
+  const rt = roundtableState();
+  if (rt.enabled === enabled) return;
+  rt.enabled = enabled;
+  rt.membersOpen = false;
+  rt.materialsOpen = false;
+  activeMenuNodeId = null;
+  activeRoundtableMessageId = null;
+  closePanels();
+  render();
+  resizeInput();
+  if (toastText) showToast(toastText);
+}
+
 function toggleRoundtableMembers() {
   const rt = roundtableState();
   if (rt.membersOpen) {
@@ -4608,6 +4630,65 @@ function resizeInput() {
   syncRoundtablePaper();
 }
 
+function touchDistance(touches) {
+  if (!touches || touches.length < 2) return 0;
+  const dx = touches[0].clientX - touches[1].clientX;
+  const dy = touches[0].clientY - touches[1].clientY;
+  return Math.hypot(dx, dy);
+}
+
+function handleMessagePinchStart(event) {
+  if (roundtableState().enabled || event.touches.length !== 2 || getOpenDialog() || panelManager.getActivePanel()) return;
+  roundtableGesture.pinchActive = true;
+  roundtableGesture.pinchTriggered = false;
+  roundtableGesture.pinchStartDistance = touchDistance(event.touches);
+}
+
+function handleMessagePinchMove(event) {
+  if (!roundtableGesture.pinchActive || roundtableGesture.pinchTriggered || event.touches.length !== 2) return;
+  const currentDistance = touchDistance(event.touches);
+  const startDistance = roundtableGesture.pinchStartDistance || currentDistance;
+  const inwardDelta = startDistance - currentDistance;
+  if (startDistance > 120 && inwardDelta > 44 && currentDistance / startDistance < 0.78) {
+    roundtableGesture.pinchTriggered = true;
+    event.preventDefault();
+    setRoundtableEnabled(true, "已通过双指手势进入圆桌");
+  }
+}
+
+function resetMessagePinchGesture() {
+  roundtableGesture.pinchActive = false;
+  roundtableGesture.pinchTriggered = false;
+  roundtableGesture.pinchStartDistance = 0;
+}
+
+function handlePaperDoubleTap(event) {
+  if (!roundtableState().enabled || event.target.closest?.("button, input, textarea, select, summary")) return;
+  const now = Date.now();
+  if (now - roundtableGesture.paperLastTapAt < 320) {
+    roundtableGesture.paperLastTapAt = 0;
+    setRoundtableEnabled(false, "已回到交流模式");
+    event.preventDefault?.();
+    return;
+  }
+  roundtableGesture.paperLastTapAt = now;
+}
+
+function handlePaperTouchStart(event) {
+  if (!roundtableState().enabled || event.touches.length !== 1) return;
+  const touch = event.touches[0];
+  roundtableGesture.paperTouchStartX = touch.clientX;
+  roundtableGesture.paperTouchStartY = touch.clientY;
+}
+
+function handlePaperTouchEnd(event) {
+  if (!roundtableState().enabled || event.changedTouches.length !== 1) return;
+  const touch = event.changedTouches[0];
+  const moved = Math.hypot(touch.clientX - roundtableGesture.paperTouchStartX, touch.clientY - roundtableGesture.paperTouchStartY);
+  if (moved > 10) return;
+  handlePaperDoubleTap(event);
+}
+
 function handleRoundtablePaperPointerDown(event) {
   if (!roundtableState().enabled || !els.roundtablePaperGrip) return;
   paperDrag.active = true;
@@ -4898,6 +4979,13 @@ els.roundtablePaperGrip?.addEventListener("pointerup", finishRoundtablePaperDrag
 els.roundtablePaperGrip?.addEventListener("pointercancel", finishRoundtablePaperDrag);
 els.roundtablePaperGrip?.addEventListener("click", (event) => event.preventDefault());
 els.roundtablePaperViewport?.addEventListener("scroll", handleRoundtablePaperScroll, { passive: true });
+els.messages?.addEventListener("touchstart", handleMessagePinchStart, { passive: true });
+els.messages?.addEventListener("touchmove", handleMessagePinchMove, { passive: false });
+els.messages?.addEventListener("touchend", resetMessagePinchGesture, { passive: true });
+els.messages?.addEventListener("touchcancel", resetMessagePinchGesture, { passive: true });
+els.roundtablePaper?.addEventListener("dblclick", handlePaperDoubleTap);
+els.roundtablePaper?.addEventListener("touchstart", handlePaperTouchStart, { passive: true });
+els.roundtablePaper?.addEventListener("touchend", handlePaperTouchEnd, { passive: false });
 
 window.addEventListener("resize", resizeInput);
 window.visualViewport?.addEventListener("resize", resizeInput);
