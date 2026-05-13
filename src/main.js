@@ -3782,8 +3782,12 @@ async function runRoundtableProgress() {
       showToast(`${assistant.name}正在发言`);
       const topic = clean(progress.topic || rt.contextOptions?.roundTopic);
       try {
+        const roleState = getRoundtableRoleState(rt.selectedIds, assistant.id);
+        const roleInstruction = roleState === "creator"
+          ? "请以本轮临时主创的身份发言：先给独立判断，再给一个可执行建议。保持短句，不要替写手直接写正文。"
+          : "请以参会议员身份发言：补充、质疑或修正前面的意见，只说最关键的一点和一个可执行建议。保持短句，不要替写手直接写正文。";
         const instruction = [
-          "请以本轮临时主创的身份发言：先给独立判断，再给一个可执行建议。保持短句，不要替写手直接写正文。",
+          roleInstruction,
           buildRoundProgressInstruction(topic),
         ].join("\n");
         const { text } = await streamAssistantRoundtableReply(assistant, instruction);
