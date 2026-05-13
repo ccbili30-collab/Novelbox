@@ -1030,6 +1030,7 @@ function ensureWorkspaceUi() {
       <p class="workspace-hint">先记录路径与已加入文件，并按类型自动归类；安卓文件夹扫描需要后续增加原生文件夹授权桥。</p>
       <input id="workspaceFileInput" type="file" multiple hidden />
       <div class="workspace-actions">
+        <button type="button" data-command="open-novel">正文库</button>
         <button type="button" data-command="choose-workspace-files">加入文件</button>
         <button type="button" data-command="clear-workspace-files">清空列表</button>
       </div>

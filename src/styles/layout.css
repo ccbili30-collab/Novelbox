@@ -138,6 +138,10 @@ body.has-session-background .roundtable-workspace {
   .top-actions [data-web-only] {
     display: none;
   }
+
+  .top-actions .novel-entry {
+    display: none;
+  }
 }
 
 .messages {

@@ -317,7 +317,7 @@
 
 .workspace-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
   gap: 8px;
   margin: 12px 0;
 }
