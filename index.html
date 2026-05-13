@@ -364,8 +364,12 @@
             <span>允许联网 / 外部资料检索</span>
           </label>
           <p class="muted">当前仅作为能力声明；没有接入真实检索工具时，AI 不应伪造联网查询。</p>
-          <details class="assistant-inline-fold">
-            <summary>高级 API 覆盖</summary>
+          <label class="checkbox-line assistant-api-expert-toggle">
+            <input id="assistantApiOverrideEnabledInput" type="checkbox" />
+            <span>专家模式：为此议员单独覆盖 API</span>
+          </label>
+          <details id="assistantApiOverrideFold" class="assistant-inline-fold assistant-api-override-fold">
+            <summary>API 覆盖</summary>
             <label class="field">
               <span>Base URL</span>
               <input id="assistantBaseUrlInput" type="text" placeholder="默认与全局 Base URL 一致，可为此议员单独改" />

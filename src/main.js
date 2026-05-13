@@ -186,6 +186,8 @@ const els = {
   assistantConfigTitle: $("#assistantConfigTitle"),
   assistantNameInput: $("#assistantNameInput"),
   assistantProviderSelect: $("#assistantProviderSelect"),
+  assistantApiOverrideEnabledInput: $("#assistantApiOverrideEnabledInput"),
+  assistantApiOverrideFold: $("#assistantApiOverrideFold"),
   assistantBaseUrlInput: $("#assistantBaseUrlInput"),
   assistantApiKeyInput: $("#assistantApiKeyInput"),
   assistantModelInput: $("#assistantModelInput"),
@@ -2076,6 +2078,23 @@ function renderAssistantProviderOptions(selectedId = "") {
   els.assistantProviderSelect.value = api.providers.some((provider) => provider.id === selectedId) ? selectedId : "";
 }
 
+function syncAssistantApiOverrideUi(forceOpen = null) {
+  const hasStoredOverride = Boolean(clean(els.assistantBaseUrlInput?.value) || clean(els.assistantApiKeyInput?.value));
+  const enabled = typeof forceOpen === "boolean"
+    ? forceOpen
+    : Boolean(els.assistantApiOverrideEnabledInput?.checked || hasStoredOverride);
+  if (els.assistantApiOverrideEnabledInput) {
+    els.assistantApiOverrideEnabledInput.checked = enabled;
+  }
+  if (els.assistantApiOverrideFold) {
+    els.assistantApiOverrideFold.hidden = !enabled;
+    els.assistantApiOverrideFold.open = enabled && (hasStoredOverride || forceOpen === true);
+  }
+  [els.assistantBaseUrlInput, els.assistantApiKeyInput].forEach((input) => {
+    if (input) input.disabled = !enabled;
+  });
+}
+
 function toggleModelPicker(force) {
   modelPickerOpen = typeof force === "boolean" ? force : !modelPickerOpen;
   renderModelPicker();
@@ -3204,6 +3223,7 @@ function openAssistantConfig(id) {
   renderAssistantProviderOptions(config.providerId);
   if (els.assistantBaseUrlInput) els.assistantBaseUrlInput.value = config.apiBaseUrl || "";
   if (els.assistantApiKeyInput) els.assistantApiKeyInput.value = config.apiKey || "";
+  syncAssistantApiOverrideUi(Boolean(clean(config.apiBaseUrl) || clean(config.apiKey)));
   els.assistantModelInput.value = config.model;
   if (els.assistantNetworkEnabledInput) els.assistantNetworkEnabledInput.checked = Boolean(config.networkEnabled);
   if (els.assistantMaxTokensInput) els.assistantMaxTokensInput.value = config.maxTokens || "";
@@ -3256,11 +3276,12 @@ function currentAssistantContextOptions() {
 
 function currentAssistantFormConfig() {
   const previous = assistantConfigTargetId ? roundtableState().assistantConfigs[assistantConfigTargetId] || {} : {};
+  const apiOverrideEnabled = Boolean(els.assistantApiOverrideEnabledInput?.checked);
   return {
     name: clean(els.assistantNameInput.value),
     providerId: clean(els.assistantProviderSelect?.value),
-    apiBaseUrl: clean(els.assistantBaseUrlInput?.value),
-    apiKey: clean(els.assistantApiKeyInput?.value),
+    apiBaseUrl: apiOverrideEnabled ? clean(els.assistantBaseUrlInput?.value) : "",
+    apiKey: apiOverrideEnabled ? clean(els.assistantApiKeyInput?.value) : "",
     model: clean(els.assistantModelInput.value),
     networkEnabled: Boolean(els.assistantNetworkEnabledInput?.checked),
     maxTokens: Number(els.assistantMaxTokensInput?.value) || 0,
@@ -3431,6 +3452,7 @@ function applyAssistantImportConfig(config) {
   renderAssistantProviderOptions(clean(config.providerId));
   if (els.assistantBaseUrlInput) els.assistantBaseUrlInput.value = clean(config.apiBaseUrl);
   if (els.assistantApiKeyInput) els.assistantApiKeyInput.value = clean(config.apiKey);
+  syncAssistantApiOverrideUi(Boolean(clean(config.apiBaseUrl) || clean(config.apiKey)));
   els.assistantModelInput.value = clean(config.model);
   if (els.assistantNetworkEnabledInput) els.assistantNetworkEnabledInput.checked = Boolean(config.networkEnabled);
   if (els.assistantMaxTokensInput) els.assistantMaxTokensInput.value = Number(config.maxTokens) || "";
@@ -3795,11 +3817,12 @@ function saveAssistantConfigFromForm(options = {}) {
   if (!base) return false;
   const rt = roundtableState();
   const model = clean(els.assistantModelInput.value);
+  const apiOverrideEnabled = Boolean(els.assistantApiOverrideEnabledInput?.checked);
   rt.assistantConfigs[id] = {
     name: clean(els.assistantNameInput.value) || base.name,
     providerId: clean(els.assistantProviderSelect?.value),
-    apiBaseUrl: clean(els.assistantBaseUrlInput?.value),
-    apiKey: clean(els.assistantApiKeyInput?.value),
+    apiBaseUrl: apiOverrideEnabled ? clean(els.assistantBaseUrlInput?.value) : "",
+    apiKey: apiOverrideEnabled ? clean(els.assistantApiKeyInput?.value) : "",
     model,
     networkEnabled: Boolean(els.assistantNetworkEnabledInput?.checked),
     maxTokens: Number(els.assistantMaxTokensInput?.value) || 0,
@@ -5070,6 +5093,9 @@ els.assistantModelInput?.addEventListener("input", () => {
 els.assistantProviderSelect?.addEventListener("change", () => {
   if (els.assistantModelStatus) els.assistantModelStatus.textContent = els.assistantProviderSelect.value ? "已切换提供方" : "跟随默认提供方";
   renderAssistantModelPicker();
+});
+els.assistantApiOverrideEnabledInput?.addEventListener("change", () => {
+  syncAssistantApiOverrideUi(Boolean(els.assistantApiOverrideEnabledInput?.checked));
 });
 els.assistantNameInput?.addEventListener("input", () => {
   if (!clean(els.assistantAvatarPreview?.dataset.avatarDataUrl)) {

@@ -1226,6 +1226,21 @@
   margin: 7px 10px 10px;
 }
 
+.assistant-api-expert-toggle {
+  margin: 8px 10px 4px;
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.assistant-api-override-fold[hidden] {
+  display: none;
+}
+
+.assistant-api-override-fold {
+  border-style: dashed;
+  background: rgba(255, 255, 255, 0.42);
+}
+
 .assistant-config-dialog .assistant-fold > .field,
 .assistant-config-dialog .assistant-fold > .assistant-context-head,
 .assistant-config-dialog .assistant-fold > .assistant-context-options,
