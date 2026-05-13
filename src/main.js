@@ -3055,22 +3055,98 @@ function currentAssistantFormConfig() {
   };
 }
 
-function exportAssistantConfig() {
+function createAssistantPersonaPayload(config, assistantId = assistantConfigTargetId) {
+  return {
+    type: "tbird-council-persona",
+    version: 1,
+    exportedAt: Date.now(),
+    assistantId: assistantId || "",
+    config: {
+      name: clean(config.name),
+      providerId: clean(config.providerId),
+      model: clean(config.model),
+      networkEnabled: Boolean(config.networkEnabled),
+      maxTokens: Number(config.maxTokens) || 0,
+      temperature: Number.isFinite(Number(config.temperature)) ? Number(config.temperature) : sessionSettings().temperature,
+      contextOptions: normalizeRoundtableContextOptions(config.contextOptions),
+      activationProfile: clean(config.activationProfile),
+      memories: normalizeAssistantMemories(config.memories),
+      avatarDataUrl: clean(config.avatarDataUrl),
+      prompt: clean(config.prompt),
+    },
+  };
+}
+
+function formatAssistantPersonaText(payload) {
+  const config = payload.config || {};
+  const context = normalizeRoundtableContextOptions(config.contextOptions);
+  const readableContext = [
+    context.includeManuscript ? "正文" : "",
+    context.includeMainChat ? "主线对话" : "",
+    context.includeDiscussion ? "圆桌记录" : "",
+    context.includePlotline ? "剧情线" : "",
+    context.includeCharacters ? "角色卡" : "",
+    context.includeWorld ? "世界观" : "",
+    context.includeOutline ? "大纲" : "",
+    context.includeForeshadows ? "伏笔" : "",
+  ].filter(Boolean).join("、") || "无";
+  return [
+    "TBIRD-COUNCIL-PERSONA v1",
+    `名称: ${config.name || "未命名议员"}`,
+    `模型: ${config.model || "跟随默认"}`,
+    `联网: ${config.networkEnabled ? "允许" : "不允许"}`,
+    `温度: ${Number.isFinite(Number(config.temperature)) ? Number(config.temperature).toFixed(2) : "跟随默认"}`,
+    `阅读范围: ${readableContext}`,
+    `正文读取字数: ${context.excerptMax}`,
+    `圆桌记录条数: ${context.discussionCount}`,
+    "",
+    "--- 角色提示词 ---",
+    config.prompt || "",
+    "",
+    "--- 演员身份卡 ---",
+    config.activationProfile || "",
+    "",
+    "--- 记忆 ---",
+    config.memories?.length ? config.memories.map((item) => `- ${item.text}`).join("\n") : "无",
+    "",
+    "--- TBIRD JSON ---",
+    JSON.stringify(payload, null, 2),
+    "--- END TBIRD JSON ---",
+  ].join("\n");
+}
+
+function parseAssistantPersonaText(text) {
+  const source = clean(text);
+  if (!source) throw new Error("导入内容为空");
+  try {
+    const payload = JSON.parse(source);
+    return payload?.config ? payload.config : payload;
+  } catch {}
+  const match = source.match(/--- TBIRD JSON ---\s*([\s\S]*?)\s*--- END TBIRD JSON ---/);
+  if (!match) throw new Error("没有找到 TBird 议员人格数据块");
+  const payload = JSON.parse(match[1]);
+  return payload?.config ? payload.config : payload;
+}
+
+async function exportAssistantConfig() {
   if (!assistantConfigTargetId) return;
   const config = currentAssistantFormConfig();
   if (!config.name && !config.prompt) return showToast("议员配置为空");
-  const payload = {
-    type: "roundtable-assistant",
-    version: 1,
-    exportedAt: Date.now(),
-    config,
-  };
-  downloadText(`Roundtable-议员-${config.name || assistantConfigTargetId}.json`, JSON.stringify(payload, null, 2), "application/json;charset=utf-8");
-  showToast("议员配置已导出");
+  const payload = createAssistantPersonaPayload(config);
+  await copyText(formatAssistantPersonaText(payload));
+  showToast("议员人格文本已复制");
 }
 
-function importAssistantConfig() {
+async function importAssistantConfig() {
   if (!assistantConfigTargetId) return;
+  try {
+    const text = await navigator.clipboard?.readText?.();
+    if (clean(text).includes("TBIRD-COUNCIL-PERSONA") || clean(text).includes("--- TBIRD JSON ---")) {
+      applyAssistantImportConfig(parseAssistantPersonaText(text));
+      showToast("已从剪贴板导入议员人格，保存后生效");
+      return;
+    }
+  } catch {}
   els.assistantImportFile?.click();
 }
 
@@ -3078,51 +3154,53 @@ async function handleAssistantImportSelected() {
   const file = els.assistantImportFile?.files?.[0];
   if (!file) return;
   try {
-    const payload = JSON.parse(await file.text());
-    const config = payload?.config || payload;
-    const name = clean(config?.name);
-    const prompt = clean(config?.prompt);
-    if (!name || !prompt) return showToast("议员配置 JSON 缺少 name/prompt");
-    els.assistantNameInput.value = name;
-    renderAssistantProviderOptions(clean(config.providerId));
-    if (els.assistantBaseUrlInput) els.assistantBaseUrlInput.value = clean(config.apiBaseUrl);
-    if (els.assistantApiKeyInput) els.assistantApiKeyInput.value = clean(config.apiKey);
-    els.assistantModelInput.value = clean(config.model);
-    if (els.assistantNetworkEnabledInput) els.assistantNetworkEnabledInput.checked = Boolean(config.networkEnabled);
-    if (els.assistantMaxTokensInput) els.assistantMaxTokensInput.value = Number(config.maxTokens) || "";
-    const temperature = Number(config.temperature);
-    els.assistantTemperatureInput.value = Number.isFinite(temperature) ? clamp(temperature, 0, 2) : sessionSettings().temperature;
-    els.assistantTemperatureLabel.textContent = Number(els.assistantTemperatureInput.value).toFixed(2);
-    const contextOptions = normalizeRoundtableContextOptions(config.contextOptions);
-    if (els.assistantIncludeManuscriptInput) els.assistantIncludeManuscriptInput.checked = contextOptions.includeManuscript;
-    if (els.assistantIncludeNovelInput) els.assistantIncludeNovelInput.checked = contextOptions.includeNovel;
-    if (els.assistantIncludePlotlineInput) els.assistantIncludePlotlineInput.checked = contextOptions.includePlotline;
-    if (els.assistantIncludeCharactersInput) els.assistantIncludeCharactersInput.checked = contextOptions.includeCharacters;
-    if (els.assistantIncludeWorldInput) els.assistantIncludeWorldInput.checked = contextOptions.includeWorld;
-    if (els.assistantIncludeOutlineInput) els.assistantIncludeOutlineInput.checked = contextOptions.includeOutline;
-    if (els.assistantIncludeForeshadowsInput) els.assistantIncludeForeshadowsInput.checked = contextOptions.includeForeshadows;
-    if (els.assistantIncludeMainChatInput) els.assistantIncludeMainChatInput.checked = contextOptions.includeMainChat;
-    if (els.assistantIncludeDiscussionInput) els.assistantIncludeDiscussionInput.checked = contextOptions.includeDiscussion;
-    if (els.assistantExcerptMaxInput) els.assistantExcerptMaxInput.value = contextOptions.excerptMax;
-    if (els.assistantDiscussionCountInput) els.assistantDiscussionCountInput.value = contextOptions.discussionCount;
-    if (els.assistantActivationProfileInput) els.assistantActivationProfileInput.value = clean(config.activationProfile);
-    if (assistantConfigTargetId && config.memories) {
-      roundtableState().assistantConfigs[assistantConfigTargetId] ||= {};
-      roundtableState().assistantConfigs[assistantConfigTargetId].memories = normalizeAssistantMemories(config.memories);
-    }
-    if (els.assistantActivationStatus) els.assistantActivationStatus.textContent = clean(config.activationProfile) ? "已激活" : "未激活";
-    if (els.activateAssistant) els.activateAssistant.textContent = clean(config.activationProfile) ? "重新激活" : "激活";
-    if (els.assistantAvatarPreview) {
-      els.assistantAvatarPreview.dataset.avatarDataUrl = clean(config.avatarDataUrl);
-      renderAvatarPreview(els.assistantAvatarPreview, config.avatarDataUrl, name || "议");
-    }
-    els.assistantPromptInput.value = prompt;
+    applyAssistantImportConfig(parseAssistantPersonaText(await file.text()));
     showToast("议员配置已导入，保存后生效");
   } catch (error) {
     showToast(humanizeError(error, "议员配置导入失败"));
   } finally {
     if (els.assistantImportFile) els.assistantImportFile.value = "";
   }
+}
+
+function applyAssistantImportConfig(config) {
+  const name = clean(config?.name);
+  const prompt = clean(config?.prompt);
+  if (!name || !prompt) throw new Error("议员人格缺少名称或角色提示词");
+  els.assistantNameInput.value = name;
+  renderAssistantProviderOptions(clean(config.providerId));
+  if (els.assistantBaseUrlInput) els.assistantBaseUrlInput.value = clean(config.apiBaseUrl);
+  if (els.assistantApiKeyInput) els.assistantApiKeyInput.value = clean(config.apiKey);
+  els.assistantModelInput.value = clean(config.model);
+  if (els.assistantNetworkEnabledInput) els.assistantNetworkEnabledInput.checked = Boolean(config.networkEnabled);
+  if (els.assistantMaxTokensInput) els.assistantMaxTokensInput.value = Number(config.maxTokens) || "";
+  const temperature = Number(config.temperature);
+  els.assistantTemperatureInput.value = Number.isFinite(temperature) ? clamp(temperature, 0, 2) : sessionSettings().temperature;
+  els.assistantTemperatureLabel.textContent = Number(els.assistantTemperatureInput.value).toFixed(2);
+  const contextOptions = normalizeRoundtableContextOptions(config.contextOptions);
+  if (els.assistantIncludeManuscriptInput) els.assistantIncludeManuscriptInput.checked = contextOptions.includeManuscript;
+  if (els.assistantIncludeNovelInput) els.assistantIncludeNovelInput.checked = contextOptions.includeNovel;
+  if (els.assistantIncludePlotlineInput) els.assistantIncludePlotlineInput.checked = contextOptions.includePlotline;
+  if (els.assistantIncludeCharactersInput) els.assistantIncludeCharactersInput.checked = contextOptions.includeCharacters;
+  if (els.assistantIncludeWorldInput) els.assistantIncludeWorldInput.checked = contextOptions.includeWorld;
+  if (els.assistantIncludeOutlineInput) els.assistantIncludeOutlineInput.checked = contextOptions.includeOutline;
+  if (els.assistantIncludeForeshadowsInput) els.assistantIncludeForeshadowsInput.checked = contextOptions.includeForeshadows;
+  if (els.assistantIncludeMainChatInput) els.assistantIncludeMainChatInput.checked = contextOptions.includeMainChat;
+  if (els.assistantIncludeDiscussionInput) els.assistantIncludeDiscussionInput.checked = contextOptions.includeDiscussion;
+  if (els.assistantExcerptMaxInput) els.assistantExcerptMaxInput.value = contextOptions.excerptMax;
+  if (els.assistantDiscussionCountInput) els.assistantDiscussionCountInput.value = contextOptions.discussionCount;
+  if (els.assistantActivationProfileInput) els.assistantActivationProfileInput.value = clean(config.activationProfile);
+  if (assistantConfigTargetId && config.memories) {
+    roundtableState().assistantConfigs[assistantConfigTargetId] ||= {};
+    roundtableState().assistantConfigs[assistantConfigTargetId].memories = normalizeAssistantMemories(config.memories);
+  }
+  if (els.assistantActivationStatus) els.assistantActivationStatus.textContent = clean(config.activationProfile) ? "已激活" : "未激活";
+  if (els.activateAssistant) els.activateAssistant.textContent = clean(config.activationProfile) ? "重新激活" : "激活";
+  if (els.assistantAvatarPreview) {
+    els.assistantAvatarPreview.dataset.avatarDataUrl = clean(config.avatarDataUrl);
+    renderAvatarPreview(els.assistantAvatarPreview, config.avatarDataUrl, name || "议");
+  }
+  els.assistantPromptInput.value = prompt;
 }
 
 async function handleAssistantAvatarSelected() {
