@@ -57,6 +57,7 @@
         <div class="composer-context-strip">
           <button id="contextBadge" class="context-badge" type="button" data-command="open-context">0/∞ · 0K</button>
         </div>
+        <div id="chatAttachmentList" class="chat-attachment-list" hidden></div>
         <textarea id="chatInput" rows="1" placeholder="在这里输入你的问题..."></textarea>
         <div class="composer-bottom">
           <button id="composerToolButton" class="round-button composer-tool-button" type="button" data-command="composer-tool" aria-label="写手设置">写</button>
@@ -299,7 +300,7 @@
 
     <input id="assistantImportFile" type="file" accept=".txt,.md,.json,text/plain,text/markdown,application/json" hidden />
     <input id="assistantAvatarFile" type="file" accept="image/png,image/jpeg,image/webp" hidden />
-    <input id="chatImageFile" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+    <input id="chatImageFile" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden />
     <input id="userAvatarFile" type="file" accept="image/png,image/jpeg,image/webp" hidden />
     <input id="sessionBackgroundFile" type="file" accept="image/png,image/jpeg,image/webp" hidden />
 

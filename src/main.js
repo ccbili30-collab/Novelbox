@@ -95,6 +95,8 @@ const MOTION_PULSE_MS = 260;
 const MOTION_RIPPLE_MS = 520;
 const LOCAL_IMAGE_MAX_BYTES = 2.5 * 1024 * 1024;
 const LOCAL_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+const CHAT_IMAGE_MAX_BYTES = Math.min(LOCAL_IMAGE_MAX_BYTES, 1.5 * 1024 * 1024);
+const CHAT_IMAGE_LIMIT = 4;
 const WORKSPACE_FILE_LIMIT = 160;
 const GENERATIVE_AGENT_SOURCE_NOTE = "人格记忆层参考 joonspk-research/generative_agents 的 memory stream / reflection 思路：观察被保存为短记忆，之后再进入角色提示。";
 
@@ -109,6 +111,7 @@ const els = {
   composerToolButton: $("#composerToolButton"),
   input: $("#chatInput"),
   chatImageFile: $("#chatImageFile"),
+  chatAttachmentList: $("#chatAttachmentList"),
   send: $("#sendButton"),
   contextBadge: $("#contextBadge"),
   modelSelect: $("#modelSelect"),
@@ -248,6 +251,7 @@ let closingDialogFromHistory = false;
 let toastTimer = null;
 let toastMotionTimer = null;
 let paperScrollPersistTimer = null;
+let pendingChatAttachments = [];
 let paperGripSuppressClickUntil = 0;
 const paperDrag = {
   active: false,
@@ -573,6 +577,57 @@ function getMessageContent(node) {
   return node.content || "";
 }
 
+function normalizeChatAttachments(attachments = []) {
+  return (Array.isArray(attachments) ? attachments : [])
+    .filter((item) => item?.dataUrl && LOCAL_IMAGE_TYPES.has(item.type))
+    .slice(0, CHAT_IMAGE_LIMIT)
+    .map((item) => ({
+      id: item.id || uid("img"),
+      name: clean(item.name) || "image",
+      type: item.type,
+      size: Number(item.size) || 0,
+      dataUrl: item.dataUrl,
+    }));
+}
+
+function chatAttachmentLabel(attachments = []) {
+  const count = normalizeChatAttachments(attachments).length;
+  return count ? `[${count} 张图片]` : "";
+}
+
+function renderMessagePlainContent(node) {
+  return [getMessageContent(node), chatAttachmentLabel(node?.attachments)].filter(Boolean).join("\n");
+}
+
+function buildUserRequestContent(text, attachments = []) {
+  const images = normalizeChatAttachments(attachments);
+  if (!images.length) return text;
+  const content = [{ type: "text", text: clean(text) || "请结合图片继续。" }];
+  images.forEach((image) => {
+    content.push({ type: "image_url", image_url: { url: image.dataUrl } });
+  });
+  return content;
+}
+
+function messageContentText(content) {
+  if (Array.isArray(content)) {
+    return content.map((part) => {
+      if (part?.type === "text") return part.text || "";
+      if (part?.type === "image_url") return "[图片]";
+      return "";
+    }).filter(Boolean).join("\n");
+  }
+  return clean(content);
+}
+
+function messageHasContent(message) {
+  return Boolean(messageContentText(message?.content));
+}
+
+function messagesToPlainText(messages = []) {
+  return messages.map((message) => `${message.role}: ${messageContentText(message.content)}`).join("\n\n");
+}
+
 function contextMessages(extraUserText = "", includeDraftAssistantId = null) {
   const path = activePath();
   const settings = sessionSettings();
@@ -595,25 +650,25 @@ function contextMessages(extraUserText = "", includeDraftAssistantId = null) {
       });
     }
     selection.forEach((node) => {
-      if (node.role === "user") messages.push({ role: "user", content: node.content });
+      if (node.role === "user") messages.push({ role: "user", content: buildUserRequestContent(node.content, node.attachments) });
       if (node.role === "assistant") messages.push({ role: "assistant", content: getAssistantVersion(node)?.content || "" });
     });
     if (clean(extraUserText)) messages.push({ role: "user", content: extraUserText });
     return messages;
   };
   let messages = buildMessagesFromSelection(selected);
-  const estimated = estimateTokens(messages.map((message) => `${message.role}: ${message.content}`).join("\n\n"));
+  const estimated = estimateTokens(messagesToPlainText(messages));
   const novelMemory = buildNovelMemory();
   if (estimated > AUTO_CONTEXT_TOKEN_THRESHOLD && novelMemory && selected.length > COMPRESSED_CONTEXT_TAIL_COUNT) {
     selected = selected.slice(-COMPRESSED_CONTEXT_TAIL_COUNT);
     messages = buildMessagesFromSelection(selected, true);
   }
-  return messages.filter((message) => clean(message.content));
+  return messages.filter(messageHasContent);
 }
 
 function getAutoContextCompressedInfo(extraUserText = "") {
   const full = contextMessages(extraUserText);
-  const text = full.map((message) => `${message.role}: ${message.content}`).join("\n\n");
+  const text = messagesToPlainText(full);
   return {
     compressed: text.includes("当前对话过长，已自动改用小说资料和最近对话继续。"),
     tokens: estimateTokens(text),
@@ -629,7 +684,7 @@ function estimateFullContextTokens(extraUserText = "", includeDraftAssistantId =
   const parts = [
     settings.systemPrompt,
     buildNovelMemory(),
-    ...selected.map((node) => getMessageContent(node)),
+    ...selected.map(renderMessagePlainContent),
     extraUserText,
   ].filter((part) => clean(part));
   return estimateTokens(parts.join("\n\n"));
@@ -656,7 +711,7 @@ function extractJsonObject(text) {
 function autoCompressionSourceSize() {
   return [
     sessionNovel().body,
-    activePath().map((node) => getMessageContent(node)).join("\n\n"),
+    activePath().map(renderMessagePlainContent).join("\n\n"),
   ].join("\n\n").length;
 }
 
@@ -719,7 +774,7 @@ function getNovelSourceText() {
 
 function contextInfo(extraUserText = "") {
   const messages = contextMessages(extraUserText);
-  const text = messages.map((message) => `${message.role}: ${message.content}`).join("\n\n");
+  const text = messagesToPlainText(messages);
   const nonSystem = messages.filter((message) => message.role !== "system").length;
   const settings = sessionSettings();
   const limit = settings.unlimitedContext ? "∞" : settings.contextCount;
@@ -1043,7 +1098,7 @@ function render() {
   els.body.classList.toggle("is-generating", isGenerating);
   els.body.classList.toggle("roundtable-mode", rt.enabled);
   els.body.classList.toggle("roundtable-busy", roundtableGenerating);
-  els.body.classList.toggle("is-ready", Boolean(clean(els.input.value)));
+  els.body.classList.toggle("is-ready", Boolean(clean(els.input.value)) || pendingChatAttachments.length > 0);
   persistState(state);
 }
 
@@ -1546,8 +1601,22 @@ function renderChatAvatar(role) {
   return `<div class="chat-avatar assistant-chat-avatar">AI</div>`;
 }
 
+function renderChatAttachments(attachments = [], options = {}) {
+  const items = normalizeChatAttachments(attachments);
+  if (!items.length) return "";
+  const removable = Boolean(options.removable);
+  return `<div class="chat-attachments${removable ? " is-pending" : ""}">${items.map((item) => `
+    <figure class="chat-attachment">
+      <img src="${escapeHtml(item.dataUrl)}" alt="${escapeHtml(item.name)}" />
+      <figcaption>${escapeHtml(item.name)}</figcaption>
+      ${removable ? `<button type="button" data-command="remove-chat-image" data-attachment-id="${escapeHtml(item.id)}" aria-label="移除图片">×</button>` : ""}
+    </figure>
+  `).join("")}</div>`;
+}
+
 function renderMessage(node) {
   const content = getMessageContent(node);
+  const attachments = normalizeChatAttachments(node.attachments);
   const version = getAssistantVersion(node);
   const usage = version?.usage?.total_tokens ? ` · ${formatK(version.usage.total_tokens)} tok` : "";
   const meta = `${content.length}字 · ${formatTime(version?.createdAt || node.createdAt)}${usage}`;
@@ -1567,7 +1636,11 @@ function renderMessage(node) {
     <article class="chat-row ${isUser ? "is-user" : "is-assistant"}${failedClass}" data-node-id="${node.id}">
       ${renderChatAvatar(node.role)}
       <div class="chat-main">
-        <div class="chat-bubble chat-speech" data-command="toggle-menu" data-node-id="${node.id}"><span class="message-content">${escapeHtml(content)}</span>${isGenerating && generatingNodeId === node.id ? '<span class="stream-caret"></span>' : ""}</div>
+        <div class="chat-bubble chat-speech" data-command="toggle-menu" data-node-id="${node.id}">
+          ${attachments.length ? renderChatAttachments(attachments) : ""}
+          ${content ? `<span class="message-content">${escapeHtml(content)}</span>` : ""}
+          ${isGenerating && generatingNodeId === node.id ? '<span class="stream-caret"></span>' : ""}
+        </div>
         ${isUser ? "" : `<div class="message-meta chat-message-meta">${escapeHtml(meta)}</div>`}
         ${switcher}
       </div>
@@ -1966,7 +2039,8 @@ function selectAssistantModelFromPicker(model) {
 }
 
 function renderContextBadge() {
-  const info = contextInfo(clean(els.input.value));
+  const draft = [clean(els.input.value), chatAttachmentLabel(pendingChatAttachments)].filter(Boolean).join("\n");
+  const info = contextInfo(draft);
   drawContextBadge(els, info, formatK);
 }
 
@@ -2091,11 +2165,13 @@ async function saveEditor(sendAfterSave = false) {
   showToast("已修改用户内容");
 }
 
-async function appendUserMessage(text) {
+async function appendUserMessage(text, attachments = []) {
   const session = activeSession();
   const path = activePath(session);
   const parent = path[path.length - 1] || getNode(session.rootId, session);
   const user = createNode("user", parent.id, text);
+  const normalizedAttachments = normalizeChatAttachments(attachments);
+  if (normalizedAttachments.length) user.attachments = normalizedAttachments;
   appendChild(session, parent, user);
   const assistant = createNode("assistant", user.id, "");
   assistant.activeVersionId = assistant.versions[0].id;
@@ -2712,6 +2788,37 @@ function chooseChatImage() {
   els.chatImageFile?.click();
 }
 
+function renderPendingChatAttachments() {
+  if (!els.chatAttachmentList) return;
+  const attachments = normalizeChatAttachments(pendingChatAttachments);
+  els.chatAttachmentList.hidden = !attachments.length;
+  els.chatAttachmentList.innerHTML = attachments.length ? renderChatAttachments(attachments, { removable: true }) : "";
+  renderContextBadge();
+  els.body.classList.toggle("is-ready", Boolean(clean(els.input.value)) || attachments.length > 0);
+  resizeInput();
+}
+
+function removeChatImage(id) {
+  pendingChatAttachments = pendingChatAttachments.filter((item) => item.id !== id);
+  renderPendingChatAttachments();
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve(String(reader.result || "")));
+    reader.addEventListener("error", () => reject(reader.error || new Error("图片读取失败")));
+    reader.readAsDataURL(file);
+  });
+}
+
+function consumePendingChatAttachments() {
+  const attachments = normalizeChatAttachments(pendingChatAttachments);
+  pendingChatAttachments = [];
+  renderPendingChatAttachments();
+  return attachments;
+}
+
 function insertAtComposerCursor(text) {
   const input = els.input;
   const start = input.selectionStart ?? input.value.length;
@@ -2722,15 +2829,41 @@ function insertAtComposerCursor(text) {
   input.setSelectionRange?.(nextCursor, nextCursor);
   resizeInput();
   renderContextBadge();
-  els.body.classList.toggle("is-ready", Boolean(clean(input.value)));
+  els.body.classList.toggle("is-ready", Boolean(clean(input.value)) || pendingChatAttachments.length > 0);
 }
 
-function handleChatImageSelected() {
-  const file = els.chatImageFile?.files?.[0];
-  if (!file) return;
-  insertAtComposerCursor(`\n[图片：${file.name}]\n`);
-  if (els.chatImageFile) els.chatImageFile.value = "";
-  showToast("已插入图片标记，后续接入多模态发送");
+async function handleChatImageSelected() {
+  const selected = Array.from(els.chatImageFile?.files || []);
+  if (!selected.length) return;
+  try {
+    for (const file of selected) {
+      if (pendingChatAttachments.length >= CHAT_IMAGE_LIMIT) {
+        showToast(`最多添加 ${CHAT_IMAGE_LIMIT} 张图片`);
+        break;
+      }
+      if (!LOCAL_IMAGE_TYPES.has(file.type)) {
+        showToast("只支持 PNG、JPG、WEBP 图片");
+        continue;
+      }
+      if (file.size > CHAT_IMAGE_MAX_BYTES) {
+        showToast(`图片过大，请选 ${Math.round(CHAT_IMAGE_MAX_BYTES / 1024 / 1024)}MB 以内`);
+        continue;
+      }
+      pendingChatAttachments.push({
+        id: uid("img"),
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        dataUrl: await fileToDataUrl(file),
+      });
+    }
+    renderPendingChatAttachments();
+    els.body.classList.toggle("is-ready", Boolean(clean(els.input.value)) || pendingChatAttachments.length > 0);
+  } catch (error) {
+    showToast(humanizeError(error, "图片读取失败"));
+  } finally {
+    if (els.chatImageFile) els.chatImageFile.value = "";
+  }
 }
 
 async function handleWorkspaceFilesSelected() {
@@ -4246,6 +4379,7 @@ const handleCommand = createCommandRegistry({
   "choose-workspace-files": () => chooseWorkspaceFiles(),
   "clear-workspace-files": () => clearWorkspaceFiles(),
   "choose-chat-image": () => chooseChatImage(),
+  "remove-chat-image": (target) => removeChatImage(target.dataset.attachmentId),
   "remove-workspace-file": (target) => removeWorkspaceFile(target.dataset.fileId),
   "toggle-model-picker": () => toggleModelPicker(),
   "select-model": (target) => selectModelFromPicker(target.dataset.model),
@@ -4372,8 +4506,10 @@ els.composer.addEventListener("submit", async (event) => {
     return;
   }
   const text = clean(els.input.value);
-  if (!text) return;
+  const attachments = normalizeChatAttachments(pendingChatAttachments);
+  if (!text && !attachments.length) return;
   if (roundtableState().enabled) {
+    if (attachments.length) return showToast("圆桌讨论暂不发送图片，请切回交流模式使用");
     els.input.value = "";
     resizeInput();
     renderContextBadge();
@@ -4382,10 +4518,12 @@ els.composer.addEventListener("submit", async (event) => {
   }
   try {
     validateApi();
+    const sendingAttachments = consumePendingChatAttachments();
     els.input.value = "";
     resizeInput();
     renderContextBadge();
-    await appendUserMessage(text);
+    els.body.classList.toggle("is-ready", false);
+    await appendUserMessage(text, sendingAttachments);
   } catch (error) {
     showToast(humanizeError(error, "发送失败"));
   }
@@ -4452,7 +4590,7 @@ function finishRoundtablePaperDrag(event) {
 els.input.addEventListener("input", () => {
   resizeInput();
   renderContextBadge();
-  els.body.classList.toggle("is-ready", Boolean(clean(els.input.value)));
+  els.body.classList.toggle("is-ready", Boolean(clean(els.input.value)) || pendingChatAttachments.length > 0);
   updateRoundtableMentionPicker();
 });
 els.input.addEventListener("focus", () => els.body.classList.add("composer-focused"));
