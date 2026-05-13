@@ -1242,6 +1242,11 @@ function renderRoundtableMessage(message) {
   const failedClass = message.failed ? " failed" : "";
   const streamingClass = message.streaming ? " streaming" : "";
   if (isWriter) {
+    const writerTip = message.streaming
+      ? "正在写入正文..."
+      : message.manuscriptSync?.active
+        ? "已将这一段同步到上方正文区"
+        : "这一段尚未同步到正文区";
     return `
       <article class="roundtable-writer-block ${profile.tone}${streamingClass}">
         <div class="roundtable-writer-card" data-command="toggle-roundtable-menu" data-round-id="${message.id}">
@@ -1257,7 +1262,7 @@ function renderRoundtableMessage(message) {
           </div>
           ${decision}
           ${mentionBadge}
-          <div class="roundtable-writer-tip">已将这一段同步到上方正文区</div>
+          <div class="roundtable-writer-tip">${escapeHtml(writerTip)}</div>
           <div class="roundtable-writer-snippet">${renderRoundtableRichText(message.content || "")}${message.streaming ? '<span class="stream-caret"></span>' : ""}</div>
         </div>
       </article>
