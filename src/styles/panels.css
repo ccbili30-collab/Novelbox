@@ -109,6 +109,49 @@
   margin-bottom: 10px;
 }
 
+.layout-debug-section {
+  padding-bottom: 2px;
+}
+
+.layout-debug-section > summary {
+  cursor: pointer;
+  list-style: none;
+  margin-bottom: 0;
+}
+
+.layout-debug-section > summary::-webkit-details-marker {
+  display: none;
+}
+
+.layout-debug-section > summary::after {
+  content: "+";
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-left: auto;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: #666;
+  background: #fff;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.layout-debug-section[open] > summary {
+  margin-bottom: 10px;
+}
+
+.layout-debug-section[open] > summary::after {
+  content: "-";
+}
+
+.layout-number-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
 .range-field {
   display: grid;
   gap: 5px;
@@ -130,6 +173,25 @@
 
 .range-field input {
   width: 100%;
+}
+
+.layout-number-grid .range-field {
+  margin: 0;
+}
+
+.layout-number-grid .range-field span {
+  align-items: center;
+  font-size: 12px;
+}
+
+.layout-number-grid .range-field input {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 9px;
+  color: var(--text);
+  background: #fff;
+  font-size: 14px;
 }
 
 .preset-row {

@@ -1859,6 +1859,14 @@ function formatLayoutValue(key, value) {
   return `${value}px`;
 }
 
+function readLayoutInputValue(input, fallback) {
+  const raw = Number(input.value);
+  if (!Number.isFinite(raw)) return fallback;
+  const min = Number(input.min);
+  const max = Number(input.max);
+  return clamp(raw, Number.isFinite(min) ? min : -Infinity, Number.isFinite(max) ? max : Infinity);
+}
+
 function renderModelPicker() {
   ensureModelPickerUi();
   ensureAssistantModelPickerUi();
@@ -4406,7 +4414,8 @@ els.sessionBackgroundFile?.addEventListener("change", handleSessionBackgroundSel
 els.layoutInputs.forEach((input) => {
   input.addEventListener("input", () => {
     const key = input.dataset.layoutKey;
-    sessionSettings().layout[key] = Number(input.value);
+    const layout = sessionSettings().layout;
+    layout[key] = readLayoutInputValue(input, layout[key]);
     applyLayout();
     renderSettings();
     resizeInput();
