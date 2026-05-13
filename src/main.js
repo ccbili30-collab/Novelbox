@@ -176,6 +176,7 @@ const els = {
   assistantConfigDialog: $("#assistantConfigDialog"),
   assistantConfigTitle: $("#assistantConfigTitle"),
   assistantNameInput: $("#assistantNameInput"),
+  assistantProviderSelect: $("#assistantProviderSelect"),
   assistantBaseUrlInput: $("#assistantBaseUrlInput"),
   assistantApiKeyInput: $("#assistantApiKeyInput"),
   assistantModelInput: $("#assistantModelInput"),
@@ -330,6 +331,27 @@ function syncApiFromProvider(api = apiSettings()) {
   return api;
 }
 
+function apiForProvider(providerId) {
+  const api = apiSettings();
+  const provider = api.providers.find((item) => item.id === providerId) || activeApiProvider(api);
+  return {
+    ...api,
+    currentProviderId: provider?.id || api.currentProviderId,
+    baseUrl: provider?.baseUrl || api.baseUrl,
+    apiKey: provider?.apiKey || api.apiKey,
+    models: provider?.models || api.models,
+  };
+}
+
+function apiForAssistantConfig(config = {}) {
+  const providerApi = apiForProvider(config.providerId);
+  return {
+    ...providerApi,
+    baseUrl: clean(config.apiBaseUrl) || providerApi.baseUrl,
+    apiKey: clean(config.apiKey) || providerApi.apiKey,
+  };
+}
+
 function sessionSettings(session = activeSession()) {
   session.settings = hydrateSessionSettings(session.settings);
   return session.settings;
@@ -391,10 +413,11 @@ function isCustomRoundAssistant(id) {
 function getRoundAssistant(id) {
   const base = getRoundAssistantBase(id);
   const rt = roundtableState();
+  const config = rt.assistantConfigs[id] || {};
   return resolveRoundAssistant({
     base,
-    config: rt.assistantConfigs[id],
-    api: apiSettings(),
+    config,
+    api: apiForAssistantConfig(config),
     sessionSettings: sessionSettings(),
     roundtableContextOptions: rt.contextOptions,
   });
@@ -1777,14 +1800,15 @@ function renderModelPicker() {
     `;
   }
   els.modelDatalist.innerHTML = models.map((model) => `<option value="${escapeHtml(model)}"></option>`).join("");
-  renderAssistantModelPicker(models);
+  renderAssistantModelPicker();
 }
 
 function renderAssistantModelPicker(models = null) {
   ensureAssistantModelPickerUi();
   if (!els.assistantModelPicker || !els.assistantModelPickerButton) return;
   const current = clean(els.assistantModelInput?.value) || sessionSettings().model;
-  const items = Array.from(new Set([current, sessionSettings().model, ...apiSettings().models].filter(Boolean))).sort();
+  const providerApi = apiForProvider(els.assistantProviderSelect?.value);
+  const items = Array.from(new Set([current, sessionSettings().model, ...providerApi.models].filter(Boolean))).sort();
   const list = models || items;
   els.assistantModelPickerButton.classList.toggle("active", assistantModelPickerOpen);
   els.assistantModelPickerButton.setAttribute("aria-expanded", String(assistantModelPickerOpen));
@@ -1797,6 +1821,16 @@ function renderAssistantModelPicker(models = null) {
         </button>
       `).join("")
     : `<p class="muted">还没有模型。先拉取此议员模型，或直接手动输入。</p>`;
+}
+
+function renderAssistantProviderOptions(selectedId = "") {
+  if (!els.assistantProviderSelect) return;
+  const api = apiSettings();
+  els.assistantProviderSelect.innerHTML = [
+    `<option value="">跟随默认提供方</option>`,
+    ...api.providers.map((provider) => `<option value="${escapeHtml(provider.id)}">${escapeHtml(provider.name)}</option>`),
+  ].join("");
+  els.assistantProviderSelect.value = api.providers.some((provider) => provider.id === selectedId) ? selectedId : "";
 }
 
 function toggleModelPicker(force) {
@@ -2216,11 +2250,8 @@ async function fetchModels() {
 async function fetchAssistantModels() {
   if (!assistantConfigTargetId) return;
   try {
-    const api = {
-      ...apiSettings(),
-      baseUrl: clean(els.assistantBaseUrlInput?.value) || apiSettings().baseUrl,
-      apiKey: clean(els.assistantApiKeyInput?.value) || apiSettings().apiKey,
-    };
+    const config = currentAssistantFormConfig();
+    const api = apiForAssistantConfig(config);
     if (!clean(api.apiKey)) throw new Error("请先填写此议员或全局 API Key");
     if (els.assistantModelStatus) els.assistantModelStatus.textContent = "正在拉取...";
     if (els.fetchAssistantModels) els.fetchAssistantModels.disabled = true;
@@ -2229,7 +2260,8 @@ async function fetchAssistantModels() {
     const models = (data.data || []).map((item) => item.id).filter(Boolean).sort();
     if (!models.length) throw new Error("没有读取到模型");
     const globalApi = apiSettings();
-    const provider = activeApiProvider(globalApi);
+    const providerApi = apiForProvider(config.providerId);
+    const provider = globalApi.providers.find((item) => item.id === providerApi.currentProviderId) || activeApiProvider(globalApi);
     provider.models = Array.from(new Set([sessionSettings().model, clean(els.assistantModelInput?.value), ...models].filter(Boolean)));
     syncApiFromProvider(globalApi);
     if (!clean(els.assistantModelInput?.value)) {
@@ -2846,6 +2878,7 @@ function openAssistantConfig(id) {
     els.assistantAvatarPreview.dataset.avatarDataUrl = config.avatarDataUrl || "";
     renderAvatarPreview(els.assistantAvatarPreview, config.avatarDataUrl, config.name || assistant.name || "议");
   }
+  renderAssistantProviderOptions(config.providerId);
   if (els.assistantBaseUrlInput) els.assistantBaseUrlInput.value = config.apiBaseUrl || "";
   if (els.assistantApiKeyInput) els.assistantApiKeyInput.value = config.apiKey || "";
   els.assistantModelInput.value = config.model;
@@ -2897,6 +2930,7 @@ function currentAssistantFormConfig() {
   const previous = assistantConfigTargetId ? roundtableState().assistantConfigs[assistantConfigTargetId] || {} : {};
   return {
     name: clean(els.assistantNameInput.value),
+    providerId: clean(els.assistantProviderSelect?.value),
     apiBaseUrl: clean(els.assistantBaseUrlInput?.value),
     apiKey: clean(els.assistantApiKeyInput?.value),
     model: clean(els.assistantModelInput.value),
@@ -2939,6 +2973,7 @@ async function handleAssistantImportSelected() {
     const prompt = clean(config?.prompt);
     if (!name || !prompt) return showToast("议员配置 JSON 缺少 name/prompt");
     els.assistantNameInput.value = name;
+    renderAssistantProviderOptions(clean(config.providerId));
     if (els.assistantBaseUrlInput) els.assistantBaseUrlInput.value = clean(config.apiBaseUrl);
     if (els.assistantApiKeyInput) els.assistantApiKeyInput.value = clean(config.apiKey);
     els.assistantModelInput.value = clean(config.model);
@@ -3060,11 +3095,7 @@ async function activateAssistantIdentity() {
     maxTokens: Math.min(Number(config.maxTokens) || sessionSettings().maxTokens || 900, 900),
     temperature: Number.isFinite(Number(config.temperature)) ? config.temperature : sessionSettings().temperature,
   };
-  const api = {
-    ...apiSettings(),
-    baseUrl: config.apiBaseUrl || apiSettings().baseUrl,
-    apiKey: config.apiKey || apiSettings().apiKey,
-  };
+  const api = apiForAssistantConfig(config);
   try {
     validateApi(settings, api);
     assistantActivating = true;
@@ -3115,6 +3146,7 @@ function saveAssistantConfigFromForm(options = {}) {
   const model = clean(els.assistantModelInput.value);
   rt.assistantConfigs[id] = {
     name: clean(els.assistantNameInput.value) || base.name,
+    providerId: clean(els.assistantProviderSelect?.value),
     apiBaseUrl: clean(els.assistantBaseUrlInput?.value),
     apiKey: clean(els.assistantApiKeyInput?.value),
     model,
@@ -3127,8 +3159,11 @@ function saveAssistantConfigFromForm(options = {}) {
     prompt: clean(els.assistantPromptInput.value) || base.prompt,
   };
   if (model) {
+    const providerApi = apiForProvider(rt.assistantConfigs[id].providerId);
     const api = apiSettings();
-    api.models = Array.from(new Set([model, ...api.models]));
+    const provider = api.providers.find((item) => item.id === providerApi.currentProviderId) || activeApiProvider(api);
+    provider.models = Array.from(new Set([model, ...(provider.models || [])].filter(Boolean)));
+    syncApiFromProvider(api);
   }
   if (options.close !== false) closeAssistantConfig();
   touchSession(activeSession());
@@ -4256,6 +4291,10 @@ els.assistantModelInput?.addEventListener("focus", () => {
 });
 els.assistantModelInput?.addEventListener("input", () => {
   if (els.assistantModelStatus) els.assistantModelStatus.textContent = clean(els.assistantModelInput.value) ? "手动输入" : "未选择";
+  renderAssistantModelPicker();
+});
+els.assistantProviderSelect?.addEventListener("change", () => {
+  if (els.assistantModelStatus) els.assistantModelStatus.textContent = els.assistantProviderSelect.value ? "已切换提供方" : "跟随默认提供方";
   renderAssistantModelPicker();
 });
 els.assistantNameInput?.addEventListener("input", () => {
