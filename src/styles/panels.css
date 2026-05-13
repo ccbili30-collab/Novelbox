@@ -109,6 +109,77 @@
   margin-bottom: 10px;
 }
 
+.settings-panel-head {
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.settings-panel-head > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.settings-panel-head strong,
+.settings-panel-head span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-back-button {
+  width: 26px;
+  height: 26px;
+  font-size: 18px;
+}
+
+.settings-home,
+.settings-page {
+  animation: panel-page-in 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+#settingsPanel [hidden] {
+  display: none !important;
+}
+
+.settings-home {
+  display: grid;
+  gap: 9px;
+  padding-top: 2px;
+}
+
+.settings-slot {
+  display: grid;
+  gap: 4px;
+  min-height: 62px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  background: #fff;
+  text-align: left;
+}
+
+.settings-slot b {
+  font-size: 15px;
+}
+
+.settings-slot span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-page > .settings-section:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
 .layout-debug-section {
   padding-bottom: 2px;
 }
@@ -185,13 +256,50 @@
 }
 
 .layout-number-grid .range-field input {
+  min-width: 0;
   min-height: 34px;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 7px 9px;
+  border-radius: 8px 0 0 8px;
+  padding: 7px 6px 7px 8px;
   color: var(--text);
   background: #fff;
   font-size: 14px;
+}
+
+.layout-stepper {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 18px;
+  grid-template-rows: 17px 17px;
+  align-items: stretch;
+  min-height: 34px;
+}
+
+.layout-stepper input {
+  grid-row: 1 / span 2;
+}
+
+.layout-stepper button {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-left: 0;
+  color: #555;
+  background: #f9f9f9;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.layout-stepper button:first-of-type {
+  border-bottom: 0;
+  border-radius: 0 8px 0 0;
+}
+
+.layout-stepper button:last-child {
+  border-radius: 0 0 8px 0;
 }
 
 .preset-row {
@@ -207,6 +315,18 @@
   border-radius: 8px;
   background: #f7f7f7;
   font-size: 13px;
+}
+
+@keyframes panel-page-in {
+  from {
+    opacity: 0;
+    transform: translateX(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .compact-field {

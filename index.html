@@ -84,134 +84,162 @@
       <div id="sessionList" class="session-list"></div>
     </aside>
 
-    <aside id="settingsPanel" class="side-panel right-panel" hidden>
-      <div class="panel-head">
-        <strong>会话设置</strong>
+    <aside id="settingsPanel" class="side-panel right-panel" data-settings-page="home" hidden>
+      <div class="panel-head settings-panel-head">
+        <button id="settingsBackButton" class="icon-button settings-back-button" type="button" data-command="settings-home" hidden>‹</button>
+        <div>
+          <strong id="settingsPanelTitle">设置</strong>
+          <span id="settingsPanelSubtitle" class="muted">选择要调整的模块</span>
+        </div>
         <button class="icon-button" type="button" data-command="close-panels">×</button>
       </div>
-      <div class="settings-section provider-settings-section">
-        <div class="section-title">
-          <strong>全局默认 API</strong>
-          <span class="muted">主线、写手和议员的默认来源</span>
-        </div>
-        <label class="field">
-          <span>当前提供方</span>
-          <select id="providerSelect"></select>
-        </label>
-        <label class="field">
-          <span>提供方名称</span>
-          <input id="providerNameInput" type="text" placeholder="例如 OpenAI / DeepSeek / Qwen" />
-        </label>
-        <div class="panel-row provider-actions">
-          <button type="button" data-command="add-provider">新增提供方</button>
-          <button type="button" data-command="delete-provider">删除当前</button>
-        </div>
-      </div>
-      <label class="field">
-        <span>Base URL</span>
-        <input id="baseUrlInput" type="text" placeholder="https://api.openai.com/v1" />
-      </label>
-      <label class="field">
-        <span>API Key</span>
-        <input id="apiKeyInput" type="password" placeholder="sk-..." />
-      </label>
-      <datalist id="modelDatalist"></datalist>
-      <div class="settings-section">
-        <div class="section-title">
-          <strong>本会话外观</strong>
-          <span class="muted">只影响当前会话</span>
-        </div>
-        <label class="field">
-          <span>你的显示名</span>
-          <input id="userNameInput" type="text" placeholder="我" />
-        </label>
-        <div class="avatar-setting-row">
-          <div id="userAvatarPreview" class="avatar-preview">我</div>
-          <div class="avatar-setting-actions">
-            <button id="chooseUserAvatarButton" type="button">选择用户头像</button>
-            <button id="clearUserAvatarButton" type="button">清除</button>
+
+      <section class="settings-home" data-settings-view="home">
+        <button class="settings-slot" type="button" data-command="open-settings-page" data-settings-page="model">
+          <b>模型配置</b>
+          <span>默认 API、主线模型和生成参数</span>
+        </button>
+        <button class="settings-slot" type="button" data-command="open-settings-page" data-settings-page="appearance">
+          <b>本会话外观</b>
+          <span>你的名字、头像和背景</span>
+        </button>
+        <button class="settings-slot" type="button" data-command="open-settings-page" data-settings-page="layout">
+          <b>排版调试</b>
+          <span>输入区、气泡和字号数值</span>
+        </button>
+      </section>
+
+      <section class="settings-page" data-settings-view="model" hidden>
+        <div class="settings-section provider-settings-section">
+          <div class="section-title">
+            <strong>默认 API</strong>
+            <span class="muted">主线、写手和议员的默认来源</span>
           </div>
-        </div>
-        <div class="background-setting-row">
-          <div id="sessionBackgroundPreview" class="background-preview"></div>
-          <div class="avatar-setting-actions">
-            <button id="chooseSessionBackgroundButton" type="button">选择背景</button>
-            <button id="clearSessionBackgroundButton" type="button">清除</button>
-          </div>
-        </div>
-      </div>
-      <details class="settings-section main-ai-settings-section">
-        <summary class="section-title">
-          <strong>主线 AI</strong>
-          <span class="muted">提示词、模型和生成参数</span>
-        </summary>
-        <label class="field">
-          <span>主线 AI 提示</span>
-          <textarea id="systemPromptInput" rows="6"></textarea>
-        </label>
-        <label class="field">
-          <span>主线模型</span>
-          <input id="modelInput" type="text" list="modelDatalist" placeholder="gpt-4o-mini" />
-        </label>
-        <div class="panel-row">
-          <button type="button" data-command="fetch-models">拉取模型列表</button>
-          <span id="modelStatus" class="muted">未拉取</span>
-        </div>
-        <label class="field">
-          <span>温度 <b id="temperatureLabel">0.8</b></span>
-          <input id="temperatureInput" type="range" min="0" max="2" step="0.05" />
-        </label>
-        <div class="split-fields">
           <label class="field">
-            <span>上下文条数</span>
-            <input id="contextCountInput" type="number" min="0" step="1" />
+            <span>当前提供方</span>
+            <select id="providerSelect"></select>
+          </label>
+          <label class="field">
+            <span>提供方名称</span>
+            <input id="providerNameInput" type="text" placeholder="例如 OpenAI / DeepSeek / Qwen" />
+          </label>
+          <div class="panel-row provider-actions">
+            <button type="button" data-command="add-provider">新增提供方</button>
+            <button type="button" data-command="delete-provider">删除当前</button>
+          </div>
+        </div>
+        <label class="field">
+          <span>Base URL</span>
+          <input id="baseUrlInput" type="text" placeholder="https://api.openai.com/v1" />
+        </label>
+        <label class="field">
+          <span>API Key</span>
+          <input id="apiKeyInput" type="password" placeholder="sk-..." />
+        </label>
+        <datalist id="modelDatalist"></datalist>
+        <div class="settings-section main-ai-settings-section">
+          <div class="section-title">
+            <strong>主线 AI</strong>
+            <span class="muted">提示词、模型和生成参数</span>
+          </div>
+          <label class="field">
+            <span>主线 AI 提示</span>
+            <textarea id="systemPromptInput" rows="6"></textarea>
+          </label>
+          <label class="field">
+            <span>主线模型</span>
+            <input id="modelInput" type="text" list="modelDatalist" placeholder="gpt-4o-mini" />
+          </label>
+          <div class="panel-row">
+            <button type="button" data-command="fetch-models">拉取模型列表</button>
+            <span id="modelStatus" class="muted">未拉取</span>
+          </div>
+          <label class="field">
+            <span>温度 <b id="temperatureLabel">0.8</b></span>
+            <input id="temperatureInput" type="range" min="0" max="2" step="0.05" />
+          </label>
+          <div class="split-fields">
+            <label class="field">
+              <span>上下文条数</span>
+              <input id="contextCountInput" type="number" min="0" step="1" />
+            </label>
+            <label class="check-field">
+              <input id="unlimitedContextInput" type="checkbox" />
+              <span>无限</span>
+            </label>
+          </div>
+          <label class="field">
+            <span>主线最大输出 token</span>
+            <input id="maxTokensInput" type="number" min="1" step="1" />
           </label>
           <label class="check-field">
-            <input id="unlimitedContextInput" type="checkbox" />
-            <span>无限</span>
+            <input id="streamInput" type="checkbox" />
+            <span>流式输出</span>
           </label>
         </div>
-        <label class="field">
-          <span>主线最大输出 token</span>
-          <input id="maxTokensInput" type="number" min="1" step="1" />
-        </label>
-        <label class="check-field">
-          <input id="streamInput" type="checkbox" />
-          <span>流式输出</span>
-        </label>
-      </details>
-      <details class="settings-section layout-debug-section">
-        <summary class="section-title">
-          <strong>排版调试</strong>
-          <span class="muted">数值</span>
-        </summary>
-        <div class="layout-number-grid">
-          <label class="range-field"><span>输入栏高度 <b data-layout-value="composerMinHeight"></b></span><input type="number" min="48" max="130" step="1" data-layout-key="composerMinHeight" /></label>
-          <label class="range-field"><span>输入框字号 <b data-layout-value="composerFontSize"></b></span><input type="number" min="12" max="24" step="1" data-layout-key="composerFontSize" /></label>
-          <label class="range-field"><span>发送按钮 <b data-layout-value="sendButtonSize"></b></span><input type="number" min="24" max="52" step="1" data-layout-key="sendButtonSize" /></label>
-          <label class="range-field"><span>工具按钮 <b data-layout-value="toolButtonSize"></b></span><input type="number" min="20" max="44" step="1" data-layout-key="toolButtonSize" /></label>
-          <label class="range-field"><span>消息字号 <b data-layout-value="messageFontSize"></b></span><input type="number" min="13" max="24" step="1" data-layout-key="messageFontSize" /></label>
-          <label class="range-field"><span>行间距 <b data-layout-value="messageLineHeight"></b></span><input type="number" min="120" max="190" step="1" data-layout-key="messageLineHeight" /></label>
-          <label class="range-field"><span>AI 左边距 <b data-layout-value="assistantLeft"></b></span><input type="number" min="0" max="60" step="1" data-layout-key="assistantLeft" /></label>
-          <label class="range-field"><span>消息两侧边距 <b data-layout-value="messageSidePadding"></b></span><input type="number" min="4" max="36" step="1" data-layout-key="messageSidePadding" /></label>
-          <label class="range-field"><span>消息间距 <b data-layout-value="messageGap"></b></span><input type="number" min="8" max="42" step="1" data-layout-key="messageGap" /></label>
-          <label class="range-field"><span>用户气泡内边距 <b data-layout-value="userBubblePadding"></b></span><input type="number" min="0" max="24" step="1" data-layout-key="userBubblePadding" /></label>
-          <label class="range-field"><span>元信息字号 <b data-layout-value="metaFontSize"></b></span><input type="number" min="8" max="16" step="1" data-layout-key="metaFontSize" /></label>
-          <label class="range-field"><span>省略号大小 <b data-layout-value="moreButtonSize"></b></span><input type="number" min="18" max="42" step="1" data-layout-key="moreButtonSize" /></label>
+      </section>
+
+      <section class="settings-page" data-settings-view="appearance" hidden>
+        <div class="settings-section">
+          <div class="section-title">
+            <strong>本会话外观</strong>
+            <span class="muted">只影响当前会话</span>
+          </div>
+          <label class="field">
+            <span>你的显示名</span>
+            <input id="userNameInput" type="text" placeholder="我" />
+          </label>
+          <div class="avatar-setting-row">
+            <div id="userAvatarPreview" class="avatar-preview">我</div>
+            <div class="avatar-setting-actions">
+              <button id="chooseUserAvatarButton" type="button">选择用户头像</button>
+              <button id="clearUserAvatarButton" type="button">清除</button>
+            </div>
+          </div>
+          <div class="background-setting-row">
+            <div id="sessionBackgroundPreview" class="background-preview"></div>
+            <div class="avatar-setting-actions">
+              <button id="chooseSessionBackgroundButton" type="button">选择背景</button>
+              <button id="clearSessionBackgroundButton" type="button">清除</button>
+            </div>
+          </div>
         </div>
-        <label class="field compact-field">
-          <span>预设名称</span>
-          <input id="layoutPresetName" type="text" placeholder="例如：我的手机排版" />
-        </label>
-        <div class="preset-row">
-          <button type="button" data-command="layout-preset" data-preset="compact">经典紧凑</button>
-          <button type="button" data-command="layout-preset" data-preset="comfortable">大字舒适</button>
-          <button type="button" data-command="save-layout-preset">存为预设</button>
-          <button type="button" data-command="copy-layout">复制参数</button>
-          <button type="button" data-command="reset-layout">恢复默认</button>
+      </section>
+
+      <section class="settings-page" data-settings-view="layout" hidden>
+        <div class="settings-section layout-debug-section">
+          <div class="section-title">
+            <strong>排版调试</strong>
+            <span class="muted">数值</span>
+          </div>
+          <div class="layout-number-grid">
+            <label class="range-field"><span>输入栏高度 <b data-layout-value="composerMinHeight"></b></span><div class="layout-stepper"><input type="number" min="48" max="130" step="1" data-layout-key="composerMinHeight" /><button type="button" data-command="layout-step" data-layout-key="composerMinHeight" data-step="1">↑</button><button type="button" data-command="layout-step" data-layout-key="composerMinHeight" data-step="-1">↓</button></div></label>
+            <label class="range-field"><span>输入框字号 <b data-layout-value="composerFontSize"></b></span><div class="layout-stepper"><input type="number" min="12" max="24" step="1" data-layout-key="composerFontSize" /><button type="button" data-command="layout-step" data-layout-key="composerFontSize" data-step="1">↑</button><button type="button" data-command="layout-step" data-layout-key="composerFontSize" data-step="-1">↓</button></div></label>
+            <label class="range-field"><span>发送按钮 <b data-layout-value="sendButtonSize"></b></span><div class="layout-stepper"><input type="number" min="24" max="52" step="1" data-layout-key="sendButtonSize" /><button type="button" data-command="layout-step" data-layout-key="sendButtonSize" data-step="1">↑</button><button type="button" data-command="layout-step" data-layout-key="sendButtonSize" data-step="-1">↓</button></div></label>
+            <label class="range-field"><span>工具按钮 <b data-layout-value="toolButtonSize"></b></span><div class="layout-stepper"><input type="number" min="20" max="44" step="1" data-layout-key="toolButtonSize" /><button type="button" data-command="layout-step" data-layout-key="toolButtonSize" data-step="1">↑</button><button type="button" data-command="layout-step" data-layout-key="toolButtonSize" data-step="-1">↓</button></div></label>
+            <label class="range-field"><span>消息字号 <b data-layout-value="messageFontSize"></b></span><div class="layout-stepper"><input type="number" min="13" max="24" step="1" data-layout-key="messageFontSize" /><button type="button" data-command="layout-step" data-layout-key="messageFontSize" data-step="1">↑</button><button type="button" data-command="layout-step" data-layout-key="messageFontSize" data-step="-1">↓</button></div></label>
+            <label class="range-field"><span>行间距 <b data-layout-value="messageLineHeight"></b></span><div class="layout-stepper"><input type="number" min="120" max="190" step="1" data-layout-key="messageLineHeight" /><button type="button" data-command="layout-step" data-layout-key="messageLineHeight" data-step="1">↑</button><button type="button" data-command="layout-step" data-layout-key="messageLineHeight" data-step="-1">↓</button></div></label>
+            <label class="range-field"><span>AI 左边距 <b data-layout-value="assistantLeft"></b></span><div class="layout-stepper"><input type="number" min="0" max="60" step="1" data-layout-key="assistantLeft" /><button type="button" data-command="layout-step" data-layout-key="assistantLeft" data-step="1">↑</button><button type="button" data-command="layout-step" data-layout-key="assistantLeft" data-step="-1">↓</button></div></label>
+            <label class="range-field"><span>消息两侧边距 <b data-layout-value="messageSidePadding"></b></span><div class="layout-stepper"><input type="number" min="4" max="36" step="1" data-layout-key="messageSidePadding" /><button type="button" data-command="layout-step" data-layout-key="messageSidePadding" data-step="1">↑</button><button type="button" data-command="layout-step" data-layout-key="messageSidePadding" data-step="-1">↓</button></div></label>
+            <label class="range-field"><span>消息间距 <b data-layout-value="messageGap"></b></span><div class="layout-stepper"><input type="number" min="8" max="42" step="1" data-layout-key="messageGap" /><button type="button" data-command="layout-step" data-layout-key="messageGap" data-step="1">↑</button><button type="button" data-command="layout-step" data-layout-key="messageGap" data-step="-1">↓</button></div></label>
+            <label class="range-field"><span>用户气泡内边距 <b data-layout-value="userBubblePadding"></b></span><div class="layout-stepper"><input type="number" min="0" max="24" step="1" data-layout-key="userBubblePadding" /><button type="button" data-command="layout-step" data-layout-key="userBubblePadding" data-step="1">↑</button><button type="button" data-command="layout-step" data-layout-key="userBubblePadding" data-step="-1">↓</button></div></label>
+            <label class="range-field"><span>元信息字号 <b data-layout-value="metaFontSize"></b></span><div class="layout-stepper"><input type="number" min="8" max="16" step="1" data-layout-key="metaFontSize" /><button type="button" data-command="layout-step" data-layout-key="metaFontSize" data-step="1">↑</button><button type="button" data-command="layout-step" data-layout-key="metaFontSize" data-step="-1">↓</button></div></label>
+            <label class="range-field"><span>省略号大小 <b data-layout-value="moreButtonSize"></b></span><div class="layout-stepper"><input type="number" min="18" max="42" step="1" data-layout-key="moreButtonSize" /><button type="button" data-command="layout-step" data-layout-key="moreButtonSize" data-step="1">↑</button><button type="button" data-command="layout-step" data-layout-key="moreButtonSize" data-step="-1">↓</button></div></label>
+          </div>
+          <label class="field compact-field">
+            <span>预设名称</span>
+            <input id="layoutPresetName" type="text" placeholder="例如：我的手机排版" />
+          </label>
+          <div class="preset-row">
+            <button type="button" data-command="layout-preset" data-preset="compact">经典紧凑</button>
+            <button type="button" data-command="layout-preset" data-preset="comfortable">大字舒适</button>
+            <button type="button" data-command="save-layout-preset">存为预设</button>
+            <button type="button" data-command="copy-layout">复制参数</button>
+            <button type="button" data-command="reset-layout">恢复默认</button>
+          </div>
+          <div id="customLayoutPresets" class="custom-preset-list"></div>
         </div>
-        <div id="customLayoutPresets" class="custom-preset-list"></div>
-      </details>
+      </section>
     </aside>
 
     <aside id="novelPanel" class="side-panel right-panel" hidden>

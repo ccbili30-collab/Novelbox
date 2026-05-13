@@ -118,6 +118,10 @@ const els = {
   backdrop: $("#backdrop"),
   historyPanel: $("#historyPanel"),
   settingsPanel: $("#settingsPanel"),
+  settingsPanelTitle: $("#settingsPanelTitle"),
+  settingsPanelSubtitle: $("#settingsPanelSubtitle"),
+  settingsBack: $("#settingsBackButton"),
+  settingsViews: Array.from(document.querySelectorAll("[data-settings-view]")),
   workspacePanel: $("#workspacePanel"),
   novelPanel: $("#novelPanel"),
   contextPanel: $("#contextPanel"),
@@ -166,7 +170,7 @@ const els = {
   unlimitedContext: $("#unlimitedContextInput"),
   maxTokens: $("#maxTokensInput"),
   stream: $("#streamInput"),
-  layoutInputs: Array.from(document.querySelectorAll("[data-layout-key]")),
+  layoutInputs: Array.from(document.querySelectorAll("input[data-layout-key]")),
   layoutValues: Array.from(document.querySelectorAll("[data-layout-value]")),
   contextStats: $("#contextStats"),
   contextPreview: $("#contextPreview"),
@@ -251,6 +255,7 @@ let assistantActivating = false;
 let assistantImportMode = "single";
 let modelPickerOpen = false;
 let assistantModelPickerOpen = false;
+let activeSettingsPage = "home";
 let panelHistoryOpen = false;
 let transientHistoryOpen = false;
 let dialogHistoryOpen = false;
@@ -281,6 +286,7 @@ const streamDomTimers = new Map();
 const panelManager = createPanelManager(els, {
   onShow: (name) => {
     els.body.dataset.activePanel = name;
+    if (name === "settings") renderSettingsPage();
     if (name === "context") renderContextPanel();
     if (name === "novel") renderNovelPanel();
     if (name === "workspace") renderWorkspacePanel();
@@ -305,6 +311,13 @@ const aiClient = createAiClient({
   getAbortSignal: () => abortController?.signal,
 });
 registerBridgeHooks(bridgeCallbacks, bridgeStreamCallbacks);
+
+const settingsPageMeta = {
+  home: { title: "设置", subtitle: "选择要调整的模块" },
+  model: { title: "模型配置", subtitle: "默认 API、主线模型和生成参数" },
+  appearance: { title: "本会话外观", subtitle: "只影响当前会话" },
+  layout: { title: "排版调试", subtitle: "数值微调" },
+};
 
 const layoutPresets = {
   compact: {
@@ -914,6 +927,12 @@ function showPanel(name) {
       panelHistoryOpen = false;
     }
   }
+}
+
+function openSettingsPanel() {
+  activeSettingsPage = "home";
+  showPanel("settings");
+  renderSettingsPage();
 }
 
 function closePanels(options = {}) {
@@ -1884,6 +1903,32 @@ function renderBackgroundPreview(element, dataUrl) {
   element.classList.toggle("empty", !clean(dataUrl));
 }
 
+function renderSettingsPage() {
+  const meta = settingsPageMeta[activeSettingsPage] || settingsPageMeta.home;
+  if (els.settingsPanel) els.settingsPanel.dataset.settingsPage = activeSettingsPage;
+  if (els.settingsPanelTitle) els.settingsPanelTitle.textContent = meta.title;
+  if (els.settingsPanelSubtitle) els.settingsPanelSubtitle.textContent = meta.subtitle;
+  if (els.settingsBack) els.settingsBack.hidden = activeSettingsPage === "home";
+  els.settingsViews.forEach((view) => {
+    view.hidden = view.dataset.settingsView !== activeSettingsPage;
+  });
+}
+
+function openSettingsPage(page) {
+  if (!settingsPageMeta[page]) return;
+  activeSettingsPage = page;
+  renderSettingsPage();
+}
+
+function stepLayoutValue(key, delta) {
+  const input = els.layoutInputs.find((item) => item.dataset.layoutKey === key);
+  if (!input) return;
+  const step = Number(input.step) || 1;
+  const next = readLayoutInputValue(input, sessionSettings().layout[key]) + step * delta;
+  input.value = next;
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
 function renderSettings() {
   const s = sessionSettings();
   const api = apiSettings();
@@ -1917,6 +1962,7 @@ function renderSettings() {
     const key = value.dataset.layoutValue;
     value.textContent = formatLayoutValue(key, s.layout[key]);
   });
+  renderSettingsPage();
 }
 
 function renderCustomLayoutPresets() {
@@ -4730,7 +4776,9 @@ function buildRoundtableMessages(assistant, instruction) {
 
 const handleCommand = createCommandRegistry({
   "open-history": () => showPanel("history"),
-  "open-settings": () => showPanel("settings"),
+  "open-settings": () => openSettingsPanel(),
+  "settings-home": () => openSettingsPage("home"),
+  "open-settings-page": (target) => openSettingsPage(target.dataset.settingsPage),
   "open-workspace": () => showPanel("workspace"),
   "open-novel": () => showPanel("novel"),
   "open-context": () => showPanel("context"),
@@ -4790,6 +4838,7 @@ const handleCommand = createCommandRegistry({
   "layout-custom-preset": (target) => applyCustomLayoutPreset(target.dataset.presetId),
   "save-layout-preset": () => saveLayoutPreset(),
   "delete-layout-preset": (target) => deleteLayoutPreset(target.dataset.presetId),
+  "layout-step": (target) => stepLayoutValue(target.dataset.layoutKey, Number(target.dataset.step) || 0),
   "copy-layout": () => copyLayoutParams(),
   "reset-layout": () => resetLayoutParams(),
   "toggle-roundtable-menu": (target) => toggleRoundtableMenu(target.dataset.roundId),
