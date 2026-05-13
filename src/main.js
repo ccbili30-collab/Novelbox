@@ -3578,12 +3578,12 @@ async function regenerateRoundtableMessage(id) {
     message.streaming = Boolean(sessionSettings().stream);
     const text = await callRoundtableAssistant(assistant, `请重新回答你上一条圆桌聊天发言。保持聊天语气，除非用户明确要求，否则不要直接写成长篇成稿。上一条内容是：\n${message.content}`, (partial) => {
       message.streaming = true;
-      message.content = clean(partial);
+      message.content = cleanRoundtableAssistantOutput(assistant, partial);
       renderStreamingRoundtableMessage(message);
     });
     cancelStreamDomUpdate(`round:${message.id}`);
     message.streaming = false;
-    message.content = clean(text);
+    message.content = cleanRoundtableAssistantOutput(assistant, text);
     message.createdAt = Date.now();
     message.speakerName = assistant.name;
     delete message.mentionMeta;
@@ -3885,7 +3885,7 @@ async function runAssistantMentionFollowUps(originAssistant, originText, options
       }, buildAssistantMentionInstruction(source, targetAssistant, sourceText));
       remaining -= 1;
       currentAssistant = targetAssistant;
-      currentText = reply;
+      currentText = cleanRoundtableAssistantOutput(targetAssistant, reply);
       enqueueTargets(currentAssistant, currentText);
     } catch (error) {
       if (error.name === "AbortError" || roundtableShouldStop) break;

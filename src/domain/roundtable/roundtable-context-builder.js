@@ -93,7 +93,7 @@ export function buildRoundtablePromptMessages(input) {
     const novelMaterials = buildRoundtableNovelMaterials(options, input.novel);
     return [
       `【当前模式】圆桌协作讨论。参与者包括：${participants}`,
-      `【发言规则】必须知道是谁说的话，不要把不同议员的意见串成同一个人。可自然赞同或反驳其他议员。${speakingRule}`,
+      `【发言规则】必须知道是谁说的话，不要把不同议员的意见串成同一个人。可自然赞同或反驳其他议员。不要在开头写“${assistant.name}：”或任何自报名标签，界面会自动显示发言者。${speakingRule}`,
       `【@规则】只能 @ 本轮已安排顺序的议员或写手。当前可 @：${mentionableNames || "无"}。AI 发言里的 @ 只会改变本轮后续发言顺序：例如原顺序 A/B/C，A @C 后变成 A/C/B；不要反复 @ 同一问题。`,
       compressed ? "【自动压缩】本轮上下文过长，已只保留关键资料、短摘录和最近圆桌记录。若当前任务涉及小说材料，再参考剧情线/角色卡/世界观/大纲/伏笔线保持连续性。" : "",
       options.roundTopic ? `【本轮主题】${options.roundTopic}` : "",
