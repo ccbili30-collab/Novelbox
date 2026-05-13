@@ -287,21 +287,17 @@ Important code locations:
 - `src/styles/components.css`
   - `.roundtable-context-topic`
 
-### Feature Line Update: Mainline / Roundtable Handoff
+### Direction Update: Mainline / Roundtable Boundary
 
-Functional branch: `codex/roundtable-features`
+Current baseline:
 
-Implemented in the feature line:
-
-- ordinary main chat messages now have `发到圆桌` in the message menu
-- sending a mainline message to roundtable enables roundtable mode and adds it as a roundtable discussion item with source metadata
-- roundtable messages now have `发回主线` in their menu
-- sending a roundtable message back to mainline exits roundtable mode and posts the message as a new user turn, then calls the normal mainline AI flow
+- ordinary main chat messages no longer expose `发到圆桌`
+- roundtable manuscript is synced from writer output, not from manually forwarding arbitrary chat bubbles
+- roundtable messages may still be sent back to mainline when the user explicitly wants to continue from a discussion item
 
 Important code locations:
 
 - `src/main.js`
-  - `sendMainMessageToRoundtable()`
   - `sendRoundtableMessageToMain()`
   - `renderMenu()`
   - `renderRoundtableMenu()`

@@ -231,6 +231,7 @@ let mentionPickerRange = null;
 let assistantActivating = false;
 let modelPickerOpen = false;
 let assistantModelPickerOpen = false;
+let panelHistoryOpen = false;
 let toastTimer = null;
 let toastMotionTimer = null;
 let paperScrollPersistTimer = null;
@@ -749,11 +750,29 @@ function setRoundtableActiveSpeaker(id) {
 
 function showPanel(name) {
   if (name === "workspace") ensureWorkspaceUi();
+  const hadPanel = Boolean(panelManager.getActivePanel());
   panelManager.showPanel(name);
+  if (!hadPanel && !history.state?.tbirdPanelOpen) {
+    try {
+      history.pushState({ ...(history.state || {}), tbirdPanelOpen: true }, "");
+      panelHistoryOpen = true;
+    } catch {
+      panelHistoryOpen = false;
+    }
+  }
 }
 
-function closePanels() {
+function closePanels(options = {}) {
+  const hadPanel = Boolean(panelManager.getActivePanel());
   panelManager.closePanels();
+  if (options.fromHistory) {
+    panelHistoryOpen = false;
+    return;
+  }
+  if (hadPanel && panelHistoryOpen && history.state?.tbirdPanelOpen) {
+    panelHistoryOpen = false;
+    history.back();
+  }
 }
 
 function ensureWorkspaceUi() {
@@ -884,7 +903,7 @@ function render() {
   ensureModelPickerUi();
   applyLayout();
   applySessionAppearance();
-  els.title.textContent = rt.enabled ? "圆桌共创" : titleForSession(session);
+  els.title.textContent = rt.enabled ? `圆桌 · ${titleForSession(session)}` : titleForSession(session);
   renderRoundtable();
   renderMessages();
   renderSessions();
@@ -4053,6 +4072,21 @@ document.addEventListener("click", (event) => {
   if (event.target.closest("#assistantModelPicker, #assistantModelPickerButton, #assistantModelInput")) return;
   assistantModelPickerOpen = false;
   renderAssistantModelPicker();
+});
+
+function bindDialogBackdropClose(dialog) {
+  dialog?.addEventListener("click", (event) => {
+    if (event.target !== dialog) return;
+    dialog.close();
+  });
+}
+
+bindDialogBackdropClose(els.editDialog);
+bindDialogBackdropClose(els.assistantConfigDialog);
+
+window.addEventListener("popstate", () => {
+  if (!panelManager.getActivePanel()) return;
+  closePanels({ fromHistory: true });
 });
 
 els.temperature.addEventListener("input", () => {
