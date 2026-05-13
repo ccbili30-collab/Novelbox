@@ -1444,7 +1444,6 @@ function renderMenu() {
   const userActions = `
     <button type="button" data-command="edit-user" data-node-id="${node.id}">编辑内容</button>
     <button type="button" data-command="resend-user" data-node-id="${node.id}">重新发送</button>
-    <button type="button" data-command="send-main-to-roundtable" data-node-id="${node.id}">发到圆桌</button>
     <button type="button" data-command="copy-message" data-node-id="${node.id}">复制</button>
     <button type="button" data-command="delete-message" data-node-id="${node.id}">删除</button>
   `;
@@ -1452,7 +1451,6 @@ function renderMenu() {
     <button type="button" data-command="regen-ai" data-node-id="${node.id}">重新生成</button>
     <button type="button" data-command="edit-ai" data-node-id="${node.id}">编辑AI输出</button>
     <button type="button" data-command="continue-ai" data-node-id="${node.id}">继续</button>
-    <button type="button" data-command="send-main-to-roundtable" data-node-id="${node.id}">发到圆桌</button>
     <button type="button" data-command="copy-message" data-node-id="${node.id}">复制</button>
     <button type="button" data-command="delete-message" data-node-id="${node.id}">删除</button>
   `;
@@ -2238,23 +2236,6 @@ function stopRoundtableGeneration() {
   streamRequestId = null;
   showToast("已停止圆桌生成");
   render();
-}
-
-function sendMainMessageToRoundtable(nodeId) {
-  const node = getNode(nodeId);
-  const content = clean(getMessageContent(node));
-  if (!node || !content) return;
-  const rt = roundtableState();
-  rt.enabled = true;
-  const speakerName = node.role === "user" ? "主线用户" : "主线AI";
-  addRoundtableMessage("mainline", speakerName, content, {
-    source: { type: "mainline", nodeId },
-  });
-  activeMenuNodeId = null;
-  closePanels();
-  render();
-  resizeInput();
-  showToast("已发送到圆桌讨论");
 }
 
 async function sendRoundtableMessageToMain(id) {
@@ -3806,7 +3787,6 @@ const handleCommand = createCommandRegistry({
   "reset-layout": () => resetLayoutParams(),
   "toggle-roundtable-menu": (target) => toggleRoundtableMenu(target.dataset.roundId),
   "copy-roundtable-message": (target) => copyRoundtableMessage(target.dataset.roundId),
-  "send-main-to-roundtable": (target) => sendMainMessageToRoundtable(target.dataset.nodeId),
   "send-roundtable-to-main": (target) => sendRoundtableMessageToMain(target.dataset.roundId),
   "delete-roundtable-message": (target) => deleteRoundtableMessage(target.dataset.roundId),
   "adopt-roundtable-message": (target) => adoptRoundtableMessage(target.dataset.roundId),
