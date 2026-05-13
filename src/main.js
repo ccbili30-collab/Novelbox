@@ -14,7 +14,6 @@ import { buildNovelStats } from "./domain/novel/novel-stats.js";
 import { hydrateSessionSettings } from "./domain/settings/settings-model.js";
 import { hydrateApiSettings } from "./domain/settings/api-settings.js";
 import {
-  ASSISTANT_TEMPLATES,
   DEFAULT_CUSTOM_ROUNDTABLE_ASSISTANT_PROMPT,
   DEFAULT_ROUNDTABLE_CONTEXT,
   GENERATIVE_AGENT_MEMORY_LIMIT,
@@ -174,7 +173,6 @@ const els = {
   assistantConfigDialog: $("#assistantConfigDialog"),
   assistantConfigTitle: $("#assistantConfigTitle"),
   assistantNameInput: $("#assistantNameInput"),
-  assistantTemplateSelect: $("#assistantTemplateSelect"),
   assistantBaseUrlInput: $("#assistantBaseUrlInput"),
   assistantApiKeyInput: $("#assistantApiKeyInput"),
   assistantModelInput: $("#assistantModelInput"),
@@ -1755,7 +1753,6 @@ function renderModelPicker() {
   }
   els.modelDatalist.innerHTML = models.map((model) => `<option value="${escapeHtml(model)}"></option>`).join("");
   renderAssistantModelPicker(models);
-  renderAssistantTemplates();
 }
 
 function renderAssistantModelPicker(models = null) {
@@ -1805,14 +1802,6 @@ function selectAssistantModelFromPicker(model) {
 function renderContextBadge() {
   const info = contextInfo(clean(els.input.value));
   drawContextBadge(els, info, formatK);
-}
-
-function renderAssistantTemplates() {
-  if (!els.assistantTemplateSelect) return;
-  els.assistantTemplateSelect.innerHTML = [
-    `<option value="">选择模板套用...</option>`,
-    ...ASSISTANT_TEMPLATES.map((template) => `<option value="${escapeHtml(template.id)}">${escapeHtml(template.name)}</option>`),
-  ].join("");
 }
 
 function renderContextPanel() {
@@ -2771,22 +2760,11 @@ function openAssistantConfig(id) {
   if (els.assistantModelStatus) els.assistantModelStatus.textContent = config.model ? `当前：${config.model}` : "未拉取";
   renderAssistantModelPicker();
   els.assistantPromptInput.value = config.prompt;
-  if (els.assistantTemplateSelect) els.assistantTemplateSelect.value = "";
   if (els.deleteAssistant) {
     els.deleteAssistant.hidden = id === "writer";
   }
   els.assistantConfigDialog.showModal();
   requestAnimationFrame(() => els.assistantPromptInput.focus());
-}
-
-function applyAssistantTemplate(templateId) {
-  const template = ASSISTANT_TEMPLATES.find((item) => item.id === templateId);
-  if (!template) return;
-  els.assistantNameInput.value = template.name;
-  els.assistantPromptInput.value = template.prompt;
-  if (!clean(els.assistantAvatarPreview?.dataset.avatarDataUrl)) {
-    renderAvatarPreview(els.assistantAvatarPreview, "", template.name || "议");
-  }
 }
 
 function currentAssistantContextOptions() {
@@ -4169,7 +4147,6 @@ els.assistantNameInput?.addEventListener("input", () => {
     renderAvatarPreview(els.assistantAvatarPreview, "", clean(els.assistantNameInput.value) || "议");
   }
 });
-els.assistantTemplateSelect?.addEventListener("change", () => applyAssistantTemplate(els.assistantTemplateSelect.value));
 els.fetchAssistantModels?.addEventListener("click", fetchAssistantModels);
 els.chooseAssistantAvatar?.addEventListener("click", () => els.assistantAvatarFile?.click());
 els.clearAssistantAvatar?.addEventListener("click", clearAssistantAvatar);
