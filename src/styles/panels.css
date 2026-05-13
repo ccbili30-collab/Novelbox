@@ -528,6 +528,12 @@
   background: #222;
 }
 
+.dialog-actions .primary-button {
+  color: #fff;
+  border-color: #222;
+  background: #222;
+}
+
 .primary-button.ghost {
   color: #222;
   background: #fff;
