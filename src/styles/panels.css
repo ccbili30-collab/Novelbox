@@ -471,6 +471,13 @@
   background: #fff;
 }
 
+.history-new-session-button {
+  border-color: #1f2933;
+  color: #fff;
+  background: #1f2933;
+  box-shadow: 0 8px 20px rgba(31, 41, 51, 0.14);
+}
+
 .session-list {
   display: grid;
   gap: 9px;
