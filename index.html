@@ -374,10 +374,14 @@
           <div class="avatar-setting-actions">
             <button id="chooseAssistantAvatarButton" value="default" type="button">选择本地头像</button>
             <button id="clearAssistantAvatarButton" value="default" type="button">清除头像</button>
+            <label class="assistant-network-chip">
+              <input id="assistantNetworkEnabledInput" type="checkbox" />
+              <span>联网</span>
+            </label>
           </div>
         </div>
         <details class="assistant-fold">
-          <summary>模型 / API</summary>
+          <summary>模型</summary>
           <label class="field">
             <span>模型提供方</span>
             <select id="assistantProviderSelect"></select>
@@ -390,26 +394,6 @@
             <button id="fetchAssistantModelsButton" value="default" type="button">拉取此议员模型</button>
             <span id="assistantModelStatus" class="muted">未拉取</span>
           </div>
-          <label class="checkbox-line">
-            <input id="assistantNetworkEnabledInput" type="checkbox" />
-            <span>允许联网 / 外部资料检索</span>
-          </label>
-          <p class="muted">当前仅作为能力声明；没有接入真实检索工具时，AI 不应伪造联网查询。</p>
-          <label class="checkbox-line assistant-api-expert-toggle">
-            <input id="assistantApiOverrideEnabledInput" type="checkbox" />
-            <span>专家模式：为此议员单独覆盖 API</span>
-          </label>
-          <details id="assistantApiOverrideFold" class="assistant-inline-fold assistant-api-override-fold">
-            <summary>API 覆盖</summary>
-            <label class="field">
-              <span>Base URL</span>
-              <input id="assistantBaseUrlInput" type="text" placeholder="默认与全局 Base URL 一致，可为此议员单独改" />
-            </label>
-            <label class="field">
-              <span>API Key</span>
-              <input id="assistantApiKeyInput" type="password" placeholder="默认与全局 Key 一致，可为此议员单独改" />
-            </label>
-          </details>
           <label class="field">
             <span>最大输出 token</span>
             <input id="assistantMaxTokensInput" type="number" min="1" step="1" placeholder="留空则使用全局设置" />
@@ -438,7 +422,7 @@
           <summary>参会记录</summary>
           <div id="assistantParticipationList" class="assistant-participation-list"></div>
         </details>
-        <details class="assistant-fold">
+        <details id="assistantPrivateFold" class="assistant-fold">
           <summary>私聊</summary>
           <div id="assistantPrivateChatList" class="assistant-private-chat-list"></div>
           <label class="field">

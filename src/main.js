@@ -219,6 +219,7 @@ const els = {
   assistantActivationProfileInput: $("#assistantActivationProfileInput"),
   assistantParticipationList: $("#assistantParticipationList"),
   assistantPrivateChatList: $("#assistantPrivateChatList"),
+  assistantPrivateFold: $("#assistantPrivateFold"),
   assistantPrivateChatInput: $("#assistantPrivateChatInput"),
   sendAssistantPrivateChat: $("#sendAssistantPrivateChatButton"),
   activateAssistant: $("#activateAssistantButton"),
@@ -241,6 +242,7 @@ let activeMenuNodeId = null;
 let activeRoundtableMessageId = null;
 let editTarget = null;
 let assistantConfigTargetId = null;
+let assistantConfigMode = "member";
 let isGenerating = false;
 let abortController = null;
 let bridgeRequestId = null;
@@ -393,8 +395,8 @@ function apiForAssistantConfig(config = {}) {
   const providerApi = apiForProvider(config.providerId);
   return {
     ...providerApi,
-    baseUrl: clean(config.apiBaseUrl) || providerApi.baseUrl,
-    apiKey: clean(config.apiKey) || providerApi.apiKey,
+    baseUrl: providerApi.baseUrl,
+    apiKey: providerApi.apiKey,
   };
 }
 
@@ -1291,13 +1293,11 @@ function renderRoundtableMembers(rt) {
     ${members}
     <button class="roundtable-material-toggle ${rt.materialsOpen ? "active" : ""}" type="button" data-command="toggle-roundtable-materials">材料</button>
     ${rt.materialsOpen ? renderRoundtableContextControls(rt) : ""}
-    <button class="roundtable-material-toggle ${rt.sessionImportOpen ? "active" : ""}" type="button" data-command="toggle-roundtable-session-import">从会话拉人</button>
-    ${rt.sessionImportOpen ? renderRoundtableSessionImport() : ""}
     <div class="roundtable-member-tools">
-      <button class="roundtable-member-add" type="button" data-command="roundtable-add-assistant">+ 添加议员</button>
-      <button class="roundtable-member-add" type="button" data-command="roundtable-import-personas">导入人格</button>
-      <button class="roundtable-member-add" type="button" data-command="roundtable-export-personas">导出入席</button>
-    </div>`;
+      <button class="roundtable-member-add" type="button" data-command="roundtable-add-assistant">+ 添加主创</button>
+      <button class="roundtable-member-add ${rt.sessionImportOpen ? "active" : ""}" type="button" data-command="toggle-roundtable-session-import">从会话拉人</button>
+    </div>
+    ${rt.sessionImportOpen ? renderRoundtableSessionImport() : ""}`;
 }
 
 function assistantConfigHasSavedIdentity(config = {}) {
@@ -3295,7 +3295,7 @@ function handleComposerTool() {
     toggleRoundtableMembers();
     return;
   }
-  openAssistantConfig(getPrimaryCreatorId());
+  openAssistantConfig(getPrimaryCreatorId(), { mode: "creator" });
 }
 
 function getPrimaryCreatorId() {
@@ -3372,7 +3372,7 @@ function createCustomRoundAssistant() {
   const id = uid("round_member");
   const assistant = normalizeCustomAssistant({
     id,
-    name: `新议员${rt.customAssistants.length + 1}`,
+    name: `新主创${rt.customAssistants.length + 1}`,
     role: "议员",
     prompt: DEFAULT_CUSTOM_ROUNDTABLE_ASSISTANT_PROMPT,
   });
@@ -3447,15 +3447,16 @@ function importRoundtableMemberFromSession(sessionId, memberId) {
   showToast(`已拉入 ${name}`);
 }
 
-function openAssistantConfig(id) {
+function openAssistantConfig(id, options = {}) {
   const assistant = getRoundAssistant(id);
   const config = getRoundAssistantConfig(id);
   if (!assistant || !config) return;
   const rawConfig = roundtableState().assistantConfigs?.[id] || {};
   assistantConfigTargetId = id;
+  assistantConfigMode = options.mode || "member";
   assistantModelPickerOpen = false;
   ensureAssistantModelPickerUi();
-  els.assistantConfigTitle.textContent = `${assistant.name}设置`;
+  els.assistantConfigTitle.textContent = assistantConfigMode === "creator" ? `${assistant.name}主创设置` : `${assistant.name}设置`;
   if (els.assistantSourceLabel) {
     const imported = rawConfig.importedFrom;
     const sourceTitle = clean(imported?.sessionTitle);
@@ -3496,6 +3497,9 @@ function openAssistantConfig(id) {
   renderAssistantParticipationRecords(id);
   renderAssistantPrivateChat(id);
   if (els.assistantPrivateChatInput) els.assistantPrivateChatInput.value = "";
+  if (els.assistantPrivateFold) {
+    els.assistantPrivateFold.hidden = assistantConfigMode === "creator" || id === "writer";
+  }
   els.assistantPromptInput.value = config.prompt;
   if (els.deleteAssistant) {
     els.deleteAssistant.hidden = id === "writer";
@@ -3523,12 +3527,11 @@ function currentAssistantContextOptions() {
 
 function currentAssistantFormConfig() {
   const previous = assistantConfigTargetId ? roundtableState().assistantConfigs[assistantConfigTargetId] || {} : {};
-  const apiOverrideEnabled = Boolean(els.assistantApiOverrideEnabledInput?.checked);
   return {
     name: clean(els.assistantNameInput.value),
     providerId: clean(els.assistantProviderSelect?.value),
-    apiBaseUrl: apiOverrideEnabled ? clean(els.assistantBaseUrlInput?.value) : "",
-    apiKey: apiOverrideEnabled ? clean(els.assistantApiKeyInput?.value) : "",
+    apiBaseUrl: "",
+    apiKey: "",
     model: clean(els.assistantModelInput.value),
     networkEnabled: Boolean(els.assistantNetworkEnabledInput?.checked),
     maxTokens: Number(els.assistantMaxTokensInput?.value) || 0,
@@ -3665,7 +3668,8 @@ async function importAssistantConfig() {
     const text = await navigator.clipboard?.readText?.();
     if (clean(text).includes("TBIRD-COUNCIL-PERSONA") || clean(text).includes("--- TBIRD JSON ---")) {
       applyAssistantImportConfig(parseAssistantPersonaText(text));
-      showToast("已从剪贴板导入议员人格，保存后生效");
+      saveAssistantConfigFromForm({ close: false, toast: false, render: true });
+      showToast("已从剪贴板覆盖当前主创人格");
       return;
     }
   } catch {}
@@ -3681,7 +3685,8 @@ async function handleAssistantImportSelected() {
       importRoundtablePersonasFromText(text);
     } else {
       applyAssistantImportConfig(parseAssistantPersonaText(text));
-      showToast("议员配置已导入，保存后生效");
+      saveAssistantConfigFromForm({ close: false, toast: false, render: true });
+      showToast("已覆盖当前主创人格");
     }
   } catch (error) {
     showToast(humanizeError(error, "议员配置导入失败"));
@@ -3697,9 +3702,9 @@ function applyAssistantImportConfig(config) {
   if (!name || !prompt) throw new Error("议员人格缺少名称或角色提示词");
   els.assistantNameInput.value = name;
   renderAssistantProviderOptions(clean(config.providerId));
-  if (els.assistantBaseUrlInput) els.assistantBaseUrlInput.value = clean(config.apiBaseUrl);
-  if (els.assistantApiKeyInput) els.assistantApiKeyInput.value = clean(config.apiKey);
-  syncAssistantApiOverrideUi(Boolean(clean(config.apiBaseUrl) || clean(config.apiKey)));
+  if (els.assistantBaseUrlInput) els.assistantBaseUrlInput.value = "";
+  if (els.assistantApiKeyInput) els.assistantApiKeyInput.value = "";
+  syncAssistantApiOverrideUi(false);
   els.assistantModelInput.value = clean(config.model);
   if (els.assistantNetworkEnabledInput) els.assistantNetworkEnabledInput.checked = Boolean(config.networkEnabled);
   if (els.assistantMaxTokensInput) els.assistantMaxTokensInput.value = Number(config.maxTokens) || "";
@@ -3911,8 +3916,8 @@ function importRoundtablePersonasFromText(text) {
     rt.assistantConfigs[assistant.id] = {
       name: assistant.name,
       providerId: clean(config.providerId),
-      apiBaseUrl: clean(config.apiBaseUrl),
-      apiKey: clean(config.apiKey),
+      apiBaseUrl: "",
+      apiKey: "",
       model: clean(config.model),
       networkEnabled: Boolean(config.networkEnabled),
       maxTokens: Number(config.maxTokens) || 0,
@@ -3960,6 +3965,7 @@ function clearAssistantAvatar() {
 
 function closeAssistantConfig() {
   assistantConfigTargetId = null;
+  assistantConfigMode = "member";
   assistantModelPickerOpen = false;
   if (els.assistantConfigDialog?.open) els.assistantConfigDialog.close();
 }
@@ -4064,13 +4070,12 @@ function saveAssistantConfigFromForm(options = {}) {
   if (!base) return false;
   const rt = roundtableState();
   const model = clean(els.assistantModelInput.value);
-  const apiOverrideEnabled = Boolean(els.assistantApiOverrideEnabledInput?.checked);
   const previous = rt.assistantConfigs[id] || {};
   rt.assistantConfigs[id] = {
     name: clean(els.assistantNameInput.value) || base.name,
     providerId: clean(els.assistantProviderSelect?.value),
-    apiBaseUrl: apiOverrideEnabled ? clean(els.assistantBaseUrlInput?.value) : "",
-    apiKey: apiOverrideEnabled ? clean(els.assistantApiKeyInput?.value) : "",
+    apiBaseUrl: "",
+    apiKey: "",
     model,
     networkEnabled: Boolean(els.assistantNetworkEnabledInput?.checked),
     maxTokens: Number(els.assistantMaxTokensInput?.value) || 0,
@@ -5358,6 +5363,7 @@ els.editDialog?.addEventListener("close", () => {
 });
 els.assistantConfigDialog?.addEventListener("close", () => {
   assistantConfigTargetId = null;
+  assistantConfigMode = "member";
   assistantModelPickerOpen = false;
   handleDialogClosed();
 });

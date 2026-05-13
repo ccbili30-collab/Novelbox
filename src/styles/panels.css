@@ -1190,6 +1190,31 @@
   background: var(--surface-selected);
 }
 
+.assistant-network-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: #4c4237;
+  background: #faf8f4;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.assistant-network-chip:has(input:checked) {
+  border-color: rgba(141, 107, 49, 0.34);
+  background: var(--surface-selected);
+}
+
+.assistant-network-chip input {
+  width: 13px;
+  height: 13px;
+}
+
 .assistant-model-picker {
   display: grid;
   gap: 5px;

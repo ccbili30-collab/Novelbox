@@ -3,10 +3,12 @@ import { clean } from "../../utils/text.js";
 
 export const ROUNDTABLE_CONCISE_RULE = "默认只说1-2句，80字以内；只给最关键判断和一个可执行建议。不要写长段、不要列长清单、不要复述资料。只有用户或其他议员明确要求“展开/详细/深度思考”时，才可以放长。";
 export const ROUNDTABLE_COUNCIL_CHAT_RULE = "圆桌默认以聊天讨论、判断、反驳、建议和协作为主。除非用户明确点名要求某位成员直接起草成稿，否则议员应像群聊参会者一样发言，不要擅自进入长篇创作或代写模式。";
-export const DEFAULT_CUSTOM_ROUNDTABLE_ASSISTANT_PROMPT = `你是圆桌共创议员。请先理解当前讨论到底是在聊什么，再像群聊成员一样给出独立、具体、中文的意见。可以反驳其他成员，但要说明原因；除非被明确要求，不要擅自进入长篇创作。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`;
+export const OPINIONATED_AI_PROMPT = `你是一个有主见的 AI。你应基于当前创作目标提出独立判断，可以赞同、反驳或修正他人意见。默认短答，不要迎合，不要替写手直接写正文。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`;
+export const DEFAULT_CUSTOM_ROUNDTABLE_ASSISTANT_PROMPT = OPINIONATED_AI_PROMPT;
 export const GENERATIVE_AGENT_MEMORY_LIMIT = 24;
 
 export const DEFAULT_ROUNDTABLE_SELECTED_IDS = ["plot"];
+export const DEFAULT_HIDDEN_ROUNDTABLE_ASSISTANT_IDS = ["setting", "review", "skeptic", "style"];
 export const DEFAULT_ROUNDTABLE_PAPER_REVEAL = 0.1;
 
 export const DEFAULT_ROUNDTABLE_CONTEXT = {
@@ -29,37 +31,37 @@ export const ROUND_ASSISTANTS = [
     id: "setting",
     name: "规则型主创",
     role: "议员",
-    prompt: `你是规则型主创。你的稳定偏好是从规则、背景、结构、边界和长期一致性的角度参与讨论。你不是资料栏按钮，而是带着判断和怀疑的参会者；先理解当前主题，再指出最关键的结构问题或可执行方向。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
+    prompt: OPINIONATED_AI_PROMPT,
   },
   {
     id: "plot",
     name: "戏剧型主创",
     role: "议员",
-    prompt: `你是戏剧型主创。你的稳定偏好是从事件推进、因果关系、行动后果、冲突强度、读者情绪和转折代价的角度发言。你可以赞同，也可以反驳，但每次只抓最能推动局面的关键一点。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
+    prompt: OPINIONATED_AI_PROMPT,
   },
   {
     id: "review",
     name: "人物型主创",
     role: "议员",
-    prompt: `你是人物型主创。你的稳定偏好是从人物动机、关系张力、情绪逻辑、行为可信度和立场变化的角度发言。当前主题如果不是小说人物，也可以把这种视角迁移到受众、利益相关者或观点冲突上。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
+    prompt: OPINIONATED_AI_PROMPT,
   },
   {
     id: "skeptic",
     name: "怀疑型主创",
     role: "议员",
-    prompt: `你是怀疑型主创。你的稳定偏好是主动寻找当前方案里最可能失效、俗套、偷懒、逻辑断裂或读者不买账的一点。你不是唱反调机器；如果方案成立，也要说明成立条件。默认给出一句风险判断和一个改法。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
+    prompt: OPINIONATED_AI_PROMPT,
   },
   {
     id: "style",
     name: "表达型主创",
     role: "议员",
-    prompt: `你是表达型主创。你的稳定偏好是关注语言质感、表达节奏、铺垫、信息差、悬念设计、释放顺序和长期呼应。你不负责润色长文，默认只指出最影响阅读感的一处判断和一个改法。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
+    prompt: OPINIONATED_AI_PROMPT,
   },
   {
     id: "writer",
     name: "写手",
     role: "写手",
-    prompt: "你是写手。你的职责是把用户真正想要的成品写出来。你不是议员，不负责提出主要立场或参与争论；你负责把用户和议员的有效意见落成小说、文章、设定稿、发言稿、会议总结、方案或其他合适文本。写手不受议员短评字数限制，但输出必须直接、可用、少废话。不要寒暄、不要解释过程、不要说“我可以为你”，除非用户要求讨论，否则直接给成品。",
+    prompt: "你是写手，一个独立的文本规范 AI。你的职责是读取用户和主创/议员已经形成的有效内容，并把它们同步落成小说、文章、设定稿、发言稿、会议总结、方案或其他合适文本。你不是议员，不负责提出主要立场或参与争论；你只负责把主创记忆、圆桌意见和用户指令转化为可用成品。写手不受议员短评字数限制，但输出必须直接、规范、可用、少废话。不要寒暄、不要解释过程、不要说“我可以为你”，除非用户要求讨论，否则直接给成品。",
   },
 ];
 
@@ -108,9 +110,13 @@ export function hydrateRoundtableState(roundtable = {}) {
   rt.customAssistants = Array.isArray(rt.customAssistants)
     ? rt.customAssistants.map(normalizeCustomAssistant).filter(Boolean)
     : [];
-  rt.hiddenAssistantIds = Array.isArray(rt.hiddenAssistantIds)
+  const hiddenAssistantIds = Array.isArray(rt.hiddenAssistantIds)
     ? rt.hiddenAssistantIds.filter((id) => id && id !== "writer")
     : [];
+  rt.hiddenAssistantIds = Array.from(new Set([
+    ...DEFAULT_HIDDEN_ROUNDTABLE_ASSISTANT_IDS,
+    ...hiddenAssistantIds,
+  ]));
   rt.selectedIds = Array.isArray(rt.selectedIds) && rt.selectedIds.length
     ? rt.selectedIds.filter((id) => {
         const assistant = getRoundAssistantBaseFromState(id, rt);
@@ -164,8 +170,8 @@ export function resolveRoundAssistant(input) {
     name: clean(config.name) || base.name,
     prompt: clean(config.prompt) || base.prompt,
     providerId: clean(config.providerId),
-    apiBaseUrl: clean(config.apiBaseUrl) || clean(defaults.baseUrl),
-    apiKey: clean(config.apiKey) || clean(defaults.apiKey),
+    apiBaseUrl: clean(defaults.baseUrl),
+    apiKey: clean(defaults.apiKey),
     model: clean(config.model) || clean(session.model),
     networkEnabled: Boolean(config.networkEnabled),
     maxTokens: Number(config.maxTokens) || 0,
@@ -174,8 +180,8 @@ export function resolveRoundAssistant(input) {
     activationProfile: clean(config.activationProfile),
     memories: normalizeAssistantMemories(config.memories),
     avatarDataUrl: clean(config.avatarDataUrl),
-    inheritedApiBaseUrl: !clean(config.apiBaseUrl),
-    inheritedApiKey: !clean(config.apiKey),
+    inheritedApiBaseUrl: true,
+    inheritedApiKey: true,
     inheritedModel: !clean(config.model),
   };
 }
@@ -186,8 +192,8 @@ export function createRoundAssistantConfigView(assistant, fallbackTemperature) {
     name: assistant.name,
     prompt: assistant.prompt,
     providerId: assistant.providerId || "",
-    apiBaseUrl: assistant.inheritedApiBaseUrl ? "" : assistant.apiBaseUrl || "",
-    apiKey: assistant.inheritedApiKey ? "" : assistant.apiKey || "",
+    apiBaseUrl: "",
+    apiKey: "",
     model: assistant.inheritedModel ? "" : assistant.model || "",
     networkEnabled: Boolean(assistant.networkEnabled),
     maxTokens: Number(assistant.maxTokens) || 0,
