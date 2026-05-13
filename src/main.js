@@ -238,6 +238,7 @@ let mentionPickerOpen = false;
 let mentionPickerQuery = "";
 let mentionPickerRange = null;
 let assistantActivating = false;
+let assistantImportMode = "single";
 let modelPickerOpen = false;
 let assistantModelPickerOpen = false;
 let panelHistoryOpen = false;
@@ -1165,7 +1166,11 @@ function renderRoundtableMembers(rt) {
     ${members}
     <button class="roundtable-material-toggle ${rt.materialsOpen ? "active" : ""}" type="button" data-command="toggle-roundtable-materials">材料</button>
     ${rt.materialsOpen ? renderRoundtableContextControls(rt) : ""}
-    <button class="roundtable-member-add" type="button" data-command="roundtable-add-assistant">+ 添加议员</button>`;
+    <div class="roundtable-member-tools">
+      <button class="roundtable-member-add" type="button" data-command="roundtable-add-assistant">+ 添加议员</button>
+      <button class="roundtable-member-add" type="button" data-command="roundtable-import-personas">导入人格</button>
+      <button class="roundtable-member-add" type="button" data-command="roundtable-export-personas">导出入席</button>
+    </div>`;
 }
 
 function renderRoundtableContextControls(rt) {
@@ -3115,17 +3120,51 @@ function formatAssistantPersonaText(payload) {
   ].join("\n");
 }
 
-function parseAssistantPersonaText(text) {
+function parseAssistantPersonaPayload(text) {
   const source = clean(text);
   if (!source) throw new Error("导入内容为空");
   try {
-    const payload = JSON.parse(source);
-    return payload?.config ? payload.config : payload;
+    return JSON.parse(source);
   } catch {}
   const match = source.match(/--- TBIRD JSON ---\s*([\s\S]*?)\s*--- END TBIRD JSON ---/);
   if (!match) throw new Error("没有找到 TBird 议员人格数据块");
-  const payload = JSON.parse(match[1]);
-  return payload?.config ? payload.config : payload;
+  return JSON.parse(match[1]);
+}
+
+function extractAssistantPersonaConfigs(payload) {
+  if (Array.isArray(payload)) return payload.map((item) => item?.config || item).filter(Boolean);
+  if (Array.isArray(payload?.personas)) return payload.personas.map((item) => item?.config || item).filter(Boolean);
+  if (payload?.config) return [payload.config];
+  return payload ? [payload] : [];
+}
+
+function parseAssistantPersonaConfigs(text) {
+  return extractAssistantPersonaConfigs(parseAssistantPersonaPayload(text));
+}
+
+function parseAssistantPersonaText(text) {
+  const config = parseAssistantPersonaConfigs(text)[0];
+  if (!config) throw new Error("没有找到可导入的议员人格");
+  return config;
+}
+
+function formatAssistantPersonaBundleText(personas) {
+  const payload = {
+    type: "tbird-council-persona-bundle",
+    version: 1,
+    exportedAt: Date.now(),
+    personas,
+  };
+  return [
+    "TBIRD-COUNCIL-PERSONA-BUNDLE v1",
+    `数量: ${personas.length}`,
+    "",
+    personas.map((persona, index) => `${index + 1}. ${persona.config?.name || "未命名议员"}`).join("\n"),
+    "",
+    "--- TBIRD JSON ---",
+    JSON.stringify(payload, null, 2),
+    "--- END TBIRD JSON ---",
+  ].join("\n");
 }
 
 async function exportAssistantConfig() {
@@ -3139,6 +3178,7 @@ async function exportAssistantConfig() {
 
 async function importAssistantConfig() {
   if (!assistantConfigTargetId) return;
+  assistantImportMode = "single";
   try {
     const text = await navigator.clipboard?.readText?.();
     if (clean(text).includes("TBIRD-COUNCIL-PERSONA") || clean(text).includes("--- TBIRD JSON ---")) {
@@ -3154,11 +3194,17 @@ async function handleAssistantImportSelected() {
   const file = els.assistantImportFile?.files?.[0];
   if (!file) return;
   try {
-    applyAssistantImportConfig(parseAssistantPersonaText(await file.text()));
-    showToast("议员配置已导入，保存后生效");
+    const text = await file.text();
+    if (assistantImportMode === "bundle") {
+      importRoundtablePersonasFromText(text);
+    } else {
+      applyAssistantImportConfig(parseAssistantPersonaText(text));
+      showToast("议员配置已导入，保存后生效");
+    }
   } catch (error) {
     showToast(humanizeError(error, "议员配置导入失败"));
   } finally {
+    assistantImportMode = "single";
     if (els.assistantImportFile) els.assistantImportFile.value = "";
   }
 }
@@ -3201,6 +3247,78 @@ function applyAssistantImportConfig(config) {
     renderAvatarPreview(els.assistantAvatarPreview, config.avatarDataUrl, name || "议");
   }
   els.assistantPromptInput.value = prompt;
+}
+
+function getAssistantPersonaPayload(id) {
+  const assistant = getRoundAssistant(id);
+  if (!assistant || assistant.id === "writer") return null;
+  const config = createRoundAssistantConfigView(assistant, sessionSettings().temperature);
+  if (!config) return null;
+  return createAssistantPersonaPayload(config, id);
+}
+
+async function exportRoundtablePersonas() {
+  const rt = roundtableState();
+  const ids = (rt.selectedIds?.length ? rt.selectedIds : getRoundAssistantBases().map((assistant) => assistant.id))
+    .filter((id) => id && id !== "writer");
+  const personas = ids.map(getAssistantPersonaPayload).filter(Boolean);
+  if (!personas.length) return showToast("没有可导出的入席议员");
+  await copyText(formatAssistantPersonaBundleText(personas));
+  showToast(`已复制 ${personas.length} 位议员人格`);
+}
+
+async function importRoundtablePersonas() {
+  assistantImportMode = "bundle";
+  try {
+    const text = await navigator.clipboard?.readText?.();
+    if (clean(text).includes("TBIRD-COUNCIL-PERSONA") || clean(text).includes("--- TBIRD JSON ---")) {
+      importRoundtablePersonasFromText(text);
+      return;
+    }
+  } catch {}
+  els.assistantImportFile?.click();
+}
+
+function importRoundtablePersonasFromText(text) {
+  const configs = parseAssistantPersonaConfigs(text);
+  if (!configs.length) throw new Error("没有找到可导入的议员人格");
+  const rt = roundtableState();
+  let imported = 0;
+  configs.forEach((config) => {
+    const name = clean(config?.name);
+    const prompt = clean(config?.prompt);
+    if (!name || !prompt) return;
+    const assistant = normalizeCustomAssistant({
+      id: uid("round_member"),
+      name,
+      role: "议员",
+      prompt,
+    }, rt.customAssistants.length + imported);
+    if (!assistant) return;
+    rt.customAssistants.push(assistant);
+    rt.assistantConfigs[assistant.id] = {
+      name: assistant.name,
+      providerId: clean(config.providerId),
+      apiBaseUrl: clean(config.apiBaseUrl),
+      apiKey: clean(config.apiKey),
+      model: clean(config.model),
+      networkEnabled: Boolean(config.networkEnabled),
+      maxTokens: Number(config.maxTokens) || 0,
+      temperature: Number.isFinite(Number(config.temperature)) ? Number(config.temperature) : sessionSettings().temperature,
+      contextOptions: normalizeRoundtableContextOptions(config.contextOptions),
+      activationProfile: clean(config.activationProfile),
+      memories: normalizeAssistantMemories(config.memories),
+      avatarDataUrl: clean(config.avatarDataUrl),
+      prompt: assistant.prompt,
+    };
+    if (!rt.selectedIds.includes(assistant.id)) rt.selectedIds.push(assistant.id);
+    imported += 1;
+  });
+  if (!imported) throw new Error("议员人格缺少名称或角色提示词");
+  touchSession(activeSession());
+  render();
+  persistState(state);
+  showToast(`已导入 ${imported} 位议员人格`);
 }
 
 async function handleAssistantAvatarSelected() {
@@ -4102,6 +4220,8 @@ const handleCommand = createCommandRegistry({
   "toggle-roundtable-paper": () => toggleRoundtablePaperReveal(),
   "roundtable-writer-settings": () => openAssistantConfig("writer"),
   "roundtable-add-assistant": () => createCustomRoundAssistant(),
+  "roundtable-import-personas": () => importRoundtablePersonas(),
+  "roundtable-export-personas": () => exportRoundtablePersonas(),
   "roundtable-toggle-member": (target) => toggleRoundtableMember(target.dataset.memberId),
   "roundtable-member-up": (target) => moveRoundtableMember(target.dataset.memberId, -1),
   "roundtable-member-down": (target) => moveRoundtableMember(target.dataset.memberId, 1),

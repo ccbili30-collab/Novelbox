@@ -762,6 +762,19 @@ body.roundtable-busy .send-button {
   font-weight: 700;
 }
 
+.roundtable-member-tools {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.roundtable-member-tools .roundtable-member-add {
+  grid-column: auto;
+  min-height: 40px;
+  font-size: 12px;
+}
+
 .roundtable-context-options {
   grid-column: 1 / -1;
   display: grid;
