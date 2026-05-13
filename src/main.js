@@ -789,6 +789,11 @@ function addMotionRipple(element, event) {
 
 function showCommandFeedback(target, command, event) {
   if (!target) return;
+  const opensBubbleMenu = command === "toggle-menu" || command === "toggle-roundtable-menu";
+  if (opensBubbleMenu) {
+    vibrateLight(command);
+    return;
+  }
   const feedbackTarget = target.closest("button, .message-card, .roundtable-speech, .roundtable-writer-card, .roundtable-member-option, [data-command]");
   pulseElement(feedbackTarget);
   addMotionRipple(feedbackTarget, event);
