@@ -3060,6 +3060,12 @@ function closeAssistantConfig() {
   if (els.assistantConfigDialog?.open) els.assistantConfigDialog.close();
 }
 
+function closeDialogByBackdrop(event) {
+  const dialog = event.currentTarget;
+  if (!(dialog instanceof HTMLDialogElement) || event.target !== dialog) return;
+  dialog.close();
+}
+
 function buildAssistantActivationMessages(base, config) {
   const options = normalizeRoundtableContextOptions(config.contextOptions);
   const novelMaterials = buildRoundtableNovelMaterials(options);
@@ -4305,6 +4311,15 @@ els.bodyImportFile?.addEventListener("change", handleBodyFileSelected);
 
 els.saveEdit.addEventListener("click", () => saveEditor(false));
 els.saveSendEdit.addEventListener("click", () => saveEditor(true));
+els.editDialog?.addEventListener("click", closeDialogByBackdrop);
+els.editDialog?.addEventListener("close", () => {
+  editTarget = null;
+});
+els.assistantConfigDialog?.addEventListener("click", closeDialogByBackdrop);
+els.assistantConfigDialog?.addEventListener("close", () => {
+  assistantConfigTargetId = null;
+  assistantModelPickerOpen = false;
+});
 els.assistantTemperatureInput?.addEventListener("input", () => {
   els.assistantTemperatureLabel.textContent = Number(els.assistantTemperatureInput.value).toFixed(2);
 });
