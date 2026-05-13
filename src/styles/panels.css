@@ -1141,6 +1141,23 @@
   font-size: 11px;
 }
 
+.assistant-source-label {
+  display: block;
+  width: fit-content;
+  max-width: min(64vw, 320px);
+  margin-top: 4px;
+  overflow: hidden;
+  padding: 3px 7px;
+  border: 1px solid rgba(82, 116, 129, 0.16);
+  border-radius: 999px;
+  color: #41545b;
+  background: #eef7f8;
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .assistant-config-dialog .field {
   gap: 5px;
   margin: 9px 0;

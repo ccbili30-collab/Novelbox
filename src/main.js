@@ -184,6 +184,7 @@ const els = {
   assistantImportFile: $("#assistantImportFile"),
   assistantConfigDialog: $("#assistantConfigDialog"),
   assistantConfigTitle: $("#assistantConfigTitle"),
+  assistantSourceLabel: $("#assistantSourceLabel"),
   assistantNameInput: $("#assistantNameInput"),
   assistantProviderSelect: $("#assistantProviderSelect"),
   assistantApiOverrideEnabledInput: $("#assistantApiOverrideEnabledInput"),
@@ -3344,10 +3345,17 @@ function openAssistantConfig(id) {
   const assistant = getRoundAssistant(id);
   const config = getRoundAssistantConfig(id);
   if (!assistant || !config) return;
+  const rawConfig = roundtableState().assistantConfigs?.[id] || {};
   assistantConfigTargetId = id;
   assistantModelPickerOpen = false;
   ensureAssistantModelPickerUi();
   els.assistantConfigTitle.textContent = `${assistant.name}设置`;
+  if (els.assistantSourceLabel) {
+    const imported = rawConfig.importedFrom;
+    const sourceTitle = clean(imported?.sessionTitle);
+    els.assistantSourceLabel.hidden = !sourceTitle;
+    els.assistantSourceLabel.textContent = sourceTitle ? `来自：${sourceTitle}` : "";
+  }
   els.assistantNameInput.value = config.name;
   if (els.assistantAvatarPreview) {
     els.assistantAvatarPreview.dataset.avatarDataUrl = config.avatarDataUrl || "";
