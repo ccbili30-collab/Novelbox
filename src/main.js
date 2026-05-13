@@ -42,7 +42,10 @@ import {
   findMentionedRoundtableAssistants,
   moveMentionedAssistantsAfter,
 } from "./domain/roundtable/roundtable-flow.js";
-import { appendCouncilParticipationRecord } from "./domain/roundtable/council-participation-memory.js";
+import {
+  appendCouncilParticipationRecord,
+  getCouncilParticipationRecords,
+} from "./domain/roundtable/council-participation-memory.js";
 import {
   appendRoundtableMessage,
   createFailureRoundtableMessage,
@@ -3887,6 +3890,7 @@ function buildRoundtableMessages(assistant, instruction) {
     options,
     mentionableAssistants: getRoundtableMentionableAssistants(),
     roundtableMessages: rt.messages,
+    participationRecords: assistant.id === "writer" ? [] : getCouncilParticipationRecords(state.councilParticipationRecords, assistant.id, { limit: 6 }),
     novel: sessionNovel(),
     manuscriptText: getRoundtableManuscript(),
     mainChatText: getNovelSourceText(),

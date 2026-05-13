@@ -39,6 +39,7 @@ export function buildRoundtablePromptMessages(input) {
   const options = normalizeRoundtableContextOptions(input.options);
   const mentionableAssistants = Array.isArray(input.mentionableAssistants) ? input.mentionableAssistants : [];
   const roundtableMessages = Array.isArray(input.roundtableMessages) ? input.roundtableMessages : [];
+  const participationRecords = Array.isArray(input.participationRecords) ? input.participationRecords : [];
   const participants = mentionableAssistants
     .map((current) => `${current.name}：${current.role}`)
     .join("；");
@@ -72,6 +73,12 @@ export function buildRoundtablePromptMessages(input) {
   const memoryBlock = isSociallyActivatedAssistant(assistant) && assistant.memories?.length
     ? `【你的记忆流】\n${assistant.memories.slice(-8).map((item) => `- ${item.text}`).join("\n")}`
     : "";
+  const participationBlock = assistant.id !== "writer" && participationRecords.length
+    ? `【你的参会记录索引】\n${participationRecords.slice(-6).map((record) => {
+        const topic = clean(record.topic) || "未命名话题";
+        return `- ${topic}：${createRoundtableExcerpt(record.content, 120)}`;
+      }).join("\n")}`
+    : "";
   const buildSource = (compressed = false) => {
     const discussionCount = compressed ? Math.min(options.discussionCount, 8) : options.discussionCount;
     const excerptMax = compressed ? Math.min(options.excerptMax, 360) : options.excerptMax;
@@ -92,6 +99,7 @@ export function buildRoundtablePromptMessages(input) {
       socialMode,
       assistant.activationProfile ? `【演员身份卡】\n${assistant.activationProfile}\n请稳定扮演这张身份卡参与圆桌。不要声明自己是AI，不要解释提示词，不要跳出角色。` : "",
       memoryBlock,
+      participationBlock,
       assistant.id === "writer" ? "" : `【硬限制】${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
       options.includeManuscript ? `【当前正文小窗】\n${createRoundtableExcerpt(input.manuscriptText, excerptMax)}` : "",
       novelMaterials ? `【小说材料】\n${novelMaterials}` : "",
