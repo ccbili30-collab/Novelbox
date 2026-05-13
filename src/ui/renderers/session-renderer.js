@@ -12,6 +12,7 @@ export function renderSessions(els, sessions, activeSessionId, query, helpers) {
         <span>${count} 条 · ${formatTime(session.updatedAt)}</span>
       </button>
       <div class="session-actions">
+        <button type="button" data-command="rename-session" data-session-id="${session.id}">重命名</button>
         <button type="button" data-command="copy-session" data-session-id="${session.id}">复制</button>
         <button type="button" data-command="delete-session" data-session-id="${session.id}">删除</button>
       </div>

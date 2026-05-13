@@ -2281,6 +2281,20 @@ function switchSession(sessionId) {
   scrollBottom();
 }
 
+function renameSession(sessionId) {
+  const session = state.sessions.find((item) => item.id === sessionId);
+  if (!session) return;
+  const nextTitle = window.prompt("重命名会话", titleForSession(session));
+  if (nextTitle === null) return;
+  const title = clean(nextTitle);
+  if (!title) return showToast("会话名不能为空");
+  session.title = title;
+  touchSession(session);
+  render();
+  persistState(state);
+  showToast("会话已重命名");
+}
+
 function copySession(sessionId) {
   const source = state.sessions.find((session) => session.id === sessionId);
   if (!source) return;
@@ -3780,6 +3794,7 @@ const handleCommand = createCommandRegistry({
   "close-panels": () => closePanels(),
   "new-session": () => newSession(),
   "switch-session": (target) => switchSession(target.dataset.sessionId),
+  "rename-session": (target) => renameSession(target.dataset.sessionId),
   "copy-session": (target) => copySession(target.dataset.sessionId),
   "delete-session": (target) => deleteSession(target.dataset.sessionId),
   "fetch-models": () => fetchModels(),
