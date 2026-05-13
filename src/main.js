@@ -1009,7 +1009,7 @@ function renderRoundtable() {
   els.roundtableWorkspace.hidden = !rt.enabled;
   els.messages.hidden = rt.enabled;
   if (rt.enabled) {
-    els.input.placeholder = "在圆桌里发言；输入 @写手 可把讨论转成正文...";
+    els.input.placeholder = "圆桌发言...";
   } else {
     els.input.placeholder = "在这里输入你的问题...";
   }
@@ -1115,7 +1115,7 @@ function renderRoundtableMembers(rt) {
       `;
     })
     .join("");
-  return `<div class="roundtable-member-sheet-title"><span>参会人设置</span><small>按数字顺序发言，@写手继续正文</small></div>
+  return `<div class="roundtable-member-sheet-title"><span>参会人设置</span><small>${rt.selectedIds.length} 位已入席</small></div>
     ${members}
     <button class="roundtable-material-toggle ${rt.materialsOpen ? "active" : ""}" type="button" data-command="toggle-roundtable-materials">材料</button>
     ${rt.materialsOpen ? renderRoundtableContextControls(rt) : ""}
@@ -1326,7 +1326,7 @@ function getRoundtablePaperSource() {
     };
   }
   return {
-    text: "正文还没有放上桌。先在普通模式写一段，或在这里 @写手 开始。",
+    text: "正文尚未开始。",
     source: "待开始",
     updatedAt: Date.now(),
   };
