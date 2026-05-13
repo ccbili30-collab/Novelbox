@@ -3,11 +3,20 @@ import { clean } from "../../utils/text.js";
 
 export const ROUNDTABLE_MESSAGE_LIMIT = 80;
 
+export function inferRoundtableMessageType(speakerId, extra = {}) {
+  if (clean(extra.messageType)) return clean(extra.messageType);
+  if (speakerId === "writer") return "writer_prose";
+  if (speakerId === "user") return "user_chat";
+  if (extra.failed) return "system_event";
+  return "council_comment";
+}
+
 export function createRoundtableMessage(speakerId, speakerName, content, extra = {}) {
   return {
     id: uid("round"),
     speakerId,
     speakerName,
+    messageType: inferRoundtableMessageType(speakerId, extra),
     content: clean(content),
     createdAt: Date.now(),
     ...extra,
@@ -51,6 +60,7 @@ export function createFailureRoundtableMessage(assistant, errorMessage) {
   return createRoundtableMessage(assistant.id, assistant.name, `请求失败：${errorMessage}`, {
     failed: true,
     errorMessage,
+    messageType: "system_event",
   });
 }
 

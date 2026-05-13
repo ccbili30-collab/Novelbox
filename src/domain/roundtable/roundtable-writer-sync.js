@@ -102,10 +102,14 @@ export function locateWriterSyncStart(body, sync) {
   return Number.isFinite(sync.start) ? sync.start : sourceBody.indexOf(sync.segment || sync.content || "");
 }
 
+export function isWriterProseMessage(message) {
+  return message?.speakerId === "writer" || message?.messageType === "writer_prose";
+}
+
 export function buildWriterManuscriptSegments(messages, body) {
   const sourceBody = body || "";
   return (Array.isArray(messages) ? messages : [])
-    .filter((message) => message.speakerId === "writer" && message.manuscriptSync?.active)
+    .filter((message) => isWriterProseMessage(message) && message.manuscriptSync?.active)
     .map((message) => {
       const sync = message.manuscriptSync;
       const start = locateWriterSyncStart(sourceBody, sync);

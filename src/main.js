@@ -56,6 +56,7 @@ import {
 import {
   appendWriterSync,
   buildWriterManuscriptSegments,
+  isWriterProseMessage,
   locateWriterSyncStart,
   removeWriterSyncedSegment,
   replaceWriterSyncedSegment,
@@ -1193,7 +1194,7 @@ function renderRoundtableAvatar(profile, memberId = "") {
 
 function renderRoundtableMessage(message) {
   const isUser = message.speakerId === "user";
-  const isWriter = message.speakerId === "writer";
+  const isWriter = isWriterProseMessage(message);
   const profile = getRoundtableSpeakerProfile(message);
   const time = formatTime(message.createdAt);
   const decision = renderRoundtableDecisionBadge(message);
@@ -1263,7 +1264,7 @@ function getRoundtablePaperSource() {
     };
   }
   const rt = roundtableState();
-  const lastWriter = [...rt.messages].reverse().find((message) => message.speakerId === "writer" && clean(message.content));
+  const lastWriter = [...rt.messages].reverse().find((message) => isWriterProseMessage(message) && clean(message.content));
   if (lastWriter) {
     return {
       text: lastWriter.content,
@@ -1526,7 +1527,7 @@ function renderRoundtableMenu() {
     return;
   }
   const canRegenerate = message.speakerId !== "user";
-  const isWriter = message.speakerId === "writer";
+  const isWriter = isWriterProseMessage(message);
   const canDecide = message.speakerId !== "user" && !isWriter;
   const isReview = message.speakerId === "review";
   els.menu.innerHTML = `
@@ -3235,6 +3236,7 @@ function addRoundtableFailureMessage(assistant, error) {
     createdAt: message.createdAt,
     failed: message.failed,
     errorMessage: message.errorMessage,
+    messageType: message.messageType,
   });
 }
 
@@ -3256,7 +3258,7 @@ function updateRoundtableMessageContent(message, content) {
 function renderStreamingRoundtableMessage(message) {
   if (!message) return;
   const selector = `[data-round-id="${cssEscape(message.id)}"]`;
-  const target = message.speakerId === "writer"
+  const target = isWriterProseMessage(message)
     ? els.roundtableDiscussion?.querySelector(`${selector} .roundtable-writer-snippet`)
     : els.roundtableDiscussion?.querySelector(`.roundtable-speech${selector}`);
   if (!target) return;
@@ -3511,7 +3513,7 @@ async function rewriteWriterManuscriptSync(id) {
 async function regenerateRoundtableMessage(id) {
   const message = getRoundtableMessage(id);
   if (!message || message.speakerId === "user") return;
-  if (message.speakerId === "writer") {
+  if (isWriterProseMessage(message)) {
     activeRoundtableMessageId = null;
     await generateRoundtableWriter(`请重新写这一段正文，保留圆桌讨论意图但换一种更好的表达：\n${message.content}`);
     return;
