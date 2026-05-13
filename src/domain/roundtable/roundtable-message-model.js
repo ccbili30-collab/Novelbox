@@ -81,11 +81,12 @@ export function stripRoundtableSpeakerPrefix(content, speakerName, aliases = [])
     ...aliases,
   ].map(clean).filter(Boolean))).sort((a, b) => b.length - a.length);
   if (!names.length) return text;
-  for (let index = 0; index < 3; index += 1) {
+  for (let index = 0; index < 4; index += 1) {
     const before = text;
     for (const name of names) {
       const pattern = new RegExp(`^\\s*${escapeRegExp(name)}\\s*[：:]\\s*`, "i");
-      text = text.replace(pattern, "");
+      const colonPattern = new RegExp(`^\\s*${escapeRegExp(name)}\\s*[:：﹕︓]\\s*`, "i");
+      text = text.replace(colonPattern, "").replace(pattern, "");
       if (text !== before) break;
     }
     if (text === before) break;
