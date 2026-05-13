@@ -242,6 +242,8 @@ let modelPickerOpen = false;
 let assistantModelPickerOpen = false;
 let panelHistoryOpen = false;
 let transientHistoryOpen = false;
+let dialogHistoryOpen = false;
+let closingDialogFromHistory = false;
 let toastTimer = null;
 let toastMotionTimer = null;
 let paperScrollPersistTimer = null;
@@ -836,6 +838,45 @@ function pushTransientHistory() {
   } catch {
     transientHistoryOpen = false;
   }
+}
+
+function pushDialogHistory() {
+  if (history.state?.tbirdDialogOpen) {
+    dialogHistoryOpen = true;
+    return;
+  }
+  try {
+    history.pushState({ ...(history.state || {}), tbirdDialogOpen: true }, "");
+    dialogHistoryOpen = true;
+  } catch {
+    dialogHistoryOpen = false;
+  }
+}
+
+function getOpenDialog() {
+  return [els.assistantConfigDialog, els.editDialog].find((dialog) => dialog?.open) || null;
+}
+
+function closeOpenDialog(options = {}) {
+  const dialog = getOpenDialog();
+  if (!dialog) return false;
+  closingDialogFromHistory = Boolean(options.fromHistory);
+  dialog.close();
+  return true;
+}
+
+function handleDialogClosed() {
+  if (closingDialogFromHistory) {
+    dialogHistoryOpen = false;
+    closingDialogFromHistory = false;
+    return;
+  }
+  if (dialogHistoryOpen && history.state?.tbirdDialogOpen) {
+    dialogHistoryOpen = false;
+    history.back();
+    return;
+  }
+  dialogHistoryOpen = false;
 }
 
 function closeRoundtableMembers(options = {}) {
@@ -1991,6 +2032,7 @@ function openEditor(nodeId) {
   els.saveSendEdit.textContent = node.role === "assistant" ? "保存并继续" : "保存并重新发送";
   els.saveSendEdit.style.display = "";
   els.editDialog.showModal();
+  pushDialogHistory();
   requestAnimationFrame(() => els.editText.focus());
 }
 
@@ -2961,6 +3003,7 @@ function openAssistantConfig(id) {
     els.deleteAssistant.hidden = id === "writer";
   }
   els.assistantConfigDialog.showModal();
+  pushDialogHistory();
   requestAnimationFrame(() => els.assistantNameInput?.focus());
 }
 
@@ -4304,6 +4347,11 @@ bindDialogBackdropClose(els.assistantConfigDialog);
 
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
+  if (getOpenDialog()) {
+    closeOpenDialog();
+    event.preventDefault();
+    return;
+  }
   if (roundtableState().membersOpen) {
     closeRoundtableMembers();
     event.preventDefault();
@@ -4316,6 +4364,10 @@ document.addEventListener("keydown", (event) => {
 });
 
 window.addEventListener("popstate", () => {
+  if (getOpenDialog()) {
+    closeOpenDialog({ fromHistory: true });
+    return;
+  }
   if (roundtableState().membersOpen) {
     closeRoundtableMembers({ fromHistory: true });
     return;
@@ -4377,10 +4429,12 @@ els.saveEdit.addEventListener("click", () => saveEditor(false));
 els.saveSendEdit.addEventListener("click", () => saveEditor(true));
 els.editDialog?.addEventListener("close", () => {
   editTarget = null;
+  handleDialogClosed();
 });
 els.assistantConfigDialog?.addEventListener("close", () => {
   assistantConfigTargetId = null;
   assistantModelPickerOpen = false;
+  handleDialogClosed();
 });
 els.assistantTemperatureInput?.addEventListener("input", () => {
   els.assistantTemperatureLabel.textContent = Number(els.assistantTemperatureInput.value).toFixed(2);
