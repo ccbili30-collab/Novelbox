@@ -241,6 +241,7 @@ let assistantActivating = false;
 let modelPickerOpen = false;
 let assistantModelPickerOpen = false;
 let panelHistoryOpen = false;
+let transientHistoryOpen = false;
 let toastTimer = null;
 let toastMotionTimer = null;
 let paperScrollPersistTimer = null;
@@ -820,6 +821,35 @@ function closePanels(options = {}) {
   }
   if (hadPanel && panelHistoryOpen && history.state?.tbirdPanelOpen) {
     panelHistoryOpen = false;
+    history.back();
+  }
+}
+
+function pushTransientHistory() {
+  if (history.state?.tbirdTransientOpen) {
+    transientHistoryOpen = true;
+    return;
+  }
+  try {
+    history.pushState({ ...(history.state || {}), tbirdTransientOpen: true }, "");
+    transientHistoryOpen = true;
+  } catch {
+    transientHistoryOpen = false;
+  }
+}
+
+function closeRoundtableMembers(options = {}) {
+  const rt = roundtableState();
+  const hadMembers = Boolean(rt.membersOpen);
+  rt.membersOpen = false;
+  rt.materialsOpen = false;
+  render();
+  if (options.fromHistory) {
+    transientHistoryOpen = false;
+    return;
+  }
+  if (hadMembers && transientHistoryOpen && history.state?.tbirdTransientOpen) {
+    transientHistoryOpen = false;
     history.back();
   }
 }
@@ -2780,7 +2810,12 @@ function toggleRoundtable() {
 
 function toggleRoundtableMembers() {
   const rt = roundtableState();
-  rt.membersOpen = !rt.membersOpen;
+  if (rt.membersOpen) {
+    closeRoundtableMembers();
+    return;
+  }
+  rt.membersOpen = true;
+  pushTransientHistory();
   render();
 }
 
@@ -3058,12 +3093,6 @@ function closeAssistantConfig() {
   assistantConfigTargetId = null;
   assistantModelPickerOpen = false;
   if (els.assistantConfigDialog?.open) els.assistantConfigDialog.close();
-}
-
-function closeDialogByBackdrop(event) {
-  const dialog = event.currentTarget;
-  if (!(dialog instanceof HTMLDialogElement) || event.target !== dialog) return;
-  dialog.close();
 }
 
 function buildAssistantActivationMessages(base, config) {
@@ -4255,7 +4284,24 @@ function bindDialogBackdropClose(dialog) {
 bindDialogBackdropClose(els.editDialog);
 bindDialogBackdropClose(els.assistantConfigDialog);
 
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  if (roundtableState().membersOpen) {
+    closeRoundtableMembers();
+    event.preventDefault();
+    return;
+  }
+  if (panelManager.getActivePanel()) {
+    closePanels();
+    event.preventDefault();
+  }
+});
+
 window.addEventListener("popstate", () => {
+  if (roundtableState().membersOpen) {
+    closeRoundtableMembers({ fromHistory: true });
+    return;
+  }
   if (!panelManager.getActivePanel()) return;
   closePanels({ fromHistory: true });
 });
@@ -4311,11 +4357,9 @@ els.bodyImportFile?.addEventListener("change", handleBodyFileSelected);
 
 els.saveEdit.addEventListener("click", () => saveEditor(false));
 els.saveSendEdit.addEventListener("click", () => saveEditor(true));
-els.editDialog?.addEventListener("click", closeDialogByBackdrop);
 els.editDialog?.addEventListener("close", () => {
   editTarget = null;
 });
-els.assistantConfigDialog?.addEventListener("click", closeDialogByBackdrop);
 els.assistantConfigDialog?.addEventListener("close", () => {
   assistantConfigTargetId = null;
   assistantModelPickerOpen = false;
