@@ -667,11 +667,32 @@
 
 .edit-dialog {
   width: min(92vw, 680px);
+  max-height: min(88dvh, 780px);
   border: 0;
   border-radius: 18px;
   padding: 14px;
+  overflow: auto;
   box-shadow: var(--shadow);
   animation: dialog-rise var(--motion-spring) both;
+}
+
+.assistant-config-dialog .panel-head {
+  position: sticky;
+  z-index: 2;
+  top: -14px;
+  margin: -14px -14px 10px;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(16px);
+}
+
+.assistant-config-dialog .panel-head .icon-button {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.86);
+  font-size: 18px;
+  font-weight: 800;
 }
 
 .edit-dialog::backdrop {
@@ -851,9 +872,27 @@
 
 .dialog-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 9px;
+  gap: 7px;
   margin-top: 12px;
+}
+
+.assistant-config-dialog > form > .dialog-actions {
+  position: sticky;
+  bottom: -14px;
+  margin: 12px -14px -14px;
+  padding: 10px 14px 12px;
+  border-top: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(16px);
+}
+
+.assistant-config-dialog > form > .dialog-actions button,
+.assistant-activation-actions button {
+  padding: 7px 9px;
+  border-radius: 8px;
+  font-size: 13px;
 }
 
 .assistant-context-options {
