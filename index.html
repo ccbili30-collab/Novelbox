@@ -86,17 +86,17 @@
 
     <aside id="settingsPanel" class="side-panel right-panel" hidden>
       <div class="panel-head">
-        <strong>设置</strong>
+        <strong>会话设置</strong>
         <button class="icon-button" type="button" data-command="close-panels">×</button>
       </div>
       <label class="field">
-        <span>系统提示</span>
+        <span>主线 AI 提示</span>
         <textarea id="systemPromptInput" rows="6"></textarea>
       </label>
       <div class="settings-section provider-settings-section">
         <div class="section-title">
-          <strong>模型提供方</strong>
-          <span class="muted">默认 API 与模型来源</span>
+          <strong>全局默认 API</strong>
+          <span class="muted">主线、写手和议员的默认来源</span>
         </div>
         <label class="field">
           <span>当前提供方</span>
@@ -120,7 +120,7 @@
         <input id="apiKeyInput" type="password" placeholder="sk-..." />
       </label>
       <label class="field">
-        <span>模型</span>
+        <span>主线模型</span>
         <input id="modelInput" type="text" list="modelDatalist" placeholder="gpt-4o-mini" />
       </label>
       <datalist id="modelDatalist"></datalist>
@@ -143,7 +143,7 @@
         </label>
       </div>
       <label class="field">
-        <span>最大输出 token</span>
+        <span>主线最大输出 token</span>
         <input id="maxTokensInput" type="number" min="1" step="1" />
       </label>
       <label class="check-field">
