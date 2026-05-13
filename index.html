@@ -100,6 +100,24 @@
         <span>系统提示</span>
         <textarea id="systemPromptInput" rows="6"></textarea>
       </label>
+      <div class="settings-section provider-settings-section">
+        <div class="section-title">
+          <strong>模型提供方</strong>
+          <span class="muted">默认 API 与模型来源</span>
+        </div>
+        <label class="field">
+          <span>当前提供方</span>
+          <select id="providerSelect"></select>
+        </label>
+        <label class="field">
+          <span>提供方名称</span>
+          <input id="providerNameInput" type="text" placeholder="例如 OpenAI / DeepSeek / Qwen" />
+        </label>
+        <div class="panel-row provider-actions">
+          <button type="button" data-command="add-provider">新增提供方</button>
+          <button type="button" data-command="delete-provider">删除当前</button>
+        </div>
+      </div>
       <label class="field">
         <span>Base URL</span>
         <input id="baseUrlInput" type="text" placeholder="https://api.openai.com/v1" />

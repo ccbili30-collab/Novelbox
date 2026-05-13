@@ -12,7 +12,7 @@ import {
 } from "./domain/novel/novel-context-builder.js";
 import { buildNovelStats } from "./domain/novel/novel-stats.js";
 import { hydrateSessionSettings } from "./domain/settings/settings-model.js";
-import { hydrateApiSettings } from "./domain/settings/api-settings.js";
+import { createApiProvider, hydrateApiSettings } from "./domain/settings/api-settings.js";
 import {
   DEFAULT_CUSTOM_ROUNDTABLE_ASSISTANT_PROMPT,
   DEFAULT_ROUNDTABLE_CONTEXT,
@@ -135,6 +135,8 @@ const els = {
   sessionList: $("#sessionList"),
   historySearch: $("#historySearch"),
   systemPrompt: $("#systemPromptInput"),
+  providerSelect: $("#providerSelect"),
+  providerName: $("#providerNameInput"),
   baseUrl: $("#baseUrlInput"),
   apiKey: $("#apiKeyInput"),
   modelInput: $("#modelInput"),
@@ -313,6 +315,19 @@ function activeSession() {
 function apiSettings() {
   state.api = hydrateApiSettings(state.api);
   return state.api;
+}
+
+function activeApiProvider(api = apiSettings()) {
+  return api.providers.find((provider) => provider.id === api.currentProviderId) || api.providers[0];
+}
+
+function syncApiFromProvider(api = apiSettings()) {
+  const provider = activeApiProvider(api);
+  if (!provider) return api;
+  api.baseUrl = provider.baseUrl;
+  api.apiKey = provider.apiKey;
+  api.models = Array.from(new Set((provider.models || []).filter(Boolean)));
+  return api;
 }
 
 function sessionSettings(session = activeSession()) {
@@ -1533,8 +1548,16 @@ function renderBackgroundPreview(element, dataUrl) {
 function renderSettings() {
   const s = sessionSettings();
   const api = apiSettings();
+  const provider = activeApiProvider(api);
   const appearance = sessionAppearance();
   if (document.activeElement !== els.systemPrompt) els.systemPrompt.value = s.systemPrompt;
+  if (els.providerSelect) {
+    els.providerSelect.innerHTML = api.providers
+      .map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`)
+      .join("");
+    els.providerSelect.value = api.currentProviderId;
+  }
+  if (els.providerName && document.activeElement !== els.providerName) els.providerName.value = provider?.name || "";
   if (document.activeElement !== els.baseUrl) els.baseUrl.value = api.baseUrl;
   if (document.activeElement !== els.apiKey) els.apiKey.value = api.apiKey;
   if (document.activeElement !== els.modelInput) els.modelInput.value = s.model;
@@ -1816,7 +1839,63 @@ function setActiveModel(model) {
   if (!value) return;
   sessionSettings().model = value;
   const api = apiSettings();
-  api.models = Array.from(new Set([value, ...api.models]));
+  const provider = activeApiProvider(api);
+  provider.models = Array.from(new Set([value, ...(provider.models || [])].filter(Boolean)));
+  syncApiFromProvider(api);
+}
+
+function switchApiProvider(id) {
+  const api = apiSettings();
+  if (!api.providers.some((provider) => provider.id === id)) return;
+  api.currentProviderId = id;
+  syncApiFromProvider(api);
+  render();
+  persistState(state);
+}
+
+function updateActiveProviderName() {
+  const api = apiSettings();
+  const provider = activeApiProvider(api);
+  if (!provider || !els.providerName) return;
+  provider.name = clean(els.providerName.value) || "未命名提供方";
+  renderSettings();
+  persistState(state);
+}
+
+function updateActiveProviderCredential(key, value) {
+  const api = apiSettings();
+  const provider = activeApiProvider(api);
+  if (!provider) return;
+  provider[key] = value;
+  syncApiFromProvider(api);
+  persistState(state);
+}
+
+function addApiProvider() {
+  const api = apiSettings();
+  const provider = createApiProvider({
+    name: `提供方 ${api.providers.length + 1}`,
+    baseUrl: api.baseUrl,
+    models: api.models,
+  });
+  api.providers.push(provider);
+  api.currentProviderId = provider.id;
+  syncApiFromProvider(api);
+  render();
+  persistState(state);
+  showToast("已新增模型提供方");
+}
+
+function deleteApiProvider() {
+  const api = apiSettings();
+  if (api.providers.length <= 1) return showToast("至少保留一个模型提供方");
+  const currentId = api.currentProviderId;
+  api.providers = api.providers.filter((provider) => provider.id !== currentId);
+  api.currentProviderId = api.providers[0].id;
+  syncApiFromProvider(api);
+  render();
+  persistState(state);
+  showToast("已删除模型提供方");
 }
 
 function openEditor(nodeId) {
@@ -2121,7 +2200,9 @@ async function fetchModels() {
     if (data.__bridgeStatus >= 400) throw new Error(data.error?.message || "模型拉取失败");
     const models = (data.data || []).map((item) => item.id).filter(Boolean).sort();
     if (!models.length) throw new Error("没有读取到模型");
-    api.models = Array.from(new Set([settings.model, ...models].filter(Boolean)));
+    const provider = activeApiProvider(api);
+    provider.models = Array.from(new Set([settings.model, ...models].filter(Boolean)));
+    syncApiFromProvider(api);
     if (!settings.model) settings.model = models[0];
     els.modelStatus.textContent = `已拉取 ${models.length} 个`;
     render();
@@ -2148,7 +2229,9 @@ async function fetchAssistantModels() {
     const models = (data.data || []).map((item) => item.id).filter(Boolean).sort();
     if (!models.length) throw new Error("没有读取到模型");
     const globalApi = apiSettings();
-    globalApi.models = Array.from(new Set([sessionSettings().model, clean(els.assistantModelInput?.value), ...models].filter(Boolean)));
+    const provider = activeApiProvider(globalApi);
+    provider.models = Array.from(new Set([sessionSettings().model, clean(els.assistantModelInput?.value), ...models].filter(Boolean)));
+    syncApiFromProvider(globalApi);
     if (!clean(els.assistantModelInput?.value)) {
       els.assistantModelInput.value = models[0];
     }
@@ -3803,6 +3886,8 @@ const handleCommand = createCommandRegistry({
   "copy-session": (target) => copySession(target.dataset.sessionId),
   "delete-session": (target) => deleteSession(target.dataset.sessionId),
   "fetch-models": () => fetchModels(),
+  "add-provider": () => addApiProvider(),
+  "delete-provider": () => deleteApiProvider(),
   "choose-workspace-files": () => chooseWorkspaceFiles(),
   "clear-workspace-files": () => clearWorkspaceFiles(),
   "choose-chat-image": () => chooseChatImage(),
@@ -4064,10 +4149,12 @@ els.historySearch.addEventListener("input", renderSessions);
   ["input", els.apiKey, "apiKey"],
 ].forEach(([, element, key]) => {
   element.addEventListener("input", () => {
-    apiSettings()[key] = element.value;
-    persistState(state);
+    updateActiveProviderCredential(key, element.value);
   });
 });
+
+els.providerSelect?.addEventListener("change", () => switchApiProvider(els.providerSelect.value));
+els.providerName?.addEventListener("input", updateActiveProviderName);
 
 els.modelInput.addEventListener("input", () => {
   setActiveModel(els.modelInput.value);
