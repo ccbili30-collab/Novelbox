@@ -182,6 +182,7 @@ const els = {
   assistantModelInput: $("#assistantModelInput"),
   fetchAssistantModels: $("#fetchAssistantModelsButton"),
   assistantModelStatus: $("#assistantModelStatus"),
+  assistantNetworkEnabledInput: $("#assistantNetworkEnabledInput"),
   assistantMaxTokensInput: $("#assistantMaxTokensInput"),
   assistantTemperatureInput: $("#assistantTemperatureInput"),
   assistantTemperatureLabel: $("#assistantTemperatureLabel"),
@@ -2882,6 +2883,7 @@ function openAssistantConfig(id) {
   if (els.assistantBaseUrlInput) els.assistantBaseUrlInput.value = config.apiBaseUrl || "";
   if (els.assistantApiKeyInput) els.assistantApiKeyInput.value = config.apiKey || "";
   els.assistantModelInput.value = config.model;
+  if (els.assistantNetworkEnabledInput) els.assistantNetworkEnabledInput.checked = Boolean(config.networkEnabled);
   if (els.assistantMaxTokensInput) els.assistantMaxTokensInput.value = config.maxTokens || "";
   els.assistantTemperatureInput.value = config.temperature;
   els.assistantTemperatureLabel.textContent = Number(config.temperature).toFixed(2);
@@ -2934,6 +2936,7 @@ function currentAssistantFormConfig() {
     apiBaseUrl: clean(els.assistantBaseUrlInput?.value),
     apiKey: clean(els.assistantApiKeyInput?.value),
     model: clean(els.assistantModelInput.value),
+    networkEnabled: Boolean(els.assistantNetworkEnabledInput?.checked),
     maxTokens: Number(els.assistantMaxTokensInput?.value) || 0,
     temperature: Number(els.assistantTemperatureInput.value),
     contextOptions: currentAssistantContextOptions(),
@@ -2977,6 +2980,7 @@ async function handleAssistantImportSelected() {
     if (els.assistantBaseUrlInput) els.assistantBaseUrlInput.value = clean(config.apiBaseUrl);
     if (els.assistantApiKeyInput) els.assistantApiKeyInput.value = clean(config.apiKey);
     els.assistantModelInput.value = clean(config.model);
+    if (els.assistantNetworkEnabledInput) els.assistantNetworkEnabledInput.checked = Boolean(config.networkEnabled);
     if (els.assistantMaxTokensInput) els.assistantMaxTokensInput.value = Number(config.maxTokens) || "";
     const temperature = Number(config.temperature);
     els.assistantTemperatureInput.value = Number.isFinite(temperature) ? clamp(temperature, 0, 2) : sessionSettings().temperature;
@@ -3150,6 +3154,7 @@ function saveAssistantConfigFromForm(options = {}) {
     apiBaseUrl: clean(els.assistantBaseUrlInput?.value),
     apiKey: clean(els.assistantApiKeyInput?.value),
     model,
+    networkEnabled: Boolean(els.assistantNetworkEnabledInput?.checked),
     maxTokens: Number(els.assistantMaxTokensInput?.value) || 0,
     temperature: Number(els.assistantTemperatureInput.value),
     contextOptions: currentAssistantContextOptions(),

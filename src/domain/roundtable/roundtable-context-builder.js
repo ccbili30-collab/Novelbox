@@ -48,6 +48,9 @@ export function buildRoundtablePromptMessages(input) {
   const speakingRule = assistant.id === "writer"
     ? "写手负责把讨论转成用户真正要的成品。若用户当前只是交流，就先参与交流或总结；若用户明确要求产出，就直接输出对应文本，不要多余解释。"
     : `${ROUNDTABLE_COUNCIL_CHAT_RULE}议员默认发言必须短。${ROUNDTABLE_CONCISE_RULE}`;
+  const networkRule = assistant.networkEnabled
+    ? "【联网能力】你被允许在有真实工具支持时使用联网或外部资料检索；如果当前环境没有提供检索工具，不要声称已经搜索、查阅网页或引用实时信息。"
+    : "【联网能力】你不能使用联网或外部实时资料，只能依据当前会话、本地材料和已给出的上下文发言；不要声称搜索过、查过网页或引用最新信息。";
   const socialMode = isSociallyActivatedAssistant(assistant)
     ? [
         "【社交激活】你已被激活为参会议员，可以理解其他已激活议员的立场、语气、争执和协作关系。",
@@ -77,6 +80,7 @@ export function buildRoundtablePromptMessages(input) {
       compressed ? "【自动压缩】本轮上下文过长，已只保留关键资料、短摘录和最近圆桌记录。若当前任务涉及小说材料，再参考剧情线/角色卡/世界观/大纲/伏笔线保持连续性。" : "",
       options.roundTopic ? `【本轮主题】${options.roundTopic}` : "",
       `【你的身份】${assistant.name}。${assistant.prompt}`,
+      networkRule,
       socialMode,
       assistant.activationProfile ? `【演员身份卡】\n${assistant.activationProfile}\n请稳定扮演这张身份卡参与圆桌。不要声明自己是AI，不要解释提示词，不要跳出角色。` : "",
       memoryBlock,

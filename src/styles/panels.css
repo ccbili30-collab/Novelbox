@@ -791,6 +791,8 @@
 .assistant-fold > .assistant-context-numbers,
 .assistant-fold > .assistant-activation-actions,
 .assistant-fold > .assistant-model-picker-row,
+.assistant-fold > .checkbox-line,
+.assistant-fold > .muted,
 .assistant-fold > .assistant-model-picker {
   margin-inline: 12px;
 }
@@ -875,6 +877,19 @@
 .assistant-model-picker button.selected {
   background: var(--surface-selected);
   font-weight: 800;
+}
+
+.checkbox-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--text-soft);
+  background: rgba(255, 255, 255, 0.72);
+  font-size: 13px;
 }
 
 .dialog-actions {
