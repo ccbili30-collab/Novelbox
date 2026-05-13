@@ -382,6 +382,14 @@
   white-space: nowrap;
 }
 
+.composer-tool-button.is-writer-settings {
+  border: 1px solid rgba(67, 77, 83, 0.18);
+  color: #263840;
+  background: rgba(238, 247, 248, 0.86);
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .roundtable-mode .context-badge {
   max-width: 64px;
 }

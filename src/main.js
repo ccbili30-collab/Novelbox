@@ -933,10 +933,11 @@ function renderRoundtable() {
     els.input.placeholder = "在这里输入你的问题...";
   }
   if (els.composerToolButton) {
-    els.composerToolButton.textContent = rt.enabled ? "参会人" : "⚙";
-    els.composerToolButton.setAttribute("aria-label", rt.enabled ? "参会人" : "设置");
-    els.composerToolButton.setAttribute("title", rt.enabled ? "参会人" : "设置");
+    els.composerToolButton.textContent = rt.enabled ? "参会人" : "写";
+    els.composerToolButton.setAttribute("aria-label", rt.enabled ? "参会人" : "写手设置");
+    els.composerToolButton.setAttribute("title", rt.enabled ? "参会人" : "写手设置");
     els.composerToolButton.classList.toggle("is-roundtable-members", rt.enabled);
+    els.composerToolButton.classList.toggle("is-writer-settings", !rt.enabled);
   }
   if (els.roundtableCycleButton) {
     els.roundtableCycleButton.hidden = !rt.enabled;
@@ -2640,7 +2641,7 @@ function handleComposerTool() {
     toggleRoundtableMembers();
     return;
   }
-  showPanel("settings");
+  openAssistantConfig("writer");
 }
 
 function toggleRoundtableRound() {
