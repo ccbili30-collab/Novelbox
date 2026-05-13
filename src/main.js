@@ -1243,16 +1243,19 @@ function renderRoundtableMembers(rt) {
     .filter((base) => base.id !== "writer")
     .map((base) => {
       const assistant = getRoundAssistant(base.id);
+      const rawConfig = rt.assistantConfigs?.[assistant.id] || {};
       const selected = order.get(assistant.id);
       const model = assistant.model || sessionSettings().model || "未选模型";
       const roleLabel = getRoundtableRoleLabel(getRoundtableRoleState(rt.selectedIds, assistant.id), assistant.role);
+      const sourceTitle = clean(rawConfig.importedFrom?.sessionTitle);
+      const sourceLabel = sourceTitle ? ` · 来自${sourceTitle}` : "";
       const speaking = roundtableActiveSpeakerId === assistant.id;
       return `
         <div class="roundtable-member-option ${selected ? "selected" : ""} ${speaking ? "speaking" : ""}">
           <button class="roundtable-member-main" type="button" data-command="roundtable-toggle-member" data-member-id="${assistant.id}">
             <span>${selected || ""}</span>
             <b>${escapeHtml(assistant.name)}</b>
-            <small>${escapeHtml(roleLabel)} · ${escapeHtml(model)}</small>
+            <small>${escapeHtml(roleLabel)} · ${escapeHtml(model)}${escapeHtml(sourceLabel)}</small>
           </button>
           <button class="roundtable-member-edit" type="button" data-command="roundtable-edit-assistant" data-member-id="${assistant.id}">改</button>
         </div>
