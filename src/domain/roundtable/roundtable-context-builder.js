@@ -44,7 +44,11 @@ export function buildRoundtablePromptMessages(input) {
     .map((current) => `${current.name}：${current.role}`)
     .join("；");
   const creatorNames = mentionableAssistants
-    .filter((current) => current.id !== "writer")
+    .filter((current) => current.id !== "writer" && current.roundtableRoleState === "creator")
+    .map((current) => current.name)
+    .join("、");
+  const participantNames = mentionableAssistants
+    .filter((current) => current.id !== "writer" && current.roundtableRoleState === "participant")
     .map((current) => current.name)
     .join("、");
   const mentionableNames = mentionableAssistants
@@ -57,7 +61,7 @@ export function buildRoundtablePromptMessages(input) {
     ? "【联网能力】你被允许在有真实工具支持时使用联网或外部资料检索；如果当前环境没有提供检索工具，不要声称已经搜索、查阅网页或引用实时信息。"
     : "【联网能力】你不能使用联网或外部实时资料，只能依据当前会话、本地材料和已给出的上下文发言；不要声称搜索过、查过网页或引用最新信息。";
   const creatorRule = creatorNames
-    ? `【主创状态】本轮被选中的议员是临时主创：${creatorNames}。主创不是永久身份，而是本次圆桌中的工作状态；你要带着自己的判断、偏好和怀疑参与，不必迎合其他 AI 或强行达成共识。`
+    ? `【主创状态】本轮临时主创：${creatorNames}${participantNames ? `；参会议员：${participantNames}` : ""}。主创不是永久身份，而是本次圆桌中的工作状态；你要带着自己的判断、偏好和怀疑参与，不必迎合其他 AI 或强行达成共识。`
     : "";
   const socialMode = isSociallyActivatedAssistant(assistant)
     ? [

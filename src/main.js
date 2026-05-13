@@ -41,6 +41,8 @@ import {
   createRoundProgress,
   findMentionedRoundtableAssistants,
   moveMentionedAssistantsAfter,
+  getRoundtableRoleLabel,
+  getRoundtableRoleState,
 } from "./domain/roundtable/roundtable-flow.js";
 import {
   appendCouncilParticipationRecord,
@@ -451,19 +453,24 @@ function rememberCouncilParticipation(assistant, message, instruction = "") {
     topic: clean(roundtableState().contextOptions?.roundTopic || instruction),
     speakerName: assistant.name,
     content: message.content,
-    roleState: "creator",
+    roleState: getRoundtableRoleState(roundtableState().selectedIds, assistant.id) || "participant",
   });
   state.councilParticipationRecords = result.records;
 }
 
 function getRoundtableMentionableAssistants(options = {}) {
   const rt = roundtableState();
-  const selected = new Set(rt.selectedIds);
   const allowWriter = options.allowWriter !== false;
-  return getRoundAssistants().filter((assistant) => {
-    if (assistant.id === "writer") return allowWriter;
-    return selected.has(assistant.id);
-  });
+  const assistants = new Map(getRoundAssistants().map((assistant) => [assistant.id, assistant]));
+  const selected = (rt.selectedIds || [])
+    .map((id) => assistants.get(id))
+    .filter(Boolean)
+    .map((assistant) => ({
+      ...assistant,
+      roundtableRoleState: getRoundtableRoleState(rt.selectedIds, assistant.id),
+    }));
+  const writer = assistants.get("writer");
+  return allowWriter && writer ? [...selected, writer] : selected;
 }
 
 function getRoundtableMentionPickerItems() {
@@ -1064,7 +1071,7 @@ function renderRoundtableMembers(rt) {
       const assistant = getRoundAssistant(base.id);
       const selected = order.get(assistant.id);
       const model = assistant.model || sessionSettings().model || "未选模型";
-      const roleLabel = selected ? (selected === 1 ? "临时主创" : "参会议员") : assistant.role;
+      const roleLabel = getRoundtableRoleLabel(getRoundtableRoleState(rt.selectedIds, assistant.id), assistant.role);
       const speaking = roundtableActiveSpeakerId === assistant.id;
       return `
         <div class="roundtable-member-option ${selected ? "selected" : ""} ${speaking ? "speaking" : ""}">

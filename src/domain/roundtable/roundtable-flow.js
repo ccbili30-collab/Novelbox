@@ -60,6 +60,20 @@ export function createRoundProgress(selectedIds, topic = "") {
   };
 }
 
+export function getRoundtableRoleState(selectedIds, assistantId) {
+  if (!assistantId || assistantId === "writer") return "";
+  const ids = Array.isArray(selectedIds) ? selectedIds.filter(Boolean) : [];
+  const index = ids.indexOf(assistantId);
+  if (index < 0) return "";
+  return index === 0 ? "creator" : "participant";
+}
+
+export function getRoundtableRoleLabel(roleState, fallbackRole = "议员") {
+  if (roleState === "creator") return "临时主创";
+  if (roleState === "participant") return "参会议员";
+  return clean(fallbackRole) || "议员";
+}
+
 export function buildRoundProgressInstruction(topic) {
   const cleanTopic = clean(topic);
   return cleanTopic
