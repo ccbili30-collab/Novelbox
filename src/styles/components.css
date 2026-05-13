@@ -222,9 +222,28 @@
   color: #8a8a8a;
 }
 
+.composer-context-strip {
+  display: flex;
+  justify-content: flex-end;
+  min-height: 18px;
+  margin: -1px 0 2px;
+  pointer-events: none;
+}
+
+.composer-context-strip .context-badge {
+  width: auto;
+  max-width: min(58vw, 220px);
+  height: 18px;
+  padding: 0 2px;
+  color: rgba(85, 81, 74, 0.72);
+  background: transparent;
+  font-size: 11px;
+  pointer-events: auto;
+}
+
 .composer-bottom {
   display: grid;
-  grid-template-columns: var(--tool-button-size) var(--tool-button-size) minmax(62px, auto) minmax(0, 1fr) var(--send-button-size);
+  grid-template-columns: var(--tool-button-size) var(--tool-button-size) minmax(0, 1fr) var(--send-button-size);
   align-items: center;
   gap: 4px;
   margin-top: 4px;
@@ -232,7 +251,7 @@
 }
 
 .roundtable-mode .composer-bottom {
-  grid-template-columns: minmax(56px, auto) var(--tool-button-size) minmax(46px, auto) minmax(52px, auto) var(--send-button-size);
+  grid-template-columns: minmax(56px, auto) var(--tool-button-size) minmax(52px, auto) var(--send-button-size);
   gap: 5px;
 }
 
@@ -261,6 +280,10 @@
   max-width: none;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.composer-add-button {
+  font-weight: 700;
 }
 
 .model-select-button {
@@ -390,7 +413,7 @@
   font-weight: 800;
 }
 
-.roundtable-mode .context-badge {
+.roundtable-mode .composer-bottom .context-badge {
   max-width: 64px;
 }
 

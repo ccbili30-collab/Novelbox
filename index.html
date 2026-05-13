@@ -62,11 +62,13 @@
       <div id="messageMenu" class="message-menu" hidden></div>
 
       <form id="composer" class="composer">
+        <div class="composer-context-strip">
+          <button id="contextBadge" class="context-badge" type="button" data-command="open-context">0/∞ · 0K</button>
+        </div>
         <textarea id="chatInput" rows="1" placeholder="在这里输入你的问题..."></textarea>
         <div class="composer-bottom">
           <button id="composerToolButton" class="round-button composer-tool-button" type="button" data-command="composer-tool" aria-label="写手设置">写</button>
-          <button class="round-button" type="button" data-command="open-context" aria-label="上下文预览">↑</button>
-          <button id="contextBadge" class="context-badge" type="button" data-command="open-context">0/∞ · 0K</button>
+          <button class="round-button composer-add-button" type="button" data-command="choose-chat-image" aria-label="添加图片">+</button>
           <select id="modelSelect" aria-label="选择模型"></select>
           <button id="roundtableCycleButton" class="roundtable-cycle-button" type="button" data-command="roundtable-cycle" aria-label="开始本轮">轮</button>
           <button id="sendButton" class="send-button" type="submit" aria-label="发送">↑</button>
@@ -285,6 +287,7 @@
 
     <input id="assistantImportFile" type="file" accept=".json,application/json" hidden />
     <input id="assistantAvatarFile" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+    <input id="chatImageFile" type="file" accept="image/png,image/jpeg,image/webp" hidden />
     <input id="userAvatarFile" type="file" accept="image/png,image/jpeg,image/webp" hidden />
     <input id="sessionBackgroundFile" type="file" accept="image/png,image/jpeg,image/webp" hidden />
 

@@ -102,6 +102,7 @@ const els = {
   composer: $("#composer"),
   composerToolButton: $("#composerToolButton"),
   input: $("#chatInput"),
+  chatImageFile: $("#chatImageFile"),
   send: $("#sendButton"),
   contextBadge: $("#contextBadge"),
   modelSelect: $("#modelSelect"),
@@ -2484,6 +2485,31 @@ function chooseWorkspaceFiles() {
   els.workspaceFileInput?.click();
 }
 
+function chooseChatImage() {
+  els.chatImageFile?.click();
+}
+
+function insertAtComposerCursor(text) {
+  const input = els.input;
+  const start = input.selectionStart ?? input.value.length;
+  const end = input.selectionEnd ?? start;
+  input.value = `${input.value.slice(0, start)}${text}${input.value.slice(end)}`;
+  const nextCursor = start + text.length;
+  input.focus();
+  input.setSelectionRange?.(nextCursor, nextCursor);
+  resizeInput();
+  renderContextBadge();
+  els.body.classList.toggle("is-ready", Boolean(clean(input.value)));
+}
+
+function handleChatImageSelected() {
+  const file = els.chatImageFile?.files?.[0];
+  if (!file) return;
+  insertAtComposerCursor(`\n[图片：${file.name}]\n`);
+  if (els.chatImageFile) els.chatImageFile.value = "";
+  showToast("已插入图片标记，后续接入多模态发送");
+}
+
 async function handleWorkspaceFilesSelected() {
   const selected = Array.from(els.workspaceFileInput?.files || []);
   if (!selected.length) return;
@@ -3779,6 +3805,7 @@ const handleCommand = createCommandRegistry({
   "fetch-models": () => fetchModels(),
   "choose-workspace-files": () => chooseWorkspaceFiles(),
   "clear-workspace-files": () => clearWorkspaceFiles(),
+  "choose-chat-image": () => chooseChatImage(),
   "remove-workspace-file": (target) => removeWorkspaceFile(target.dataset.fileId),
   "toggle-model-picker": () => toggleModelPicker(),
   "select-model": (target) => selectModelFromPicker(target.dataset.model),
@@ -4102,6 +4129,7 @@ els.stream.addEventListener("change", () => {
 });
 
 els.userNameInput?.addEventListener("input", updateSessionUserName);
+els.chatImageFile?.addEventListener("change", handleChatImageSelected);
 els.chooseUserAvatar?.addEventListener("click", () => els.userAvatarFile?.click());
 els.clearUserAvatar?.addEventListener("click", clearUserAvatar);
 els.userAvatarFile?.addEventListener("change", handleUserAvatarSelected);
