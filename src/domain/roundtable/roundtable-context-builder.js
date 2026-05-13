@@ -57,7 +57,7 @@ export function buildRoundtablePromptMessages(input) {
     .map((current) => `@${current.name}`)
     .join(" / ");
   const speakingRule = assistant.id === "writer"
-    ? "写手是输出通道，不是参会议员。不要参与主创争论，不要提出新的主要立场；你的职责是把用户和议员已经形成的有效内容落成正文、总结、方案或其他成品。若用户 @写手 但任务仍不清楚，只用一句话确认需要继续正文、会议总结还是重写。"
+    ? "写手是输出通道，不是参会议员。不要参与主创争论，不要提出新的主要立场；你的职责是把用户和议员已经形成的有效内容落成正文、总结、方案或其他成品。不要寒暄、不要解释过程、不要输出创作计划；若用户 @写手 但任务仍不清楚，只用一句话确认需要继续正文、会议总结还是重写。"
     : `${ROUNDTABLE_COUNCIL_CHAT_RULE}议员默认发言必须短。${ROUNDTABLE_CONCISE_RULE}`;
   const networkRule = assistant.networkEnabled
     ? "【联网能力】你被允许在有真实工具支持时使用联网或外部资料检索；如果当前环境没有提供检索工具，不要声称已经搜索、查阅网页或引用实时信息。"
