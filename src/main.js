@@ -1307,21 +1307,31 @@ function getRoundtableSessionImportCandidates() {
     });
 }
 
+function isSessionMemberAlreadyImported(sessionId, memberId) {
+  return Object.values(roundtableState().assistantConfigs || {}).some((config) => (
+    config?.importedFrom?.sessionId === sessionId
+    && config?.importedFrom?.memberId === memberId
+  ));
+}
+
 function renderRoundtableSessionImport() {
   const candidates = getRoundtableSessionImportCandidates();
   if (!candidates.length) {
     return `<section class="roundtable-session-import"><p class="muted">其他会话里还没有可拉入的议员。</p></section>`;
   }
   return `<section class="roundtable-session-import">
-    ${candidates.slice(0, 18).map(({ session, assistant, isCustom }) => `
+    ${candidates.slice(0, 18).map(({ session, assistant, isCustom }) => {
+      const imported = isSessionMemberAlreadyImported(session.id, assistant.id);
+      return `
       <article class="roundtable-import-candidate">
         <div>
           <b>${escapeHtml(assistant.name)}</b>
           <small>${escapeHtml(titleForSession(session))} · ${escapeHtml(isCustom ? "自定义议员" : "会话身份")}</small>
         </div>
-        <button type="button" data-command="roundtable-import-session-member" data-session-id="${escapeHtml(session.id)}" data-member-id="${escapeHtml(assistant.id)}">拉入</button>
+        <button type="button" data-command="roundtable-import-session-member" data-session-id="${escapeHtml(session.id)}" data-member-id="${escapeHtml(assistant.id)}" ${imported ? "disabled" : ""}>${imported ? "已在席" : "拉入"}</button>
       </article>
-    `).join("")}
+    `;
+    }).join("")}
   </section>`;
 }
 
