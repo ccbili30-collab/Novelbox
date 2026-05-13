@@ -1060,13 +1060,14 @@ function renderRoundtableMembers(rt) {
       const assistant = getRoundAssistant(base.id);
       const selected = order.get(assistant.id);
       const model = assistant.model || sessionSettings().model || "未选模型";
+      const roleLabel = selected ? (selected === 1 ? "临时主创" : "参会议员") : assistant.role;
       const speaking = roundtableActiveSpeakerId === assistant.id;
       return `
         <div class="roundtable-member-option ${selected ? "selected" : ""} ${speaking ? "speaking" : ""}">
           <button class="roundtable-member-main" type="button" data-command="roundtable-toggle-member" data-member-id="${assistant.id}">
             <span>${selected || ""}</span>
             <b>${escapeHtml(assistant.name)}</b>
-            <small>${escapeHtml(assistant.role)} · ${escapeHtml(model)}</small>
+            <small>${escapeHtml(roleLabel)} · ${escapeHtml(model)}</small>
           </button>
           <button class="roundtable-member-edit" type="button" data-command="roundtable-edit-assistant" data-member-id="${assistant.id}">改</button>
         </div>
@@ -3729,7 +3730,10 @@ async function runRoundtableProgress() {
       showToast(`${assistant.name}正在发言`);
       const topic = clean(progress.topic || rt.contextOptions?.roundTopic);
       try {
-        const instruction = buildRoundProgressInstruction(topic);
+        const instruction = [
+          "请以本轮临时主创的身份发言：先给独立判断，再给一个可执行建议。保持短句，不要替写手直接写正文。",
+          buildRoundProgressInstruction(topic),
+        ].join("\n");
         const { text } = await streamAssistantRoundtableReply(assistant, instruction);
         if (roundtableShouldStop) break;
         const moved = moveRoundtableMentionsAfter(progress, index, text);

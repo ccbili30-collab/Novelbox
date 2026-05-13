@@ -42,6 +42,10 @@ export function buildRoundtablePromptMessages(input) {
   const participants = mentionableAssistants
     .map((current) => `${current.name}：${current.role}`)
     .join("；");
+  const creatorNames = mentionableAssistants
+    .filter((current) => current.id !== "writer")
+    .map((current) => current.name)
+    .join("、");
   const mentionableNames = mentionableAssistants
     .map((current) => `@${current.name}`)
     .join(" / ");
@@ -51,6 +55,9 @@ export function buildRoundtablePromptMessages(input) {
   const networkRule = assistant.networkEnabled
     ? "【联网能力】你被允许在有真实工具支持时使用联网或外部资料检索；如果当前环境没有提供检索工具，不要声称已经搜索、查阅网页或引用实时信息。"
     : "【联网能力】你不能使用联网或外部实时资料，只能依据当前会话、本地材料和已给出的上下文发言；不要声称搜索过、查过网页或引用最新信息。";
+  const creatorRule = creatorNames
+    ? `【主创状态】本轮被选中的议员是临时主创：${creatorNames}。主创不是永久身份，而是本次圆桌中的工作状态；你要带着自己的判断、偏好和怀疑参与，不必迎合其他 AI 或强行达成共识。`
+    : "";
   const socialMode = isSociallyActivatedAssistant(assistant)
     ? [
         "【社交激活】你已被激活为参会议员，可以理解其他已激活议员的立场、语气、争执和协作关系。",
@@ -81,6 +88,7 @@ export function buildRoundtablePromptMessages(input) {
       options.roundTopic ? `【本轮主题】${options.roundTopic}` : "",
       `【你的身份】${assistant.name}。${assistant.prompt}`,
       networkRule,
+      creatorRule,
       socialMode,
       assistant.activationProfile ? `【演员身份卡】\n${assistant.activationProfile}\n请稳定扮演这张身份卡参与圆桌。不要声明自己是AI，不要解释提示词，不要跳出角色。` : "",
       memoryBlock,
