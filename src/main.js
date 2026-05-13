@@ -4266,6 +4266,15 @@ els.modelSelect.addEventListener("change", () => {
 });
 
 document.addEventListener("click", (event) => {
+  if (roundtableState().membersOpen) {
+    const target = event.target;
+    const insideMembers = target.closest?.("#roundtableMembersPanel");
+    const onToggle = target.closest?.("#composerToolButton");
+    if (!insideMembers && !onToggle) closeRoundtableMembers();
+  }
+});
+
+document.addEventListener("click", (event) => {
   if (!modelPickerOpen) return;
   if (event.target.closest("#modelPickerPanel, #modelSelectButton")) return;
   modelPickerOpen = false;
