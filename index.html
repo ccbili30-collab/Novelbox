@@ -89,10 +89,6 @@
         <strong>会话设置</strong>
         <button class="icon-button" type="button" data-command="close-panels">×</button>
       </div>
-      <label class="field">
-        <span>主线 AI 提示</span>
-        <textarea id="systemPromptInput" rows="6"></textarea>
-      </label>
       <div class="settings-section provider-settings-section">
         <div class="section-title">
           <strong>全局默认 API</strong>
@@ -119,37 +115,7 @@
         <span>API Key</span>
         <input id="apiKeyInput" type="password" placeholder="sk-..." />
       </label>
-      <label class="field">
-        <span>主线模型</span>
-        <input id="modelInput" type="text" list="modelDatalist" placeholder="gpt-4o-mini" />
-      </label>
       <datalist id="modelDatalist"></datalist>
-      <div class="panel-row">
-        <button type="button" data-command="fetch-models">拉取模型列表</button>
-        <span id="modelStatus" class="muted">未拉取</span>
-      </div>
-      <label class="field">
-        <span>温度 <b id="temperatureLabel">0.8</b></span>
-        <input id="temperatureInput" type="range" min="0" max="2" step="0.05" />
-      </label>
-      <div class="split-fields">
-        <label class="field">
-          <span>上下文条数</span>
-          <input id="contextCountInput" type="number" min="0" step="1" />
-        </label>
-        <label class="check-field">
-          <input id="unlimitedContextInput" type="checkbox" />
-          <span>无限</span>
-        </label>
-      </div>
-      <label class="field">
-        <span>主线最大输出 token</span>
-        <input id="maxTokensInput" type="number" min="1" step="1" />
-      </label>
-      <label class="check-field">
-        <input id="streamInput" type="checkbox" />
-        <span>流式输出</span>
-      </label>
       <div class="settings-section">
         <div class="section-title">
           <strong>本会话外观</strong>
@@ -174,6 +140,46 @@
           </div>
         </div>
       </div>
+      <details class="settings-section main-ai-settings-section">
+        <summary class="section-title">
+          <strong>主线 AI</strong>
+          <span class="muted">提示词、模型和生成参数</span>
+        </summary>
+        <label class="field">
+          <span>主线 AI 提示</span>
+          <textarea id="systemPromptInput" rows="6"></textarea>
+        </label>
+        <label class="field">
+          <span>主线模型</span>
+          <input id="modelInput" type="text" list="modelDatalist" placeholder="gpt-4o-mini" />
+        </label>
+        <div class="panel-row">
+          <button type="button" data-command="fetch-models">拉取模型列表</button>
+          <span id="modelStatus" class="muted">未拉取</span>
+        </div>
+        <label class="field">
+          <span>温度 <b id="temperatureLabel">0.8</b></span>
+          <input id="temperatureInput" type="range" min="0" max="2" step="0.05" />
+        </label>
+        <div class="split-fields">
+          <label class="field">
+            <span>上下文条数</span>
+            <input id="contextCountInput" type="number" min="0" step="1" />
+          </label>
+          <label class="check-field">
+            <input id="unlimitedContextInput" type="checkbox" />
+            <span>无限</span>
+          </label>
+        </div>
+        <label class="field">
+          <span>主线最大输出 token</span>
+          <input id="maxTokensInput" type="number" min="1" step="1" />
+        </label>
+        <label class="check-field">
+          <input id="streamInput" type="checkbox" />
+          <span>流式输出</span>
+        </label>
+      </details>
       <details class="settings-section layout-debug-section">
         <summary class="section-title">
           <strong>排版调试</strong>
