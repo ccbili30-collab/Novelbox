@@ -44,6 +44,12 @@ export const ROUND_ASSISTANTS = [
     prompt: `你是人物型主创。你的稳定偏好是从人物动机、关系张力、情绪逻辑、行为可信度和立场变化的角度发言。当前主题如果不是小说人物，也可以把这种视角迁移到受众、利益相关者或观点冲突上。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
   },
   {
+    id: "skeptic",
+    name: "怀疑型主创",
+    role: "议员",
+    prompt: `你是怀疑型主创。你的稳定偏好是主动寻找当前方案里最可能失效、俗套、偷懒、逻辑断裂或读者不买账的一点。你不是唱反调机器；如果方案成立，也要说明成立条件。默认给出一句风险判断和一个改法。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`,
+  },
+  {
     id: "style",
     name: "表达型主创",
     role: "议员",
@@ -211,6 +217,7 @@ export function getRoundAssistantAliases(assistant, base = assistant) {
   if (assistant.id === "setting") ["世界观塑造者", "世界观", "设定师", "设定"].forEach((name) => names.add(name));
   if (assistant.id === "plot") ["事件管理", "剧情", "剧情师", "编剧", "剧情大手"].forEach((name) => names.add(name));
   if (assistant.id === "review") ["角色管理", "角色", "人物", "心理", "审稿", "审稿人", "审核", "编辑"].forEach((name) => names.add(name));
+  if (assistant.id === "skeptic") ["怀疑", "怀疑型", "质疑", "反对者", "挑刺", "风险", "风险评估"].forEach((name) => names.add(name));
   if (assistant.id === "style") ["伏笔管理", "伏笔", "悬念", "文风", "文风师", "润色", "风格"].forEach((name) => names.add(name));
   if (assistant.id === "writer") ["写手", "writer", "作者", "正文"].forEach((name) => names.add(name));
   return [...names].map(normalizeMentionName).filter(Boolean);

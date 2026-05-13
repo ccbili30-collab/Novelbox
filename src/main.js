@@ -1310,6 +1310,7 @@ function getRoundtableSpeakerProfile(message) {
     setting: { avatar: "设", badge: "设定", tone: "tone-setting", name: "设定师" },
     plot: { avatar: "剧", badge: "剧情", tone: "tone-plot", name: "剧情师" },
     review: { avatar: "审", badge: "审稿", tone: "tone-review", name: "审稿" },
+    skeptic: { avatar: "疑", badge: "质疑", tone: "tone-skeptic", name: "怀疑型主创" },
     style: { avatar: "风", badge: "文风", tone: "tone-style", name: "文风师" },
     writer: { avatar: "写", badge: "写手", tone: "tone-writer", name: "写手" },
   };

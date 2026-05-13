@@ -1369,6 +1369,11 @@ body.paper-dragging .paper-grip {
   background: rgba(127, 143, 137, 0.15);
 }
 
+.roundtable-mention.tone-skeptic {
+  color: #6c6258;
+  background: rgba(122, 113, 103, 0.14);
+}
+
 .roundtable-mention.tone-style {
   color: #7d626d;
   background: rgba(152, 118, 131, 0.14);
@@ -1462,6 +1467,10 @@ body.paper-dragging .paper-grip {
   background: linear-gradient(135deg, #7ac7be, #3b958c);
 }
 
+.roundtable-avatar.tone-skeptic {
+  background: linear-gradient(135deg, #a59a8e, #6c6258);
+}
+
 .roundtable-avatar.tone-style {
   background: linear-gradient(135deg, #f38ab7, #d85f93);
 }
@@ -1488,6 +1497,11 @@ body.paper-dragging .paper-grip {
 .roundtable-role-badge.tone-review {
   color: #2d837a;
   background: rgba(122, 199, 190, 0.18);
+}
+
+.roundtable-role-badge.tone-skeptic {
+  color: #6c6258;
+  background: rgba(122, 113, 103, 0.14);
 }
 
 .roundtable-role-badge.tone-style {
@@ -1988,6 +2002,10 @@ body.paper-dragging .paper-grip {
   background: #7f8f89;
 }
 
+.roundtable-avatar.tone-skeptic {
+  background: #7a7167;
+}
+
 .roundtable-avatar.tone-style {
   background: #987683;
 }
@@ -2014,6 +2032,11 @@ body.paper-dragging .paper-grip {
 .roundtable-role-badge.tone-review {
   color: #61736e;
   background: rgba(127, 143, 137, 0.15);
+}
+
+.roundtable-role-badge.tone-skeptic {
+  color: #6c6258;
+  background: rgba(122, 113, 103, 0.14);
 }
 
 .roundtable-role-badge.tone-style {
