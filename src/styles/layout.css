@@ -14,13 +14,15 @@ body.has-session-background {
     #fff;
 }
 
-body.has-session-background .app,
+body.has-session-background .app {
+  background: transparent;
+}
+
 body.has-session-background .messages,
 body.has-session-background .roundtable-workspace {
   background:
-    linear-gradient(rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.72)),
-    var(--session-bg-image) center / cover fixed,
-    #fff;
+    linear-gradient(rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.2)),
+    transparent;
 }
 
 .topbar {
