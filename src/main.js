@@ -208,6 +208,7 @@ const els = {
   assistantDiscussionCountInput: $("#assistantDiscussionCountInput"),
   assistantActivationStatus: $("#assistantActivationStatus"),
   assistantActivationProfileInput: $("#assistantActivationProfileInput"),
+  assistantParticipationList: $("#assistantParticipationList"),
   activateAssistant: $("#activateAssistantButton"),
   clearAssistantActivation: $("#clearAssistantActivationButton"),
   assistantAvatarFile: $("#assistantAvatarFile"),
@@ -3186,6 +3187,7 @@ function openAssistantConfig(id) {
   if (els.activateAssistant) els.activateAssistant.textContent = config.activationProfile ? "重新激活" : "激活";
   if (els.assistantModelStatus) els.assistantModelStatus.textContent = config.model ? `当前：${config.model}` : "未拉取";
   renderAssistantModelPicker();
+  renderAssistantParticipationRecords(id);
   els.assistantPromptInput.value = config.prompt;
   if (els.deleteAssistant) {
     els.deleteAssistant.hidden = id === "writer";
@@ -3417,6 +3419,34 @@ function applyAssistantImportConfig(config) {
     renderAvatarPreview(els.assistantAvatarPreview, config.avatarDataUrl, name || "议");
   }
   els.assistantPromptInput.value = prompt;
+}
+
+function renderAssistantParticipationRecords(assistantId) {
+  if (!els.assistantParticipationList) return;
+  if (!assistantId || assistantId === "writer") {
+    els.assistantParticipationList.innerHTML = `<p class="assistant-participation-empty">写手是输出通道，不保存议员参会记录。</p>`;
+    return;
+  }
+  const records = getCouncilParticipationRecords(state.councilParticipationRecords, assistantId, { limit: 10 }).reverse();
+  if (!records.length) {
+    els.assistantParticipationList.innerHTML = `<p class="assistant-participation-empty">还没有参会记录。</p>`;
+    return;
+  }
+  els.assistantParticipationList.innerHTML = records.map((record) => {
+    const session = state.sessions.find((item) => item.id === record.sessionId);
+    const roleLabel = getRoundtableRoleLabel(record.roleState, "议员");
+    const title = session ? titleForSession(session) : "未知会话";
+    return `
+      <article class="assistant-participation-item">
+        <div>
+          <b>${escapeHtml(title)}</b>
+          <span>${escapeHtml(roleLabel)} · ${escapeHtml(formatTime(record.createdAt))}</span>
+        </div>
+        ${record.topic ? `<small>${escapeHtml(record.topic)}</small>` : ""}
+        <p>${escapeHtml(record.content.slice(0, 120))}</p>
+      </article>
+    `;
+  }).join("");
 }
 
 function getAssistantPersonaPayload(id) {
