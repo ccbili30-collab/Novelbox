@@ -103,6 +103,7 @@ export function hydrateRoundtableState(roundtable = {}) {
   rt.enabled = Boolean(rt.enabled);
   rt.membersOpen = Boolean(rt.membersOpen);
   rt.materialsOpen = Boolean(rt.materialsOpen);
+  rt.sessionImportOpen = Boolean(rt.sessionImportOpen);
   rt.contextOpen = Boolean(rt.contextOpen);
   rt.customAssistants = Array.isArray(rt.customAssistants)
     ? rt.customAssistants.map(normalizeCustomAssistant).filter(Boolean)

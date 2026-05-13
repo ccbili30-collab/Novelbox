@@ -825,7 +825,7 @@ body.roundtable-busy .send-button {
 .roundtable-member-tools {
   display: grid;
   grid-column: 1 / -1;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
   gap: 7px;
 }
 
@@ -845,6 +845,59 @@ body.roundtable-busy .send-button {
   border-radius: 8px;
   background: rgba(255, 253, 248, 0.78);
   animation: soft-unfold 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.roundtable-session-import {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 7px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.68);
+  animation: soft-unfold 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.roundtable-import-candidate {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 42px;
+  padding: 7px 8px;
+  border: 1px solid rgba(39, 35, 29, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 253, 248, 0.86);
+}
+
+.roundtable-import-candidate div {
+  min-width: 0;
+}
+
+.roundtable-import-candidate b,
+.roundtable-import-candidate small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roundtable-import-candidate b {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.roundtable-import-candidate small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.roundtable-import-candidate button {
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 12px;
 }
 
 .roundtable-context-head {

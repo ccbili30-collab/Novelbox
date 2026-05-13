@@ -452,6 +452,19 @@ function getRoundAssistant(id) {
   });
 }
 
+function getRoundAssistantFromSession(session, id) {
+  const rt = roundtableState(session);
+  const base = getRoundAssistantBase(id, session);
+  const config = rt.assistantConfigs[id] || {};
+  return resolveRoundAssistant({
+    base,
+    config,
+    api: apiForAssistantConfig(config),
+    sessionSettings: sessionSettings(session),
+    roundtableContextOptions: rt.contextOptions,
+  });
+}
+
 function getRoundAssistantConfig(id) {
   const assistant = getRoundAssistant(id);
   return createRoundAssistantConfigView(assistant, sessionSettings().temperature);
@@ -1249,11 +1262,63 @@ function renderRoundtableMembers(rt) {
     ${members}
     <button class="roundtable-material-toggle ${rt.materialsOpen ? "active" : ""}" type="button" data-command="toggle-roundtable-materials">材料</button>
     ${rt.materialsOpen ? renderRoundtableContextControls(rt) : ""}
+    <button class="roundtable-material-toggle ${rt.sessionImportOpen ? "active" : ""}" type="button" data-command="toggle-roundtable-session-import">从会话拉人</button>
+    ${rt.sessionImportOpen ? renderRoundtableSessionImport() : ""}
     <div class="roundtable-member-tools">
       <button class="roundtable-member-add" type="button" data-command="roundtable-add-assistant">+ 添加议员</button>
       <button class="roundtable-member-add" type="button" data-command="roundtable-import-personas">导入人格</button>
       <button class="roundtable-member-add" type="button" data-command="roundtable-export-personas">导出入席</button>
     </div>`;
+}
+
+function assistantConfigHasSavedIdentity(config = {}) {
+  if (!config || typeof config !== "object") return false;
+  return Boolean(
+    clean(config.name)
+    || clean(config.prompt)
+    || clean(config.model)
+    || clean(config.providerId)
+    || clean(config.activationProfile)
+    || clean(config.avatarDataUrl)
+    || normalizeAssistantMemories(config.memories).length
+    || normalizeAssistantPrivateMessages(config.privateMessages).length
+  );
+}
+
+function getRoundtableSessionImportCandidates() {
+  const currentId = activeSession()?.id;
+  return state.sessions
+    .filter((session) => session && session.id !== currentId)
+    .flatMap((session) => {
+      const rt = roundtableState(session);
+      const customIds = new Set((rt.customAssistants || []).map((assistant) => assistant.id));
+      return getRoundAssistantBases(session)
+        .filter((base) => base.id !== "writer")
+        .filter((base) => customIds.has(base.id) || assistantConfigHasSavedIdentity(rt.assistantConfigs?.[base.id]))
+        .map((base) => {
+          const assistant = getRoundAssistantFromSession(session, base.id);
+          return assistant ? { session, assistant, isCustom: customIds.has(base.id) } : null;
+        })
+        .filter(Boolean);
+    });
+}
+
+function renderRoundtableSessionImport() {
+  const candidates = getRoundtableSessionImportCandidates();
+  if (!candidates.length) {
+    return `<section class="roundtable-session-import"><p class="muted">其他会话里还没有可拉入的议员。</p></section>`;
+  }
+  return `<section class="roundtable-session-import">
+    ${candidates.slice(0, 18).map(({ session, assistant, isCustom }) => `
+      <article class="roundtable-import-candidate">
+        <div>
+          <b>${escapeHtml(assistant.name)}</b>
+          <small>${escapeHtml(titleForSession(session))} · ${escapeHtml(isCustom ? "自定义议员" : "会话身份")}</small>
+        </div>
+        <button type="button" data-command="roundtable-import-session-member" data-session-id="${escapeHtml(session.id)}" data-member-id="${escapeHtml(assistant.id)}">拉入</button>
+      </article>
+    `).join("")}
+  </section>`;
 }
 
 function renderRoundtableContextControls(rt) {
@@ -3119,6 +3184,12 @@ function toggleRoundtableMaterials() {
   render();
 }
 
+function toggleRoundtableSessionImport() {
+  const rt = roundtableState();
+  rt.sessionImportOpen = !rt.sessionImportOpen;
+  render();
+}
+
 function handleComposerTool() {
   if (roundtableState().enabled) {
     toggleRoundtableMembers();
@@ -3205,6 +3276,68 @@ function createCustomRoundAssistant() {
   render();
   persistState(state);
   openAssistantConfig(assistant.id);
+}
+
+function uniqueRoundAssistantName(name, sourceTitle = "") {
+  const baseName = clean(name) || "新议员";
+  const existing = new Set(getRoundAssistantBases().map((assistant) => clean(assistant.name)));
+  if (!existing.has(baseName)) return baseName;
+  const title = clean(sourceTitle).slice(0, 8);
+  let candidate = title ? `${baseName} · ${title}` : `${baseName} 副本`;
+  let count = 2;
+  while (existing.has(candidate)) {
+    candidate = `${baseName} ${count}`;
+    count += 1;
+  }
+  return candidate;
+}
+
+function importRoundtableMemberFromSession(sessionId, memberId) {
+  const source = state.sessions.find((session) => session.id === sessionId);
+  if (!source || source.id === activeSession()?.id) return showToast("没有找到可拉入的来源会话");
+  const assistant = getRoundAssistantFromSession(source, memberId);
+  if (!assistant || assistant.id === "writer") return showToast("没有找到可拉入的议员");
+  const rt = roundtableState();
+  const existingId = Object.entries(rt.assistantConfigs || {}).find(([, config]) => (
+    config?.importedFrom?.sessionId === source.id
+    && config?.importedFrom?.memberId === assistant.id
+  ))?.[0];
+  if (existingId && getRoundAssistantBase(existingId)) {
+    if (!rt.selectedIds.includes(existingId)) rt.selectedIds.push(existingId);
+    touchSession(activeSession());
+    render();
+    persistState(state);
+    return showToast("这位议员已经在当前圆桌");
+  }
+  const id = uid("round_member");
+  const name = uniqueRoundAssistantName(assistant.name, titleForSession(source));
+  const imported = normalizeCustomAssistant({
+    id,
+    name,
+    role: "议员",
+    prompt: assistant.prompt || DEFAULT_CUSTOM_ROUNDTABLE_ASSISTANT_PROMPT,
+  }, rt.customAssistants.length);
+  if (!imported) return showToast("议员拉入失败");
+  const config = createRoundAssistantConfigView(assistant, sessionSettings(source).temperature) || {};
+  rt.customAssistants.push(imported);
+  rt.assistantConfigs[id] = {
+    ...config,
+    name,
+    prompt: imported.prompt,
+    memories: normalizeAssistantMemories(config.memories),
+    privateMessages: normalizeAssistantPrivateMessages(config.privateMessages),
+    importedFrom: {
+      sessionId: source.id,
+      memberId: assistant.id,
+      sessionTitle: titleForSession(source),
+      importedAt: Date.now(),
+    },
+  };
+  if (!rt.selectedIds.includes(id)) rt.selectedIds.push(id);
+  touchSession(activeSession());
+  render();
+  persistState(state);
+  showToast(`已拉入 ${name}`);
 }
 
 function openAssistantConfig(id) {
@@ -3818,6 +3951,7 @@ function saveAssistantConfigFromForm(options = {}) {
   const rt = roundtableState();
   const model = clean(els.assistantModelInput.value);
   const apiOverrideEnabled = Boolean(els.assistantApiOverrideEnabledInput?.checked);
+  const previous = rt.assistantConfigs[id] || {};
   rt.assistantConfigs[id] = {
     name: clean(els.assistantNameInput.value) || base.name,
     providerId: clean(els.assistantProviderSelect?.value),
@@ -3829,8 +3963,9 @@ function saveAssistantConfigFromForm(options = {}) {
     temperature: Number(els.assistantTemperatureInput.value),
     contextOptions: currentAssistantContextOptions(),
     activationProfile: clean(els.assistantActivationProfileInput?.value),
-    memories: normalizeAssistantMemories(rt.assistantConfigs[id]?.memories),
-    privateMessages: normalizeAssistantPrivateMessages(rt.assistantConfigs[id]?.privateMessages),
+    memories: normalizeAssistantMemories(previous.memories),
+    privateMessages: normalizeAssistantPrivateMessages(previous.privateMessages),
+    importedFrom: previous.importedFrom,
     avatarDataUrl: clean(els.assistantAvatarPreview?.dataset.avatarDataUrl),
     prompt: clean(els.assistantPromptInput.value) || base.prompt,
   };
@@ -4583,12 +4718,14 @@ const handleCommand = createCommandRegistry({
   "toggle-roundtable": () => toggleRoundtable(),
   "toggle-roundtable-members": () => toggleRoundtableMembers(),
   "toggle-roundtable-materials": () => toggleRoundtableMaterials(),
+  "toggle-roundtable-session-import": () => toggleRoundtableSessionImport(),
   "toggle-roundtable-context": () => toggleRoundtableContextDock(),
   "toggle-roundtable-paper": () => toggleRoundtablePaperReveal(),
   "roundtable-writer-settings": () => openAssistantConfig("writer"),
   "roundtable-add-assistant": () => createCustomRoundAssistant(),
   "roundtable-import-personas": () => importRoundtablePersonas(),
   "roundtable-export-personas": () => exportRoundtablePersonas(),
+  "roundtable-import-session-member": (target) => importRoundtableMemberFromSession(target.dataset.sessionId, target.dataset.memberId),
   "send-assistant-private-chat": () => sendAssistantPrivateChat(),
   "roundtable-toggle-member": (target) => toggleRoundtableMember(target.dataset.memberId),
   "roundtable-member-up": (target) => moveRoundtableMember(target.dataset.memberId, -1),
