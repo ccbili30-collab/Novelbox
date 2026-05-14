@@ -11,7 +11,7 @@ const messages = [
     id: uid("msg"),
     role: "assistant",
     name: "主创",
-    content: "我建议把这章的核心问题压成一句：主角不是被审判，而是在找回被夺走的记忆。",
+    content: "我建议把这一章的核心问题压成一句：主角不是被审判，而是在找回被夺走的记忆。",
   },
   {
     id: uid("msg"),
@@ -60,7 +60,8 @@ composer?.addEventListener("submit", (event) => {
     addMessage({
       role: "assistant",
       name: "主创",
-      content: "公开壳只演示交互形态。完整圆桌调度、记忆和私有模板实现保留在私有版本中。",
+      content:
+        "圆桌模式已经在 APK 体验版中开放。公开源码保留模块边界，生产圆桌调度和创作者记忆核心仍在私有版本里继续迭代。",
     });
   }, 260);
 });
