@@ -84,9 +84,13 @@ export function appendCreatorParticipationRecord(records, input, limit = 500) {
 export function getCreatorParticipationRecords(records, creatorId, options = {}) {
   const limit = Math.max(1, Number(options.limit) || 80);
   const sessionId = clean(options.sessionId);
+  const creatorIds = new Set([
+    creatorId,
+    ...(Array.isArray(options.aliases) ? options.aliases : []),
+  ].map(clean).filter(Boolean));
   return normalizeCreatorParticipationRecords(records)
     .filter((record) => !record.deleted)
-    .filter((record) => record.creatorId === creatorId)
+    .filter((record) => creatorIds.has(record.creatorId))
     .filter((record) => !sessionId || record.sessionId === sessionId)
     .slice(-limit);
 }

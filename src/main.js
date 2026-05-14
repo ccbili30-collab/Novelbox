@@ -80,10 +80,11 @@ import {
   removeWriterSyncedSegment,
   replaceWriterSyncedSegment,
 } from "./domain/roundtable/roundtable-writer-sync.js";
-import { createAssistantVersion, createSession } from "./domain/session/session-model.js";
+import { createSession } from "./domain/session/session-model.js";
 import {
   getNode as getSessionNode,
   activePath as getActivePath,
+  activatePathToNode as activateSessionPathToNode,
   getAssistantVersion,
   getAssistantVersionById,
   setAssistantVersionContent,
@@ -652,6 +653,34 @@ function saveCreatorIdentity(creator) {
   return creatorsState()[creator.id];
 }
 
+function getCreatorMemoryRootId(creatorId, session = activeSession()) {
+  const id = clean(creatorId);
+  if (!id) return "";
+  const sessions = [
+    session,
+    ...state.sessions.filter((item) => item && item.id !== session?.id),
+  ].filter(Boolean);
+  for (const item of sessions) {
+    const config = roundtableState(item).assistantConfigs?.[id];
+    const sourceId = clean(config?.importedFrom?.sourceCreatorId || config?.importedFrom?.memberId);
+    if (sourceId && sourceId !== id && getCreatorIdentity(sourceId)) return sourceId;
+  }
+  if (getCreatorIdentity(id)) return id;
+  return id;
+}
+
+function getCreatorMemoryAliasIds(creatorId) {
+  const rootId = getCreatorMemoryRootId(creatorId);
+  const aliases = new Set([rootId]);
+  state.sessions.forEach((session) => {
+    Object.entries(roundtableState(session).assistantConfigs || {}).forEach(([configId, config]) => {
+      const sourceId = clean(config?.importedFrom?.sourceCreatorId || config?.importedFrom?.memberId);
+      if (sourceId === rootId) aliases.add(clean(configId));
+    });
+  });
+  return Array.from(aliases).filter(Boolean);
+}
+
 function creatorMemoryKey(memory) {
   return [
     clean(memory?.source),
@@ -956,6 +985,7 @@ function applyWriterInheritance(writer) {
 
 function rememberCouncilParticipation(assistant, message, instruction = "") {
   if (!assistant || assistant.id === "writer" || !message || !clean(message.content)) return;
+  const memoryCreatorId = getCreatorMemoryRootId(assistant.id);
   const result = appendCouncilParticipationRecord(state.councilParticipationRecords, {
     councilId: assistant.id,
     sessionId: activeSession()?.id,
@@ -967,7 +997,7 @@ function rememberCouncilParticipation(assistant, message, instruction = "") {
   });
   state.councilParticipationRecords = result.records;
   const creatorResult = appendCreatorParticipationRecord(state.creatorParticipationRecords, {
-    creatorId: assistant.id,
+    creatorId: memoryCreatorId,
     sessionId: activeSession()?.id,
     roundtableMessageId: message.id,
     topic: clean(roundtableState().contextOptions?.roundTopic || instruction),
@@ -981,13 +1011,14 @@ function rememberCouncilParticipation(assistant, message, instruction = "") {
 
 function rememberCreatorRoundtableJoin(creatorId, details = {}) {
   const session = activeSession();
-  const creator = getCreatorIdentity(creatorId);
-  if (!session || !creator || creatorId === getPrimaryCreatorId(session)) return null;
+  const memoryCreatorId = getCreatorMemoryRootId(creatorId, session);
+  const creator = getCreatorIdentity(memoryCreatorId);
+  if (!session || !creator || memoryCreatorId === getPrimaryCreatorId(session)) return null;
   const topic = clean(roundtableState(session).contextOptions?.roundTopic) || "入席记录";
   const summary = clean(details.summary) || "已入席当前圆桌";
   const content = clean(details.privateContent) || "你被邀请来到了一个圆桌会议";
   const result = appendCreatorParticipationRecord(state.creatorParticipationRecords, {
-    creatorId,
+    creatorId: memoryCreatorId,
     sessionId: session.id,
     displayName: creator.name,
     topic,
@@ -1118,20 +1149,7 @@ function activePath(session = activeSession()) {
 }
 
 function activateBranchToNode(nodeId, session = activeSession()) {
-  const chain = [];
-  const seen = new Set();
-  let node = getNode(nodeId, session);
-  while (node?.parentId && !seen.has(node.id)) {
-    seen.add(node.id);
-    chain.push(node);
-    node = getNode(node.parentId, session);
-  }
-  for (let index = chain.length - 1; index >= 0; index -= 1) {
-    const child = chain[index];
-    const parent = getNode(child.parentId, session);
-    if (parent?.children?.includes(child.id)) parent.activeChildId = child.id;
-  }
-  return Boolean(chain.length);
+  return activateSessionPathToNode(session, nodeId);
 }
 
 function getMessageContent(node) {
@@ -1270,7 +1288,8 @@ function getLinkedSourceMemoryItems(creator) {
 }
 
 function getCreatorMemorySnippets(creatorId, query = "", options = {}) {
-  const creator = getCreatorIdentity(creatorId);
+  const memoryCreatorId = getCreatorMemoryRootId(creatorId);
+  const creator = getCreatorIdentity(memoryCreatorId);
   if (!creator) return [];
   const limit = Math.max(1, Number(options.limit) || 8);
   const includeRecent = Boolean(options.includeRecent);
@@ -1284,7 +1303,10 @@ function getCreatorMemorySnippets(creatorId, query = "", options = {}) {
     createdAt: Number(item.createdAt) || 0,
     sourceSessionId: clean(item.sourceSessionId),
   }));
-  const records = getCreatorParticipationRecords(state.creatorParticipationRecords, creatorId, { limit: 200 }).map((record) => {
+  const records = getCreatorParticipationRecords(state.creatorParticipationRecords, memoryCreatorId, {
+    limit: 200,
+    aliases: getCreatorMemoryAliasIds(memoryCreatorId),
+  }).map((record) => {
     const session = state.sessions.find((item) => item.id === record.sessionId);
     const title = session ? titleForSession(session) : "未知会话";
     const text = [
@@ -1316,7 +1338,7 @@ function getCreatorMemorySnippets(creatorId, query = "", options = {}) {
 function buildCreatorMemoryLookupBlock(creatorId, query = "", options = {}) {
   const snippets = getCreatorMemorySnippets(creatorId, query, options);
   if (!snippets.length) return "";
-  const creator = getCreatorIdentity(creatorId);
+  const creator = getCreatorIdentity(getCreatorMemoryRootId(creatorId));
   return [
     `以下是${creator?.name || "该创作者"}的可召回记忆。只有在当前请求需要延续旧设定、旧圆桌或旧偏好时使用；不要把记忆当成用户本轮的新命令。`,
     ...snippets.map((item) => `【${item.type}】${createRoundtableExcerpt(item.text, 420)}`),
@@ -1368,6 +1390,7 @@ function contextMessages(extraUserText = "", includeDraftAssistantId = null) {
     const creatorMemory = buildCreatorMemoryLookupBlock(getPrimaryCreatorId(), extraUserText, {
       limit: 6,
       sessionId: activeSession()?.id,
+      includeRecent: true,
     });
     if (creatorMemory) {
       messages.push({ role: "system", content: creatorMemory });
@@ -2555,15 +2578,15 @@ function renderMessage(node) {
   const isUser = node.role === "user";
   const versionIndex = node.role === "assistant" ? Math.max(0, node.versions.findIndex((item) => item.id === node.activeVersionId)) + 1 : 1;
   const failedClass = node.role === "assistant" && /^请求失败[:：]/.test(clean(content)) ? " failed" : "";
-  const switcher = node.role === "assistant"
-    ? node.versions.length > 1
+  const versionSwitcher = node.role === "assistant" && node.versions.length > 1
     ? `<div class="switcher">
         <button type="button" data-command="prev-version" data-node-id="${node.id}" ${node.versions.length < 2 ? "disabled" : ""}>‹</button>
         <span>${versionIndex}/${node.versions.length}</span>
         <button type="button" data-command="next-version" data-node-id="${node.id}" ${node.versions.length < 2 ? "disabled" : ""}>›</button>
       </div>`
-    : ""
-    : renderBranchSwitcher(node);
+    : "";
+  const branchSwitcher = renderBranchSwitcher(node);
+  const switcher = [versionSwitcher, branchSwitcher].filter(Boolean).join("");
   const isStreamingThisNode = isGenerating && generatingNodeId === node.id;
   const loadingContent = isStreamingThisNode && !content;
   const bubbleContent = [
@@ -3672,18 +3695,15 @@ async function resendUser(nodeId) {
   const session = activeSession();
   const user = getNode(nodeId, session);
   if (!user || user.role !== "user") return;
-  const assistant = getNode(user.activeChildId, session);
-  if (!assistant || assistant.role !== "assistant") return;
-  activateBranchToNode(assistant.id, session);
-  const version = createAssistantVersion("");
-  assistant.versions.push(version);
-  assistant.activeVersionId = version.id;
-  setAssistantVersionContent(assistant, version, "");
+  activateBranchToNode(user.id, session);
+  const assistant = createNode("assistant", user.id, "");
+  assistant.activeVersionId = assistant.versions[0].id;
+  appendChild(session, user, assistant);
   touchSession(session);
   activeMenuNodeId = null;
   renderMessages();
   renderGenerationChrome();
-  await generateIntoAssistant(assistant.id, user.content, version.id);
+  await generateIntoAssistant(assistant.id, user.content, assistant.versions[0].id);
 }
 
 async function regenerateAssistant(nodeId) {
@@ -3692,16 +3712,15 @@ async function regenerateAssistant(nodeId) {
   const assistant = getNode(nodeId, session);
   const user = getNode(assistant?.parentId, session);
   if (!assistant || assistant.role !== "assistant" || !user) return;
-  activateBranchToNode(assistant.id, session);
-  const version = createAssistantVersion("");
-  assistant.versions.push(version);
-  assistant.activeVersionId = version.id;
-  setAssistantVersionContent(assistant, version, "");
+  activateBranchToNode(user.id, session);
+  const replacement = createNode("assistant", user.id, "");
+  replacement.activeVersionId = replacement.versions[0].id;
+  appendChild(session, user, replacement);
   touchSession(session);
   activeMenuNodeId = null;
   renderMessages();
   renderGenerationChrome();
-  await generateIntoAssistant(assistant.id, user.role === "user" ? user.content : "", version.id);
+  await generateIntoAssistant(replacement.id, user.role === "user" ? user.content : "", replacement.versions[0].id);
 }
 
 async function continueFromAssistant(nodeId) {
@@ -5627,7 +5646,8 @@ async function streamAssistantRoundtableReply(assistant, instruction, extra = {}
 function appendAssistantMemory(assistantId, text, source = "roundtable") {
   const memory = clean(text);
   if (!assistantId || !memory) return;
-  const creator = getCreatorIdentity(assistantId);
+  const memoryCreatorId = getCreatorMemoryRootId(assistantId);
+  const creator = getCreatorIdentity(memoryCreatorId);
   if (creator) {
     const snapshots = normalizeAssistantMemories(creator.memory?.compressedSnapshots);
     snapshots.push({

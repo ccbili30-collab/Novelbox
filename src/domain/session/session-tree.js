@@ -18,6 +18,23 @@ export function activePath(session) {
   return path;
 }
 
+export function activatePathToNode(session, nodeId) {
+  const chain = [];
+  const seen = new Set();
+  let node = getNode(session, nodeId);
+  while (node?.parentId && !seen.has(node.id)) {
+    seen.add(node.id);
+    chain.push(node);
+    node = getNode(session, node.parentId);
+  }
+  for (let index = chain.length - 1; index >= 0; index -= 1) {
+    const child = chain[index];
+    const parent = getNode(session, child.parentId);
+    if (parent?.children?.includes(child.id)) parent.activeChildId = child.id;
+  }
+  return Boolean(chain.length);
+}
+
 export function getAssistantVersion(node) {
   if (!node || node.role !== "assistant") return null;
   return node.versions.find((version) => version.id === node.activeVersionId) || node.versions[0] || null;
