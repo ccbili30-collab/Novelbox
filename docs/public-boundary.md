@@ -1,6 +1,6 @@
 # Public Boundary
 
-This repository intentionally keeps the product shell public and the roundtable core private.
+This repository keeps the product shell and non-core client code public while the roundtable core continues to evolve.
 
 ## Public
 
@@ -10,18 +10,16 @@ This repository intentionally keeps the product shell public and the roundtable 
 - Session and settings primitives
 - API request helpers
 - Design notes
+- Interface shells for roundtable and creator modules
 
-## Private
+## In Development
 
 - Roundtable turn scheduler
 - Creator graph and memory federation
 - Private creator templates
-- Private prompts
+- Production prompt assembly
 - Production model routing
-- Private APK artifacts
 
 ## APK Rule
 
-Do not upload a private production APK to this public repository. APKs can be unpacked, and client-side JavaScript should be treated as visible to advanced users.
-
-Use a public-shell APK for demos, and distribute the private APK only through controlled channels. Long term, move sensitive orchestration to a server if the core must remain confidential.
+APK demos may be uploaded for testers. Client-side code should still be treated as visible to advanced users.
