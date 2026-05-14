@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>圆桌小说盒子 Roundtabox</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <button class="icon-button" type="button" aria-label="历史会话">☰</button>
+        <div>
+          <h1>圆桌小说盒子</h1>
+          <p>Roundtabox public shell</p>
+        </div>
+        <button class="icon-button" type="button" aria-label="模型配置">⚙</button>
+      </header>
+
+      <section class="workspace" aria-label="创作工作区">
+        <div class="paper">
+          <div class="paper-title">
+            <span>正文小窗 · 写手</span>
+            <small>公开演示壳</small>
+          </div>
+          <p>夜雨贴着城墙往下淌。他停在审判庭门前，忽然发现自己想不起妹妹的声音了。</p>
+        </div>
+
+        <div class="roundtable-strip" aria-label="圆桌模式预览">
+          <button class="seat active" type="button">主创</button>
+          <button class="seat" type="button">设定师</button>
+          <button class="seat" type="button">剧情师</button>
+          <button class="seat" type="button">审稿</button>
+          <button class="seat locked" type="button">圆桌核心未开源</button>
+        </div>
+
+        <section class="chat-list" id="chatList" aria-live="polite"></section>
+      </section>
+
+      <form class="composer" id="composer">
+        <button class="round-toggle" type="button" id="roundToggle">圆</button>
+        <textarea id="messageInput" rows="1" placeholder="和主创聊设定，或 @议员 讨论转折..."></textarea>
+        <button class="send-button" type="submit">发送</button>
+      </form>
+    </main>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

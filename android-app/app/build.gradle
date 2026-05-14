@@ -1,0 +1,51 @@
+plugins {
+    id "com.android.application"
+}
+
+android {
+    namespace "com.qinglan.chatnovel"
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.qinglan.chatnovel"
+        minSdk 23
+        targetSdk 34
+        versionCode 1
+        versionName "0.1.0"
+    }
+}
+
+def webRoot = rootProject.file("..")
+def generatedWebAssets = layout.buildDirectory.dir("generated/assets/web")
+
+tasks.register("syncWebAssets", Sync) {
+    from(webRoot) {
+        include "index.html"
+        include "src/**"
+    }
+    exclude "src/**/*.js"
+    into(generatedWebAssets)
+}
+
+tasks.register("bundleAndroidWebAssets", Exec) {
+    dependsOn("syncWebAssets")
+    inputs.file(webRoot.toPath().resolve("index.html").toFile())
+    inputs.files(fileTree(webRoot.toPath().resolve("src").toFile()) {
+        include "**/*.js"
+    })
+    outputs.file(generatedWebAssets.map { it.file("index.html") })
+    outputs.file(generatedWebAssets.map { it.file("src/android-main.js") })
+    workingDir(webRoot)
+    commandLine "node", "scripts/build-android-assets.mjs", webRoot.absolutePath, generatedWebAssets.get().asFile.absolutePath
+}
+
+android.sourceSets.main.assets.srcDir(generatedWebAssets)
+tasks.named("preBuild").configure {
+    dependsOn("bundleAndroidWebAssets")
+}
+
+tasks.configureEach { task ->
+    if (task.name.startsWith("merge") && task.name.endsWith("Assets")) {
+        task.dependsOn("bundleAndroidWebAssets")
+    }
+}
