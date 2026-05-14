@@ -43,3 +43,50 @@ export function getCouncilParticipationRecords(records, councilId, options = {})
     .filter((record) => !sessionId || record.sessionId === sessionId)
     .slice(-limit);
 }
+
+export function createCreatorParticipationRecord(input = {}) {
+  return {
+    id: clean(input.id) || uid("creator_record"),
+    creatorId: clean(input.creatorId || input.councilId),
+    sessionId: clean(input.sessionId),
+    roundtableMessageId: clean(input.roundtableMessageId),
+    displayName: clean(input.displayName || input.speakerName),
+    topic: clean(input.topic),
+    summary: clean(input.summary || input.content),
+    content: clean(input.content || input.summary),
+    roleState: clean(input.roleState || "participant"),
+    deleted: Boolean(input.deleted),
+    createdAt: Number(input.createdAt) || Date.now(),
+    updatedAt: Number(input.updatedAt) || Number(input.createdAt) || Date.now(),
+  };
+}
+
+export function normalizeCreatorParticipationRecords(records = []) {
+  return Array.isArray(records)
+    ? records
+      .map(createCreatorParticipationRecord)
+      .filter((record) => record.creatorId && record.sessionId && (record.summary || record.content))
+    : [];
+}
+
+export function appendCreatorParticipationRecord(records, input, limit = 500) {
+  const record = createCreatorParticipationRecord(input);
+  if (!record.creatorId || !record.sessionId || (!record.summary && !record.content)) {
+    return {
+      records: normalizeCreatorParticipationRecords(records),
+      record: null,
+    };
+  }
+  const nextRecords = [...normalizeCreatorParticipationRecords(records), record].slice(-Math.max(1, Number(limit) || 500));
+  return { records: nextRecords, record };
+}
+
+export function getCreatorParticipationRecords(records, creatorId, options = {}) {
+  const limit = Math.max(1, Number(options.limit) || 80);
+  const sessionId = clean(options.sessionId);
+  return normalizeCreatorParticipationRecords(records)
+    .filter((record) => !record.deleted)
+    .filter((record) => record.creatorId === creatorId)
+    .filter((record) => !sessionId || record.sessionId === sessionId)
+    .slice(-limit);
+}

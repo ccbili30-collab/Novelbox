@@ -21,6 +21,7 @@ export function createApiSettings() {
     baseUrl: provider.baseUrl,
     apiKey: provider.apiKey,
     models: provider.models,
+    contextTokenBudget: 200000,
   };
 }
 
@@ -50,6 +51,7 @@ export function hydrateApiSettings(api) {
   next.models = Array.isArray(next.models) && next.models.length
     ? Array.from(new Set(next.models.filter(Boolean)))
     : ["gpt-4o-mini"];
+  next.contextTokenBudget = Number(next.contextTokenBudget) || 200000;
   current.models = next.models;
   return next;
 }

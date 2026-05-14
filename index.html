@@ -79,6 +79,7 @@
       </div>
       <div class="panel-row">
         <button class="primary-button history-new-session-button" type="button" data-command="new-session">新建会话</button>
+        <button type="button" data-command="import-session-package">导入会话</button>
       </div>
       <input id="historySearch" class="plain-input" placeholder="搜索历史" />
       <div id="sessionList" class="session-list"></div>
@@ -91,10 +92,13 @@
           <strong id="settingsPanelTitle">设置</strong>
           <span id="settingsPanelSubtitle" class="muted">选择要调整的模块</span>
         </div>
-        <button class="icon-button" type="button" data-command="close-panels">×</button>
       </div>
 
       <section class="settings-home" data-settings-view="home">
+        <div class="settings-backup-row">
+          <button type="button" data-command="export-global-backup">导出全局备份</button>
+          <button type="button" data-command="import-global-backup">导入全局备份</button>
+        </div>
         <button class="settings-slot" type="button" data-command="open-settings-page" data-settings-page="model">
           <b>模型配置</b>
           <span>默认 API、主线模型和生成参数</span>
@@ -107,6 +111,10 @@
           <b>排版调试</b>
           <span>输入区、气泡和字号数值</span>
         </button>
+        <button class="settings-slot" type="button" data-command="open-settings-page" data-settings-page="creators">
+          <b>创作者们</b>
+          <span>主创、议员、记忆库和所在圆桌</span>
+        </button>
       </section>
 
       <section class="settings-page" data-settings-view="model" hidden>
@@ -115,17 +123,16 @@
             <strong>默认 API</strong>
             <span class="muted">主线、写手和议员的默认来源</span>
           </div>
-          <label class="field">
-            <span>当前提供方</span>
-            <select id="providerSelect"></select>
-          </label>
-          <label class="field">
+          <select id="providerSelect" hidden></select>
+          <div id="providerSwitcher" class="settings-provider-strip" aria-label="切换模型提供方"></div>
+          <label class="field provider-name-field" hidden>
             <span>提供方名称</span>
             <input id="providerNameInput" type="text" placeholder="例如 OpenAI / DeepSeek / Qwen" />
           </label>
           <div class="panel-row provider-actions">
             <button type="button" data-command="add-provider">新增提供方</button>
-            <button type="button" data-command="delete-provider">删除当前</button>
+            <button type="button" data-command="rename-provider">改名</button>
+            <button type="button" data-command="delete-provider">删除</button>
           </div>
         </div>
         <label class="field">
@@ -173,6 +180,10 @@
           <label class="field">
             <span>主线最大输出 token</span>
             <input id="maxTokensInput" type="number" min="1" step="1" />
+          </label>
+          <label class="field">
+            <span>上下文 token 预算</span>
+            <input id="contextTokenBudgetInput" type="number" min="1000" step="1000" placeholder="默认 200000" />
           </label>
           <label class="check-field">
             <input id="streamInput" type="checkbox" />
@@ -240,6 +251,20 @@
             <button type="button" data-command="reset-layout">恢复默认</button>
           </div>
           <div id="customLayoutPresets" class="custom-preset-list"></div>
+        </div>
+      </section>
+
+      <section class="settings-page" data-settings-view="creators" hidden>
+        <div class="settings-section">
+          <div class="section-title">
+            <strong>创作者们</strong>
+            <span class="muted">管理主创、议员、私聊会话和记忆入口</span>
+          </div>
+          <div class="creator-page-actions">
+            <button type="button" data-command="import-creator-package">导入创作者</button>
+            <button type="button" data-command="replace-current-creator-package">导入并替换当前主创</button>
+          </div>
+          <div id="creatorsList" class="creators-list"></div>
         </div>
       </section>
     </aside>
@@ -335,7 +360,10 @@
     </aside>
 
     <input id="assistantImportFile" type="file" accept=".txt,.md,.json,text/plain,text/markdown,application/json" hidden />
-    <input id="assistantAvatarFile" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+    <input id="sessionImportFile" type="file" accept=".json,application/json" hidden />
+    <input id="creatorImportFile" type="file" accept=".json,application/json" hidden />
+    <input id="globalBackupImportFile" type="file" accept=".json,application/json" hidden />
+    <input id="assistantAvatarFile" type="file" accept="image/png,image/jpeg,image/webp,image/x-icon,.ico" hidden />
     <input id="chatImageFile" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden />
     <input id="userAvatarFile" type="file" accept="image/png,image/jpeg,image/webp" hidden />
     <input id="sessionBackgroundFile" type="file" accept="image/png,image/jpeg,image/webp" hidden />
@@ -376,11 +404,11 @@
             <button id="clearAssistantAvatarButton" value="default" type="button">清除头像</button>
             <label class="assistant-network-chip">
               <input id="assistantNetworkEnabledInput" type="checkbox" />
-              <span>联网</span>
+              <span>模型自带联网</span>
             </label>
           </div>
         </div>
-        <details class="assistant-fold">
+        <details id="assistantModelFold" class="assistant-fold">
           <summary>模型</summary>
           <label class="field">
             <span>模型提供方</span>
@@ -399,11 +427,15 @@
             <input id="assistantMaxTokensInput" type="number" min="1" step="1" placeholder="留空则使用全局设置" />
           </label>
           <label class="field">
+            <span>上下文 token 预算</span>
+            <input id="assistantContextTokenBudgetInput" type="number" min="1000" step="1000" placeholder="默认跟随全局" />
+          </label>
+          <label class="field">
             <span>温度 <b id="assistantTemperatureLabel">0.80</b></span>
             <input id="assistantTemperatureInput" type="range" min="0" max="2" step="0.05" />
           </label>
         </details>
-        <details class="assistant-fold">
+        <details id="assistantActivationFold" class="assistant-fold">
           <summary>角色激活</summary>
           <div class="assistant-context-head">
             <strong id="assistantActivationStatus">未激活</strong>
@@ -418,10 +450,12 @@
             <button id="clearAssistantActivationButton" value="default" type="button">清除身份</button>
           </div>
         </details>
-        <details class="assistant-fold">
+        <div id="sealedActivationBar" class="sealed-hidden-bar" hidden>角色激活已封装</div>
+        <details id="assistantParticipationFold" class="assistant-fold">
           <summary>参会记录</summary>
           <div id="assistantParticipationList" class="assistant-participation-list"></div>
         </details>
+        <div id="sealedPromptBar" class="sealed-hidden-bar" hidden>提示词已封装</div>
         <details id="assistantPrivateFold" class="assistant-fold">
           <summary>私聊</summary>
           <div id="assistantPrivateChatList" class="assistant-private-chat-list"></div>
@@ -433,7 +467,7 @@
             <button id="sendAssistantPrivateChatButton" value="default" type="button" data-command="send-assistant-private-chat">发送</button>
           </div>
         </details>
-        <details class="assistant-fold">
+        <details id="assistantMaterialsFold" class="assistant-fold">
           <summary>材料</summary>
           <div class="assistant-context-head">
             <strong>阅读范围</strong>
@@ -460,7 +494,7 @@
             </label>
           </div>
         </details>
-        <details class="assistant-fold">
+        <details id="assistantPromptFold" class="assistant-fold">
           <summary>提示词</summary>
           <label class="field">
             <span>角色提示词</span>
@@ -476,6 +510,14 @@
         </div>
       </form>
     </dialog>
+
+    <div id="sealedCreatorOverlay" class="sealed-creator-overlay" hidden aria-modal="true" role="dialog" aria-labelledby="sealedCreatorTitle">
+      <section class="sealed-creator-panel">
+        <button id="closeSealedCreatorOverlayButton" class="sealed-close-button" type="button" aria-label="关闭封装主创">×</button>
+        <h2 id="sealedCreatorTitle" class="visually-hidden">封装主创</h2>
+        <div id="sealedCreatorList" class="sealed-creator-list"></div>
+      </section>
+    </div>
 
     <div id="toast" class="toast" hidden></div>
     <script type="module" src="./src/main.js"></script>

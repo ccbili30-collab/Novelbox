@@ -1,15 +1,73 @@
 import { uid } from "../../utils/id.js";
 import { clean } from "../../utils/text.js";
+import { SEALED_B_PROMPT, SEALED_T_PROMPT } from "./sealed-prompts.js";
 
 export const ROUNDTABLE_CONCISE_RULE = "默认只说1-2句，80字以内；只给最关键判断和一个可执行建议。不要写长段、不要列长清单、不要复述资料。只有用户或其他议员明确要求“展开/详细/深度思考”时，才可以放长。";
 export const ROUNDTABLE_COUNCIL_CHAT_RULE = "圆桌默认以聊天讨论、判断、反驳、建议和协作为主。除非用户明确点名要求某位成员直接起草成稿，否则议员应像群聊参会者一样发言，不要擅自进入长篇创作或代写模式。";
-export const OPINIONATED_AI_PROMPT = `你是一个有主见的 AI。你应基于当前创作目标提出独立判断，可以赞同、反驳或修正他人意见。默认短答，不要迎合，不要替写手直接写正文。${ROUNDTABLE_COUNCIL_CHAT_RULE}${ROUNDTABLE_CONCISE_RULE}`;
+export const AI_TRAIT_WORDS = [
+  "好奇",
+  "敏锐",
+  "温柔",
+  "勇敢",
+  "耐心",
+  "诚实",
+  "浪漫",
+  "抽象",
+  "安静",
+  "戏剧化",
+  "冷静",
+  "锋利",
+  "顽皮",
+  "固执",
+  "急躁",
+  "多疑",
+  "虚荣",
+  "苦涩",
+  "焦虑",
+  "鲁莽",
+  "犬儒",
+];
+
+export function createTraitPrompt(trait) {
+  return `你是一个${clean(trait) || "好奇"}的 AI。`;
+}
+
+export function createRandomTraitPrompt() {
+  return createTraitPrompt(AI_TRAIT_WORDS[Math.floor(Math.random() * AI_TRAIT_WORDS.length)]);
+}
+
+function isLegacyDefaultPrompt(prompt) {
+  const value = clean(prompt);
+  return !value
+    || value.includes("你是一个有主见的 AI")
+    || value.includes(ROUNDTABLE_COUNCIL_CHAT_RULE)
+    || value.includes(ROUNDTABLE_CONCISE_RULE);
+}
+
+export const OPINIONATED_AI_PROMPT = createRandomTraitPrompt();
 export const DEFAULT_CUSTOM_ROUNDTABLE_ASSISTANT_PROMPT = OPINIONATED_AI_PROMPT;
 export const GENERATIVE_AGENT_MEMORY_LIMIT = 24;
 
-export const DEFAULT_ROUNDTABLE_SELECTED_IDS = ["plot"];
+export const DEFAULT_ROUNDTABLE_SELECTED_IDS = [];
 export const DEFAULT_HIDDEN_ROUNDTABLE_ASSISTANT_IDS = ["setting", "review", "skeptic", "style"];
 export const DEFAULT_ROUNDTABLE_PAPER_REVEAL = 0.1;
+
+export const SEALED_ROUNDTABLE_CREATORS = [
+  {
+    id: "sealed-t",
+    name: "T",
+    role: "sealed-creator",
+    prompt: SEALED_T_PROMPT,
+    avatarUrl: "./src/assets/sealed-t.ico",
+  },
+  {
+    id: "sealed-b",
+    name: "B",
+    role: "sealed-creator",
+    prompt: SEALED_B_PROMPT,
+    avatarUrl: "./src/assets/sealed-b.png",
+  },
+];
 
 export const DEFAULT_ROUNDTABLE_CONTEXT = {
   includeManuscript: true,
@@ -35,7 +93,7 @@ export const ROUND_ASSISTANTS = [
   },
   {
     id: "plot",
-    name: "戏剧型主创",
+    name: "主创",
     role: "议员",
     prompt: OPINIONATED_AI_PROMPT,
   },
@@ -96,7 +154,7 @@ export function normalizeCustomAssistant(item, index = 0) {
     id,
     name: clean(item.name) || `新议员${index + 1}`,
     role: clean(item.role) || "议员",
-    prompt: clean(item.prompt) || DEFAULT_CUSTOM_ROUNDTABLE_ASSISTANT_PROMPT,
+    prompt: clean(item.prompt) || createRandomTraitPrompt(),
   };
 }
 
@@ -118,13 +176,39 @@ export function hydrateRoundtableState(roundtable = {}) {
     ...hiddenAssistantIds,
   ]));
   rt.selectedIds = Array.isArray(rt.selectedIds) && rt.selectedIds.length
-    ? rt.selectedIds.filter((id) => {
-        const assistant = getRoundAssistantBaseFromState(id, rt);
-        return assistant && assistant.id !== "writer";
-      })
+    ? Array.from(new Set(rt.selectedIds
+        .map((id) => clean(id))
+        .filter((id) => id && id !== "writer" && id !== "plot" && !isSealedRoundtableCreatorId(id))))
     : [...DEFAULT_ROUNDTABLE_SELECTED_IDS];
+  rt.primaryInRound = rt.primaryInRound !== false;
+  rt.speakerOrderIds = Array.isArray(rt.speakerOrderIds)
+    ? Array.from(new Set(rt.speakerOrderIds.map((id) => clean(id)).filter(Boolean)))
+    : [];
   rt.messages = Array.isArray(rt.messages) ? rt.messages : [];
   rt.assistantConfigs = rt.assistantConfigs && typeof rt.assistantConfigs === "object" ? rt.assistantConfigs : {};
+  ROUND_ASSISTANTS.forEach((assistant) => {
+    if (assistant.id === "writer") return;
+    const config = rt.assistantConfigs[assistant.id] && typeof rt.assistantConfigs[assistant.id] === "object"
+      ? rt.assistantConfigs[assistant.id]
+      : {};
+    if (isLegacyDefaultPrompt(config.prompt)) {
+      rt.assistantConfigs[assistant.id] = {
+        ...config,
+        prompt: createRandomTraitPrompt(),
+      };
+    }
+  });
+  rt.customAssistants.forEach((assistant) => {
+    const config = rt.assistantConfigs[assistant.id] && typeof rt.assistantConfigs[assistant.id] === "object"
+      ? rt.assistantConfigs[assistant.id]
+      : {};
+    if (isLegacyDefaultPrompt(config.prompt)) {
+      rt.assistantConfigs[assistant.id] = {
+        ...config,
+        prompt: createRandomTraitPrompt(),
+      };
+    }
+  });
   rt.roundProgress = rt.roundProgress && typeof rt.roundProgress === "object" ? rt.roundProgress : null;
   rt.contextOptions = normalizeRoundtableContextOptions(rt.contextOptions);
   rt.paperReveal = clamp(Number.isFinite(Number(rt.paperReveal)) ? Number(rt.paperReveal) : DEFAULT_ROUNDTABLE_PAPER_REVEAL, 0, 1);
@@ -132,6 +216,21 @@ export function hydrateRoundtableState(roundtable = {}) {
   rt.paperAtBottom = rt.paperAtBottom !== false;
   rt.paperTextLength = Math.max(0, Number(rt.paperTextLength) || 0);
   rt.paperHasNewProse = Boolean(rt.paperHasNewProse);
+  rt.sealedCreatorId = SEALED_ROUNDTABLE_CREATORS.some((creator) => creator.id === rt.sealedCreatorId)
+    ? rt.sealedCreatorId
+    : "";
+  SEALED_ROUNDTABLE_CREATORS.forEach((creator) => {
+    const config = rt.assistantConfigs[creator.id] && typeof rt.assistantConfigs[creator.id] === "object"
+      ? rt.assistantConfigs[creator.id]
+      : {};
+    rt.assistantConfigs[creator.id] = {
+      ...config,
+      name: clean(config.name) || creator.name,
+      prompt: creator.prompt,
+      avatarDataUrl: clean(config.avatarDataUrl),
+      sealed: true,
+    };
+  });
   return rt;
 }
 
@@ -144,7 +243,17 @@ export function getRoundAssistantBasesFromState(roundtable = {}) {
 }
 
 export function getRoundAssistantBaseFromState(id, roundtable = {}) {
-  return getRoundAssistantBasesFromState(roundtable).find((assistant) => assistant.id === id) || null;
+  return getRoundAssistantBasesFromState(roundtable).find((assistant) => assistant.id === id)
+    || SEALED_ROUNDTABLE_CREATORS.find((assistant) => assistant.id === id)
+    || null;
+}
+
+export function isSealedRoundtableCreatorId(id) {
+  return SEALED_ROUNDTABLE_CREATORS.some((creator) => creator.id === id);
+}
+
+export function getSealedRoundtableCreatorBase(id) {
+  return SEALED_ROUNDTABLE_CREATORS.find((creator) => creator.id === id) || null;
 }
 
 export function isCustomRoundAssistantInState(id, roundtable = {}) {
@@ -167,7 +276,7 @@ export function resolveRoundAssistant(input) {
     ...config,
     id: base.id,
     role: base.role,
-    name: clean(config.name) || base.name,
+    name: clean(config.name) || (base.id === "plot" ? clean(config.model) || clean(session.model) : "") || base.name,
     prompt: clean(config.prompt) || base.prompt,
     providerId: clean(config.providerId),
     apiBaseUrl: clean(defaults.baseUrl),
@@ -179,7 +288,7 @@ export function resolveRoundAssistant(input) {
     contextOptions,
     activationProfile: clean(config.activationProfile),
     memories: normalizeAssistantMemories(config.memories),
-    avatarDataUrl: clean(config.avatarDataUrl),
+    avatarDataUrl: clean(config.avatarDataUrl) || clean(base.avatarUrl),
     inheritedApiBaseUrl: true,
     inheritedApiKey: true,
     inheritedModel: !clean(config.model),
@@ -197,6 +306,7 @@ export function createRoundAssistantConfigView(assistant, fallbackTemperature) {
     model: assistant.inheritedModel ? "" : assistant.model || "",
     networkEnabled: Boolean(assistant.networkEnabled),
     maxTokens: Number(assistant.maxTokens) || 0,
+    contextTokenBudget: Number(assistant.contextTokenBudget) || 0,
     temperature: Number.isFinite(Number(assistant.temperature)) ? Number(assistant.temperature) : fallbackTemperature,
     contextOptions: assistant.contextOptions || normalizeRoundtableContextOptions(),
     activationProfile: assistant.activationProfile || "",

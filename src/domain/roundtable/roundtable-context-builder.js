@@ -45,10 +45,6 @@ export function buildRoundtablePromptMessages(input) {
     .map((current) => `${current.name}：${current.role}`)
     .join("；");
   const writerName = mentionableAssistants.find((current) => current.id === "writer")?.name || "写手";
-  const creatorNames = mentionableAssistants
-    .filter((current) => current.id !== "writer" && current.roundtableRoleState === "creator")
-    .map((current) => current.name)
-    .join("、");
   const participantNames = mentionableAssistants
     .filter((current) => current.id !== "writer" && current.roundtableRoleState === "participant")
     .map((current) => current.name)
@@ -60,10 +56,10 @@ export function buildRoundtablePromptMessages(input) {
     ? "写手是输出通道，不是参会议员。不要参与主创争论，不要提出新的主要立场；你的职责是把用户和议员已经形成的有效内容落成正文、总结、方案或其他成品。不要寒暄、不要解释过程、不要输出创作计划；若用户 @写手 但任务仍不清楚，只用一句话确认需要继续正文、会议总结还是重写。"
     : `${ROUNDTABLE_COUNCIL_CHAT_RULE}议员默认发言必须短。${ROUNDTABLE_CONCISE_RULE}`;
   const networkRule = assistant.networkEnabled
-    ? "【联网能力】你被允许在有真实工具支持时使用联网或外部资料检索；如果当前环境没有提供检索工具，不要声称已经搜索、查阅网页或引用实时信息。"
-    : "【联网能力】你不能使用联网或外部实时资料，只能依据当前会话、本地材料和已给出的上下文发言；不要声称搜索过、查过网页或引用最新信息。";
-  const creatorRule = creatorNames
-    ? `【主创状态】本轮临时主创：${creatorNames}${participantNames ? `；参会议员：${participantNames}` : ""}。主创不是永久身份，而是本次圆桌中的工作状态；你要带着自己的判断、偏好和怀疑参与，不必迎合其他 AI 或强行达成共识。`
+    ? "【模型自带联网】用户允许你使用模型供应商自身提供的联网能力；本应用没有给你接入独立搜索工具。只有当当前模型/API明确支持联网时才可引用外部实时资料，否则不要声称已经搜索、查阅网页或引用最新信息。"
+    : "【外部资料限制】你不能使用联网或外部实时资料，只能依据当前会话、本地材料和已给出的上下文发言；不要声称搜索过、查过网页或引用最新信息。";
+  const creatorRule = participantNames
+    ? `【圆桌席位】本轮参会议员：${participantNames}。当前会话主创不是可删除席位；你作为被点名/被安排发言的议员参与讨论，要带着自己的判断、偏好和怀疑，不必迎合其他 AI 或强行达成共识。`
     : "";
   const socialMode = isSociallyActivatedAssistant(assistant)
     ? [
@@ -76,7 +72,7 @@ export function buildRoundtablePromptMessages(input) {
         "【未激活模式】你先按当前主题正常参会，不要强行把自己或其他成员演成真实社交人物。",
         "你可以保持自己的视角偏好，但不要脑补成员情绪、关系变化、谁把谁气走，也不要表演道歉或圆场。",
       ].join("\n");
-  const memoryBlock = isSociallyActivatedAssistant(assistant) && assistant.memories?.length
+  const memoryBlock = assistant.id !== "writer" && assistant.memories?.length
     ? `【你的记忆流】\n${assistant.memories.slice(-8).map((item) => `- ${item.text}`).join("\n")}`
     : "";
   const participationBlock = assistant.id !== "writer" && participationRecords.length

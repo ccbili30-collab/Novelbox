@@ -1,9 +1,15 @@
-﻿import { uid } from "./utils/id.js";
+import { uid } from "./utils/id.js";
 import { clean, escapeHtml } from "./utils/text.js";
 import { formatTime } from "./utils/time.js";
 import { estimateTokens, formatK } from "./utils/tokens.js";
 import { humanizeError } from "./utils/errors.js";
+import { createAssistantController } from "./app/assistant-controller.js";
 import { createCommandRegistry } from "./app/command-registry.js";
+import { createCreatorController } from "./app/creator-controller.js";
+import { createImportExportController } from "./app/import-export.js";
+import { createRoundtableController } from "./app/roundtable-controller.js";
+import { createWorkspaceController } from "./app/workspace-controller.js";
+import { createWriterController } from "./app/writer-controller.js";
 import { createDefaultLayout, hydrateLayout } from "./domain/layout/layout-model.js";
 import { createDefaultNovel } from "./domain/novel/novel-model.js";
 import {
@@ -14,15 +20,23 @@ import { buildNovelStats } from "./domain/novel/novel-stats.js";
 import { hydrateSessionSettings } from "./domain/settings/settings-model.js";
 import { createApiProvider, hydrateApiSettings } from "./domain/settings/api-settings.js";
 import {
-  DEFAULT_CUSTOM_ROUNDTABLE_ASSISTANT_PROMPT,
+  createCreatorIdentity,
+  creatorToAssistant,
+  hydrateCreatorIdentity,
+} from "./domain/creator/creator-model.js";
+import {
   DEFAULT_ROUNDTABLE_CONTEXT,
   GENERATIVE_AGENT_MEMORY_LIMIT,
+  SEALED_ROUNDTABLE_CREATORS,
+  createRandomTraitPrompt,
   createRoundAssistantConfigView,
+  getSealedRoundtableCreatorBase,
   getRoundAssistantBaseFromState,
   getRoundAssistantBasesFromState,
   getRoundAssistantAliases,
   hydrateRoundtableState,
   isCustomRoundAssistantInState,
+  isSealedRoundtableCreatorId,
   normalizeAssistantMemories,
   normalizeCustomAssistant,
   normalizeMentionName,
@@ -33,19 +47,19 @@ import {
   buildAssistantMentionInstruction,
   buildAssistantMemoryPrompt as buildAssistantMemoryPromptFromDomain,
   buildRoundtableNovelMaterials as buildRoundtableNovelMaterialsFromDomain,
-  buildRoundtablePromptMessages,
+  createRoundtableExcerpt,
   isSociallyActivatedAssistant,
 } from "./domain/roundtable/roundtable-context-builder.js";
 import {
-  buildRoundProgressInstruction,
-  createRoundProgress,
   findMentionedRoundtableAssistants,
   moveMentionedAssistantsAfter,
   getRoundtableRoleLabel,
   getRoundtableRoleState,
 } from "./domain/roundtable/roundtable-flow.js";
 import {
+  appendCreatorParticipationRecord,
   appendCouncilParticipationRecord,
+  getCreatorParticipationRecords,
   getCouncilParticipationRecords,
 } from "./domain/roundtable/council-participation-memory.js";
 import {
@@ -66,7 +80,7 @@ import {
   removeWriterSyncedSegment,
   replaceWriterSyncedSegment,
 } from "./domain/roundtable/roundtable-writer-sync.js";
-import { createSession } from "./domain/session/session-model.js";
+import { createAssistantVersion, createSession } from "./domain/session/session-model.js";
 import {
   getNode as getSessionNode,
   activePath as getActivePath,
@@ -80,7 +94,7 @@ import {
 } from "./domain/session/session-tree.js";
 import { createAiClient } from "./services/api/ai-client.js";
 import { createBridgeClient, registerBridgeHooks } from "./services/bridge/bridge-client.js";
-import { loadState, saveState as persistState } from "./state/persistence.js";
+import { hydrate, loadState, saveState as persistState } from "./state/persistence.js";
 import { bindCommandDelegation } from "./ui/bindings/event-binding.js";
 import { createPanelManager } from "./ui/panels/panel-manager.js";
 import { renderContextBadge as drawContextBadge, renderContextPanel as drawContextPanel } from "./ui/renderers/context-renderer.js";
@@ -94,10 +108,9 @@ const PAPER_DEEP_COLLAPSE_THRESHOLD = 0.035;
 const MOTION_PULSE_MS = 260;
 const MOTION_RIPPLE_MS = 520;
 const LOCAL_IMAGE_MAX_BYTES = 2.5 * 1024 * 1024;
-const LOCAL_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+const LOCAL_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/x-icon", "image/vnd.microsoft.icon"]);
 const CHAT_IMAGE_MAX_BYTES = Math.min(LOCAL_IMAGE_MAX_BYTES, 1.5 * 1024 * 1024);
 const CHAT_IMAGE_LIMIT = 4;
-const WORKSPACE_FILE_LIMIT = 160;
 const GENERATIVE_AGENT_SOURCE_NOTE = "人格记忆层参考 joonspk-research/generative_agents 的 memory stream / reflection 思路：观察被保存为短记忆，之后再进入角色提示。";
 
 const $ = (selector) => document.querySelector(selector);
@@ -149,6 +162,7 @@ const els = {
   historySearch: $("#historySearch"),
   systemPrompt: $("#systemPromptInput"),
   providerSelect: $("#providerSelect"),
+  providerSwitcher: $("#providerSwitcher"),
   providerName: $("#providerNameInput"),
   baseUrl: $("#baseUrlInput"),
   apiKey: $("#apiKeyInput"),
@@ -169,6 +183,7 @@ const els = {
   temperature: $("#temperatureInput"),
   temperatureLabel: $("#temperatureLabel"),
   contextCount: $("#contextCountInput"),
+  contextTokenBudget: $("#contextTokenBudgetInput"),
   unlimitedContext: $("#unlimitedContextInput"),
   maxTokens: $("#maxTokensInput"),
   stream: $("#streamInput"),
@@ -182,16 +197,21 @@ const els = {
   workspaceFileGroups: $("#workspaceFileGroups"),
   layoutPresetName: $("#layoutPresetName"),
   customLayoutPresets: $("#customLayoutPresets"),
+  creatorsList: $("#creatorsList"),
   editDialog: $("#editDialog"),
   editTitle: $("#editTitle"),
   editText: $("#editText"),
   saveEdit: $("#saveEditButton"),
   saveSendEdit: $("#saveSendEditButton"),
   assistantImportFile: $("#assistantImportFile"),
+  sessionImportFile: $("#sessionImportFile"),
+  creatorImportFile: $("#creatorImportFile"),
+  globalBackupImportFile: $("#globalBackupImportFile"),
   assistantConfigDialog: $("#assistantConfigDialog"),
   assistantConfigTitle: $("#assistantConfigTitle"),
   assistantSourceLabel: $("#assistantSourceLabel"),
   assistantNameInput: $("#assistantNameInput"),
+  assistantModelFold: $("#assistantModelFold"),
   assistantProviderSelect: $("#assistantProviderSelect"),
   assistantApiOverrideEnabledInput: $("#assistantApiOverrideEnabledInput"),
   assistantApiOverrideFold: $("#assistantApiOverrideFold"),
@@ -202,6 +222,7 @@ const els = {
   assistantModelStatus: $("#assistantModelStatus"),
   assistantNetworkEnabledInput: $("#assistantNetworkEnabledInput"),
   assistantMaxTokensInput: $("#assistantMaxTokensInput"),
+  assistantContextTokenBudgetInput: $("#assistantContextTokenBudgetInput"),
   assistantTemperatureInput: $("#assistantTemperatureInput"),
   assistantTemperatureLabel: $("#assistantTemperatureLabel"),
   assistantIncludeManuscriptInput: $("#assistantIncludeManuscriptInput"),
@@ -215,8 +236,11 @@ const els = {
   assistantIncludeDiscussionInput: $("#assistantIncludeDiscussionInput"),
   assistantExcerptMaxInput: $("#assistantExcerptMaxInput"),
   assistantDiscussionCountInput: $("#assistantDiscussionCountInput"),
+  assistantActivationFold: $("#assistantActivationFold"),
+  sealedActivationBar: $("#sealedActivationBar"),
   assistantActivationStatus: $("#assistantActivationStatus"),
   assistantActivationProfileInput: $("#assistantActivationProfileInput"),
+  assistantParticipationFold: $("#assistantParticipationFold"),
   assistantParticipationList: $("#assistantParticipationList"),
   assistantPrivateChatList: $("#assistantPrivateChatList"),
   assistantPrivateFold: $("#assistantPrivateFold"),
@@ -228,7 +252,13 @@ const els = {
   assistantAvatarPreview: $("#assistantAvatarPreview"),
   chooseAssistantAvatar: $("#chooseAssistantAvatarButton"),
   clearAssistantAvatar: $("#clearAssistantAvatarButton"),
+  assistantMaterialsFold: $("#assistantMaterialsFold"),
+  assistantPromptFold: $("#assistantPromptFold"),
+  sealedPromptBar: $("#sealedPromptBar"),
   assistantPromptInput: $("#assistantPromptInput"),
+  sealedCreatorOverlay: $("#sealedCreatorOverlay"),
+  sealedCreatorList: $("#sealedCreatorList"),
+  closeSealedCreatorOverlay: $("#closeSealedCreatorOverlayButton"),
   resetAssistantConfig: $("#resetAssistantConfigButton"),
   deleteAssistant: $("#deleteAssistantButton"),
   importAssistant: $("#importAssistantButton"),
@@ -257,10 +287,21 @@ let mentionPickerQuery = "";
 let mentionPickerRange = null;
 let assistantActivating = false;
 let assistantImportMode = "single";
+let pendingCustomAssistantDraftId = null;
+let sealedCreatorTapCount = 0;
+let sealedCreatorTapTimer = null;
+let sealedCreatorOverlayOpen = false;
+let sealedCreatorHistoryOpen = false;
+let closingSealedCreatorFromButton = false;
+let keepRoundtableMembersOnDialogBack = false;
 let modelPickerOpen = false;
 let settingsModelPickerOpen = false;
 let assistantModelPickerOpen = false;
 let activeSettingsPage = "home";
+let activeCreatorDetailId = null;
+let activeCreatorRecordId = null;
+let activeCreatorMemoryId = null;
+const creatorMemoryLookupPreviews = new Map();
 let panelHistoryOpen = false;
 let transientHistoryOpen = false;
 let dialogHistoryOpen = false;
@@ -316,12 +357,176 @@ const aiClient = createAiClient({
   getAbortSignal: () => abortController?.signal,
 });
 registerBridgeHooks(bridgeCallbacks, bridgeStreamCallbacks);
+const assistantController = createAssistantController({
+  clean,
+  uid,
+  sessionSettings,
+  roundtableState,
+  getCouncilParticipationRecords: (assistantId, options) => getCouncilParticipationRecords(state.councilParticipationRecords, assistantId, options),
+  formatTime,
+});
+const workspaceController = createWorkspaceController({
+  getEls: () => els,
+  activeSession,
+  clean,
+  escapeHtml,
+  formatBytes,
+  formatTime,
+  touchSession,
+  persistState: () => persistState(state),
+  showToast,
+  humanizeError,
+  uid,
+});
+const writerController = createWriterController({
+  activeSession,
+  activePath,
+  sessionNovel,
+  sessionSettings,
+  getMessageContent,
+  getCreatorIdentity,
+  getPrimaryCreatorId,
+  getPrimaryCreatorRuntimeConfig,
+  callCompressionModel,
+  getRoundAssistant,
+  addRoundtableMessage,
+  callRoundtableAssistant,
+  cleanRoundtableAssistantOutput,
+  renderStreamingRoundtableMessage,
+  cancelStreamDomUpdate,
+  updateRoundtableMessageContent,
+  syncWriterMessageToNovel,
+  touchSession,
+  persistState: () => persistState(state),
+  render,
+  showToast,
+  humanizeError,
+  clean,
+  simpleHash,
+});
+const roundtableController = createRoundtableController({
+  getState: () => state,
+  activeSession,
+  activePath,
+  roundtableState,
+  sessionNovel,
+  sessionSettings,
+  apiSettings,
+  apiForProvider,
+  getRoundAssistantFromSession,
+  getRoundAssistantBase,
+  getPrimaryCreatorId,
+  getRoundAssistantBases,
+  getCreatorIdentity,
+  getMessageContent,
+  getMainSystemPrompt,
+  buildNovelMemoryFromSession,
+  getCreatorMemorySnippets,
+  getRoundtableMentionableAssistants,
+  getRoundtableManuscript,
+  getNovelSourceText,
+  getAssistantContextTokenThreshold,
+  getRoundAssistant,
+  moveRoundtableMentionsAfter,
+  parseRoundtableMentions,
+  buildAssistantMentionInstruction,
+  addAssistantRoundtableReply,
+  cleanRoundtableAssistantOutput,
+  uniqueRoundAssistantName,
+  saveCreatorIdentity,
+  normalizeAssistantPrivateMessages: assistantController.normalizePrivateMessages,
+  rememberCreatorRoundtableJoin,
+  isSealedRoundtableCreatorId,
+  assistantConfigHasSavedIdentity,
+  callCompressionModel,
+  ensureAutoCompressNovelMemory,
+  callOpenAITextStreamWithSettings,
+  callOpenAITextWithSettings,
+  streamAssistantRoundtableReply,
+  addRoundtableFailureMessage,
+  setRoundtableActiveSpeaker,
+  getRoundtableActiveSpeaker: () => roundtableActiveSpeakerId,
+  syncPrimaryCreatorIntoRoundtable,
+  refreshWriterStyleCacheWithAi,
+  closePanels,
+  render,
+  resizeInput,
+  touchSession,
+  persistState: () => persistState(state),
+  showToast,
+  pushTransientHistory,
+  getTransientHistoryOpen: () => transientHistoryOpen,
+  setTransientHistoryOpen: (value) => {
+    transientHistoryOpen = Boolean(value);
+  },
+  resetActiveMenus: () => {
+    activeMenuNodeId = null;
+    activeRoundtableMessageId = null;
+  },
+  clean,
+  titleForSession,
+  uid,
+  humanizeError,
+});
+const importExportController = createImportExportController({
+  getEls: () => els,
+  getState: () => state,
+  replaceState: (nextState) => {
+    state = nextState;
+    activeMenuNodeId = null;
+    activeRoundtableMessageId = null;
+    activeCreatorDetailId = null;
+    activeCreatorRecordId = null;
+    activeCreatorMemoryId = null;
+    creatorMemoryLookupPreviews.clear();
+  },
+  hydrateState: hydrate,
+  activeSession,
+  activePath,
+  sessionNovel,
+  sessionAppearance,
+  sessionSettings,
+  roundtableState,
+  writerState,
+  getPrimaryCreatorId,
+  getCreatorIdentity,
+  saveCreatorIdentity,
+  titleForSession,
+  touchSession,
+  getMessageContent,
+  clean,
+  uid,
+  downloadText,
+  closePanels,
+  render,
+  persistState: () => persistState(state),
+  showToast,
+  humanizeError,
+});
+const creatorController = createCreatorController({
+  getState: () => state,
+  getCreatorIdentity,
+  getPrimaryCreatorId,
+  creatorsState,
+  saveCreatorIdentity,
+  ensureSessionCreator,
+  roundtableState,
+  switchSession,
+  closePanels,
+  render,
+  persistState: () => persistState(state),
+  touchSession,
+  clean,
+  showToast,
+  askDeleteChoice: askThreeWayDelete,
+});
 
 const settingsPageMeta = {
   home: { title: "设置", subtitle: "选择要调整的模块" },
   model: { title: "模型配置", subtitle: "默认 API、主线模型和生成参数" },
   appearance: { title: "本会话外观", subtitle: "只影响当前会话" },
   layout: { title: "排版调试", subtitle: "数值微调" },
+  creators: { title: "创作者们", subtitle: "身份、记忆和所在圆桌" },
 };
 
 const layoutPresets = {
@@ -400,6 +605,157 @@ function apiForAssistantConfig(config = {}) {
   };
 }
 
+function creatorsState() {
+  state.creators = state.creators && typeof state.creators === "object" ? state.creators : {};
+  return state.creators;
+}
+
+function getCreatorIdentity(id) {
+  const creators = creatorsState();
+  const creator = creators[id];
+  return creator ? hydrateCreatorIdentity(creator, {
+    modelConfig: {
+      providerId: apiSettings().currentProviderId,
+      baseUrl: apiSettings().baseUrl,
+      model: sessionSettings().model,
+      contextTokenBudget: apiSettings().contextTokenBudget,
+    },
+  }) : null;
+}
+
+function ensureSessionCreator(session = activeSession()) {
+  const creators = creatorsState();
+  if (session.creatorId && creators[session.creatorId]) return creators[session.creatorId];
+  const settings = sessionSettings(session);
+  const api = apiSettings();
+  const creator = createCreatorIdentity({
+    name: clean(settings.model) || "主创",
+    prompt: clean(settings.systemPrompt),
+    modelConfig: {
+      providerId: api.currentProviderId,
+      baseUrl: api.baseUrl,
+      model: settings.model,
+      temperature: settings.temperature,
+      maxTokens: settings.maxTokens,
+      contextTokenBudget: api.contextTokenBudget,
+    },
+    privateSessionId: session.id,
+  });
+  creators[creator.id] = creator;
+  session.creatorId = creator.id;
+  return creator;
+}
+
+function saveCreatorIdentity(creator) {
+  if (!creator?.id) return null;
+  creatorsState()[creator.id] = hydrateCreatorIdentity(creator);
+  return creatorsState()[creator.id];
+}
+
+function creatorMemoryKey(memory) {
+  return [
+    clean(memory?.source),
+    clean(memory?.sourceSessionId),
+    clean(memory?.sourceCreatorId),
+    clean(memory?.text).slice(0, 120),
+  ].join("::");
+}
+
+function migrateImportedPrimaryCloneCreators() {
+  const creators = creatorsState();
+  let changed = false;
+  state.sessions.forEach((session) => {
+    const rt = roundtableState(session);
+    Object.entries(rt.assistantConfigs || {}).forEach(([cloneId, config]) => {
+      if (!config?.importedFrom?.clone) return;
+      const sourceCreatorId = clean(config.importedFrom.sourceCreatorId || config.importedFrom.memberId);
+      if (!sourceCreatorId || sourceCreatorId === cloneId || !creators[sourceCreatorId]) return;
+      const sourceCreator = hydrateCreatorIdentity(creators[sourceCreatorId]);
+      const cloneCreator = creators[cloneId] ? hydrateCreatorIdentity(creators[cloneId]) : null;
+      const sourceMemories = normalizeAssistantMemories(sourceCreator.memory?.compressedSnapshots);
+      const known = new Set(sourceMemories.map(creatorMemoryKey));
+      const cloneMemories = normalizeAssistantMemories(cloneCreator?.memory?.compressedSnapshots);
+      cloneMemories.forEach((memory) => {
+        const key = creatorMemoryKey(memory);
+        if (known.has(key)) return;
+        known.add(key);
+        sourceMemories.push({
+          ...memory,
+          sourceCreatorId,
+        });
+      });
+      saveCreatorIdentity({
+        ...sourceCreator,
+        memory: {
+          ...(sourceCreator.memory || {}),
+          compressedSnapshots: sourceMemories,
+        },
+        updatedAt: Date.now(),
+      });
+      const existingSourceConfig = rt.assistantConfigs[sourceCreatorId] || {};
+      rt.assistantConfigs[sourceCreatorId] = {
+        ...config,
+        ...existingSourceConfig,
+        name: clean(sourceCreator.name) || clean(config.name),
+        memories: normalizeAssistantMemories(existingSourceConfig.memories),
+        importedFrom: {
+          ...config.importedFrom,
+          sourceCreatorId,
+          clone: true,
+        },
+      };
+      delete rt.assistantConfigs[cloneId];
+      const primaryId = getPrimaryCreatorId(session);
+      rt.selectedIds = (rt.selectedIds || [])
+        .map((id) => id === cloneId ? sourceCreatorId : id)
+        .filter((id, index, list) => id && id !== primaryId && list.indexOf(id) === index);
+      rt.speakerOrderIds = (rt.speakerOrderIds || [])
+        .map((id) => id === cloneId ? sourceCreatorId : id)
+        .filter((id, index, list) => id && id !== primaryId && list.indexOf(id) === index);
+      rt.messages = (rt.messages || []).map((message) => (
+        message?.speakerId === cloneId
+          ? { ...message, speakerId: sourceCreatorId, speakerName: clean(sourceCreator.name) || message.speakerName }
+          : message
+      ));
+      state.creatorParticipationRecords = (state.creatorParticipationRecords || []).map((record) => (
+        record?.creatorId === cloneId
+          ? { ...record, creatorId: sourceCreatorId, displayName: clean(sourceCreator.name) || record.displayName }
+          : record
+      ));
+      state.councilParticipationRecords = (state.councilParticipationRecords || []).map((record) => (
+        record?.councilId === cloneId
+          ? { ...record, councilId: sourceCreatorId, speakerName: clean(sourceCreator.name) || record.speakerName }
+          : record
+      ));
+      const cloneOwnsSession = state.sessions.some((item) => item.creatorId === cloneId);
+      if (!cloneOwnsSession) delete creators[cloneId];
+      changed = true;
+    });
+  });
+  return changed;
+}
+
+function syncSealedCreatorTemplatePrompts() {
+  const creators = creatorsState();
+  let changed = false;
+  Object.values(creators).forEach((creator) => {
+    const templateId = clean(creator?.sourceTemplateId);
+    if (!templateId) return;
+    const base = getSealedRoundtableCreatorBase(templateId);
+    if (!base) return;
+    const nextPrompt = clean(base.prompt);
+    if (!nextPrompt || clean(creator.prompt) === nextPrompt) return;
+    creators[creator.id] = hydrateCreatorIdentity({
+      ...creator,
+      prompt: nextPrompt,
+      sealedTemplateCode: base.id === "sealed-t" ? "T" : base.id === "sealed-b" ? "B" : clean(creator.sealedTemplateCode),
+      updatedAt: Date.now(),
+    });
+    changed = true;
+  });
+  return changed;
+}
+
 function sessionSettings(session = activeSession()) {
   session.settings = hydrateSessionSettings(session.settings);
   return session.settings;
@@ -425,12 +781,7 @@ function sessionNovel(session = activeSession()) {
 }
 
 function sessionWorkspace(session = activeSession()) {
-  session.workspace = session.workspace && typeof session.workspace === "object" ? session.workspace : {};
-  session.workspace.path = clean(session.workspace.path || "");
-  session.workspace.files = Array.isArray(session.workspace.files)
-    ? session.workspace.files.filter((file) => file && clean(file.name))
-    : [];
-  return session.workspace;
+  return workspaceController.sessionWorkspace(session);
 }
 
 function roundtableState(session = activeSession()) {
@@ -447,6 +798,17 @@ function getRoundAssistantBases(session = activeSession()) {
 }
 
 function getRoundAssistantBase(id, session = activeSession()) {
+  const creator = getCreatorIdentity(id);
+  if (creator) {
+    const isPrimary = id === getPrimaryCreatorId(session);
+    return {
+      id: creator.id,
+      name: creator.name || (isPrimary ? "主创" : "议员"),
+      role: isPrimary ? "主创" : "议员",
+      prompt: creator.prompt || "",
+      avatarUrl: creator.avatarDataUrl || "",
+    };
+  }
   return getRoundAssistantBaseFromState(id, session?.roundtable);
 }
 
@@ -459,19 +821,61 @@ function isCustomRoundAssistant(id) {
 }
 
 function getRoundAssistant(id) {
+  const creator = getCreatorIdentity(id);
+  if (creator) {
+    const api = apiForProvider(creator.modelConfig?.providerId);
+    const rt = roundtableState();
+    const config = rt.assistantConfigs?.[id] || {};
+    const assistant = creatorToAssistant(creator, api, sessionSettings(), normalizeRoundtableContextOptions({
+      ...rt.contextOptions,
+      ...(config.contextOptions || {}),
+    }));
+    if (assistant) {
+      assistant.networkEnabled = Boolean(config.networkEnabled);
+      assistant.activationProfile = clean(config.activationProfile) || assistant.activationProfile;
+      assistant.memories = [
+        ...normalizeAssistantMemories(assistant.memories),
+        ...normalizeAssistantMemories(config.memories),
+      ];
+    }
+    if (assistant && id !== getPrimaryCreatorId()) assistant.role = "议员";
+    return assistant;
+  }
   const base = getRoundAssistantBase(id);
   const rt = roundtableState();
   const config = rt.assistantConfigs[id] || {};
-  return resolveRoundAssistant({
+  const assistant = resolveRoundAssistant({
     base,
     config,
     api: apiForAssistantConfig(config),
     sessionSettings: sessionSettings(),
     roundtableContextOptions: rt.contextOptions,
   });
+  if (assistant?.id === "writer") return applyWriterInheritance(assistant);
+  return assistant;
 }
 
 function getRoundAssistantFromSession(session, id) {
+  const creator = getCreatorIdentity(id);
+  if (creator) {
+    const api = apiForProvider(creator.modelConfig?.providerId);
+    const rt = roundtableState(session);
+    const config = rt.assistantConfigs?.[id] || {};
+    const assistant = creatorToAssistant(creator, api, sessionSettings(session), normalizeRoundtableContextOptions({
+      ...rt.contextOptions,
+      ...(config.contextOptions || {}),
+    }));
+    if (assistant) {
+      assistant.networkEnabled = Boolean(config.networkEnabled);
+      assistant.activationProfile = clean(config.activationProfile) || assistant.activationProfile;
+      assistant.memories = [
+        ...normalizeAssistantMemories(assistant.memories),
+        ...normalizeAssistantMemories(config.memories),
+      ];
+    }
+    if (assistant && id !== getPrimaryCreatorId(session)) assistant.role = "议员";
+    return assistant;
+  }
   const rt = roundtableState(session);
   const base = getRoundAssistantBase(id, session);
   const config = rt.assistantConfigs[id] || {};
@@ -489,6 +893,28 @@ function getRoundAssistantConfig(id) {
   return createRoundAssistantConfigView(assistant, sessionSettings().temperature);
 }
 
+function isLegacyDefaultCreatorName(name) {
+  return ["戏剧型主创", "规则型主创", "人物型主创", "怀疑型主创", "表达型主创", "主创"].includes(clean(name));
+}
+
+function getCreatorFallbackName() {
+  return clean(sessionSettings().model) || "主创";
+}
+
+function isAutoPrimaryCreatorName(creator, options = {}) {
+  const name = clean(typeof creator === "string" ? creator : creator?.name);
+  if (!name || isLegacyDefaultCreatorName(name)) return true;
+  const autoNames = [
+    clean(sessionSettings(options.session || activeSession()).model),
+    clean(creator?.modelConfig?.model),
+    clean(options.previousModel),
+    clean(options.nextModel),
+    ...SEALED_ROUNDTABLE_CREATORS.flatMap((base) => [base.name, base.sealedTemplateCode, base.id]),
+    ...(options.extraNames || []),
+  ].map(clean).filter(Boolean);
+  return autoNames.includes(name);
+}
+
 function assistantAliases(assistant) {
   const base = getRoundAssistantBase(assistant.id) || assistant;
   return getRoundAssistantAliases(assistant, base);
@@ -496,6 +922,36 @@ function assistantAliases(assistant) {
 
 function cleanRoundtableAssistantOutput(assistant, content) {
   return stripRoundtableSpeakerPrefix(content, assistant?.name, assistant ? assistantAliases(assistant) : []);
+}
+
+function simpleHash(text) {
+  const source = clean(text);
+  let hash = 2166136261;
+  for (let index = 0; index < source.length; index += 1) {
+    hash ^= source.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return String(hash >>> 0);
+}
+
+function writerState(session = activeSession()) {
+  return writerController.writerState(session);
+}
+
+function getWriterStyleSource(session = activeSession()) {
+  return writerController.getWriterStyleSource(session);
+}
+
+function refreshWriterStyleCache(options = {}) {
+  return writerController.refreshWriterStyleCache(options);
+}
+
+async function refreshWriterStyleCacheWithAi(options = {}) {
+  return writerController.refreshWriterStyleCacheWithAi(options);
+}
+
+function applyWriterInheritance(writer) {
+  return writerController.applyWriterInheritance(writer);
 }
 
 function rememberCouncilParticipation(assistant, message, instruction = "") {
@@ -510,26 +966,55 @@ function rememberCouncilParticipation(assistant, message, instruction = "") {
     roleState: getRoundtableRoleState(roundtableState().selectedIds, assistant.id) || "participant",
   });
   state.councilParticipationRecords = result.records;
+  const creatorResult = appendCreatorParticipationRecord(state.creatorParticipationRecords, {
+    creatorId: assistant.id,
+    sessionId: activeSession()?.id,
+    roundtableMessageId: message.id,
+    topic: clean(roundtableState().contextOptions?.roundTopic || instruction),
+    displayName: assistant.name,
+    summary: message.content,
+    content: message.content,
+    roleState: getRoundtableRoleState(roundtableState().selectedIds, assistant.id) || "participant",
+  });
+  state.creatorParticipationRecords = creatorResult.records;
 }
 
-function normalizeAssistantPrivateMessages(messages = []) {
-  return Array.isArray(messages)
-    ? messages
-      .filter((message) => message && ["user", "assistant"].includes(message.role) && clean(message.content))
-      .map((message) => ({
-        id: clean(message.id) || uid("private"),
-        role: message.role,
-        content: clean(message.content),
-        createdAt: Number(message.createdAt) || Date.now(),
-      }))
-      .slice(-40)
-    : [];
+function rememberCreatorRoundtableJoin(creatorId, details = {}) {
+  const session = activeSession();
+  const creator = getCreatorIdentity(creatorId);
+  if (!session || !creator || creatorId === getPrimaryCreatorId(session)) return null;
+  const topic = clean(roundtableState(session).contextOptions?.roundTopic) || "入席记录";
+  const summary = clean(details.summary) || "已入席当前圆桌";
+  const content = clean(details.privateContent) || "你被邀请来到了一个圆桌会议";
+  const result = appendCreatorParticipationRecord(state.creatorParticipationRecords, {
+    creatorId,
+    sessionId: session.id,
+    displayName: creator.name,
+    topic,
+    summary,
+    content,
+    roleState: "participant",
+  });
+  state.creatorParticipationRecords = result.records;
+  return result.record;
 }
 
 function getRoundtableMentionableAssistants(options = {}) {
   const rt = roundtableState();
   const allowWriter = options.allowWriter !== false;
-  const assistants = new Map(getRoundAssistants().map((assistant) => [assistant.id, assistant]));
+  const primary = getRoundAssistant(getPrimaryCreatorId());
+  const assistants = new Map([
+    ...(primary ? [primary] : []),
+    ...getRoundAssistants(),
+    ...(rt.selectedIds || []).map((id) => getRoundAssistant(id)).filter(Boolean),
+  ].map((assistant) => [assistant.id, assistant]));
+  const primaryItem = primary
+    ? [{
+      ...primary,
+      role: "主创",
+      roundtableRoleState: "host",
+    }]
+    : [];
   const selected = (rt.selectedIds || [])
     .map((id) => assistants.get(id))
     .filter(Boolean)
@@ -538,7 +1023,8 @@ function getRoundtableMentionableAssistants(options = {}) {
       roundtableRoleState: getRoundtableRoleState(rt.selectedIds, assistant.id),
     }));
   const writer = assistants.get("writer");
-  return allowWriter && writer ? [...selected, writer] : selected;
+  const items = [...primaryItem, ...selected];
+  return allowWriter && writer ? [...items, writer] : items;
 }
 
 function getRoundtableMentionPickerItems() {
@@ -631,6 +1117,23 @@ function activePath(session = activeSession()) {
   return getActivePath(session);
 }
 
+function activateBranchToNode(nodeId, session = activeSession()) {
+  const chain = [];
+  const seen = new Set();
+  let node = getNode(nodeId, session);
+  while (node?.parentId && !seen.has(node.id)) {
+    seen.add(node.id);
+    chain.push(node);
+    node = getNode(node.parentId, session);
+  }
+  for (let index = chain.length - 1; index >= 0; index -= 1) {
+    const child = chain[index];
+    const parent = getNode(child.parentId, session);
+    if (parent?.children?.includes(child.id)) parent.activeChildId = child.id;
+  }
+  return Boolean(chain.length);
+}
+
 function getMessageContent(node) {
   if (!node) return "";
   if (node.role === "assistant") return getAssistantVersion(node)?.content || "";
@@ -688,20 +1191,186 @@ function messagesToPlainText(messages = []) {
   return messages.map((message) => `${message.role}: ${messageContentText(message.content)}`).join("\n\n");
 }
 
+function buildWorkspaceMemory(session = activeSession()) {
+  return workspaceController.buildWorkspaceMemory(session);
+}
+
+function memoryQueryLooksNeeded(text = "") {
+  const source = clean(text);
+  if (!source) return false;
+  return /记得|记忆|以前|之前|上次|刚才|延续|继续|接着|参会|圆桌|在哪|说过|提过|忘|回忆|历史|旧会话|原会话/.test(source);
+}
+
+function memoryQueryTokens(text = "") {
+  const source = clean(text).toLowerCase();
+  const tokens = new Set();
+  (source.match(/[a-z0-9_\-]{2,}/g) || []).forEach((token) => tokens.add(token));
+  (source.match(/[\u4e00-\u9fff]{2,}/g) || []).forEach((segment) => {
+    if (segment.length <= 12) tokens.add(segment);
+    for (let index = 0; index < Math.min(segment.length - 1, 24); index += 1) {
+      tokens.add(segment.slice(index, index + 2));
+    }
+  });
+  return Array.from(tokens).slice(0, 48);
+}
+
+function scoreMemoryText(text = "", tokens = [], sessionId = "") {
+  const source = clean(text).toLowerCase();
+  if (!source) return 0;
+  let score = 0;
+  tokens.forEach((token) => {
+    if (token && source.includes(token)) score += Math.min(8, token.length);
+  });
+  if (sessionId && source.includes(sessionId.toLowerCase())) score += 2;
+  return score;
+}
+
+function buildLinkedSourceSessionMemoryText(sourceSession, sourceCreatorId = "") {
+  if (!sourceSession) return "";
+  const sourceCreator = getCreatorIdentity(sourceCreatorId || getPrimaryCreatorId(sourceSession));
+  const novel = sessionNovel(sourceSession);
+  const recentChat = activePath(sourceSession)
+    .filter((node) => ["user", "assistant"].includes(node.role))
+    .slice(-18)
+    .map((node) => `${node.role === "user" ? "用户" : sourceCreator?.name || "来源主创"}：${getMessageContent(node)}`)
+    .filter((line) => clean(line))
+    .join("\n")
+    .slice(-2600);
+  return [
+    `来源会话：${titleForSession(sourceSession)}`,
+    sourceCreator ? `来源主创：${sourceCreator.name || "主创"}` : "",
+    clean(sourceCreator?.memory?.displayName) ? `来源记忆库：${clean(sourceCreator.memory.displayName)}` : "",
+    buildNovelMemoryFromSession(novel) ? `【来源小说资料】\n${buildNovelMemoryFromSession(novel)}` : "",
+    recentChat ? `【来源最近有效对话】\n${recentChat}` : "",
+  ].filter(Boolean).join("\n\n");
+}
+
+function getLinkedSourceMemoryItems(creator) {
+  const snapshots = Array.isArray(creator?.memory?.compressedSnapshots)
+    ? creator.memory.compressedSnapshots
+    : [];
+  const links = new Map();
+  snapshots.forEach((item) => {
+    const sourceSessionId = clean(item?.sourceSessionId);
+    if (!sourceSessionId) return;
+    links.set(sourceSessionId, clean(item?.sourceCreatorId));
+  });
+  return Array.from(links.entries())
+    .map(([sourceSessionId, sourceCreatorId]) => {
+      const sourceSession = state.sessions.find((session) => session.id === sourceSessionId);
+      const text = buildLinkedSourceSessionMemoryText(sourceSession, sourceCreatorId);
+      return text ? {
+        type: "来源会话实时记忆",
+        text,
+        createdAt: Number(sourceSession?.updatedAt) || Date.now(),
+        sourceSessionId,
+      } : null;
+    })
+    .filter(Boolean);
+}
+
+function getCreatorMemorySnippets(creatorId, query = "", options = {}) {
+  const creator = getCreatorIdentity(creatorId);
+  if (!creator) return [];
+  const limit = Math.max(1, Number(options.limit) || 8);
+  const includeRecent = Boolean(options.includeRecent);
+  const shouldQuery = includeRecent || memoryQueryLooksNeeded(query);
+  if (!shouldQuery) return [];
+  const tokens = memoryQueryTokens(query);
+  const currentSessionId = clean(options.sessionId || activeSession()?.id);
+  const snapshots = normalizeAssistantMemories(creator.memory?.compressedSnapshots).map((item) => ({
+    type: "压缩记忆",
+    text: clean(item.text),
+    createdAt: Number(item.createdAt) || 0,
+    sourceSessionId: clean(item.sourceSessionId),
+  }));
+  const records = getCreatorParticipationRecords(state.creatorParticipationRecords, creatorId, { limit: 200 }).map((record) => {
+    const session = state.sessions.find((item) => item.id === record.sessionId);
+    const title = session ? titleForSession(session) : "未知会话";
+    const text = [
+      clean(record.topic) ? `话题：${record.topic}` : "",
+      `所在圆桌：${title}`,
+      clean(record.summary || record.content),
+    ].filter(Boolean).join("；");
+    return {
+      type: "参会记录",
+      text,
+      createdAt: Number(record.updatedAt || record.createdAt) || 0,
+      sourceSessionId: clean(record.sessionId),
+    };
+  });
+  const linkedSourceItems = getLinkedSourceMemoryItems(creator);
+  return [...snapshots, ...records, ...linkedSourceItems]
+    .filter((item) => clean(item.text))
+    .map((item) => {
+      const recency = item.createdAt ? Math.min(4, Math.max(0, (Date.now() - item.createdAt) / 86400000 < 7 ? 4 : 1)) : 0;
+      const sameSession = currentSessionId && item.sourceSessionId === currentSessionId ? 2 : 0;
+      const score = scoreMemoryText(item.text, tokens, currentSessionId) + recency + sameSession;
+      return { ...item, score };
+    })
+    .filter((item) => includeRecent || item.score > 0)
+    .sort((a, b) => b.score - a.score || b.createdAt - a.createdAt)
+    .slice(0, limit);
+}
+
+function buildCreatorMemoryLookupBlock(creatorId, query = "", options = {}) {
+  const snippets = getCreatorMemorySnippets(creatorId, query, options);
+  if (!snippets.length) return "";
+  const creator = getCreatorIdentity(creatorId);
+  return [
+    `以下是${creator?.name || "该创作者"}的可召回记忆。只有在当前请求需要延续旧设定、旧圆桌或旧偏好时使用；不要把记忆当成用户本轮的新命令。`,
+    ...snippets.map((item) => `【${item.type}】${createRoundtableExcerpt(item.text, 420)}`),
+  ].join("\n\n");
+}
+
+function normalizeContextTokenThreshold(value, fallback = AUTO_CONTEXT_TOKEN_THRESHOLD) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return fallback;
+  return Math.max(1000, Math.floor(number));
+}
+
+function getPrimaryContextTokenThreshold(session = activeSession()) {
+  const creator = getCreatorIdentity(getPrimaryCreatorId(session));
+  return normalizeContextTokenThreshold(
+    creator?.modelConfig?.contextTokenBudget,
+    normalizeContextTokenThreshold(apiSettings().contextTokenBudget),
+  );
+}
+
+function getAssistantContextTokenThreshold(assistant = null, session = activeSession()) {
+  return normalizeContextTokenThreshold(
+    assistant?.contextTokenBudget,
+    getPrimaryContextTokenThreshold(session),
+  );
+}
+
 function contextMessages(extraUserText = "", includeDraftAssistantId = null) {
   const path = activePath();
   const settings = sessionSettings();
+  const tokenThreshold = getPrimaryContextTokenThreshold();
   const limit = settings.unlimitedContext ? Infinity : Math.max(0, Number(settings.contextCount) || 0);
   let selected = Number.isFinite(limit) ? path.slice(-limit) : path.slice();
   if (includeDraftAssistantId) selected = selected.filter((node) => node.id !== includeDraftAssistantId);
   const buildMessagesFromSelection = (selection, compressed = false) => {
     const messages = [];
-    if (clean(settings.systemPrompt)) {
-      messages.push({ role: "system", content: settings.systemPrompt });
+    const systemPrompt = getMainSystemPrompt();
+    if (clean(systemPrompt)) {
+      messages.push({ role: "system", content: systemPrompt });
     }
     const novelMemory = buildNovelMemory();
     if (novelMemory) {
       messages.push({ role: "system", content: novelMemory });
+    }
+    const workspaceMemory = buildWorkspaceMemory();
+    if (workspaceMemory) {
+      messages.push({ role: "system", content: workspaceMemory });
+    }
+    const creatorMemory = buildCreatorMemoryLookupBlock(getPrimaryCreatorId(), extraUserText, {
+      limit: 6,
+      sessionId: activeSession()?.id,
+    });
+    if (creatorMemory) {
+      messages.push({ role: "system", content: creatorMemory });
     }
     if (compressed) {
       messages.push({
@@ -719,7 +1388,7 @@ function contextMessages(extraUserText = "", includeDraftAssistantId = null) {
   let messages = buildMessagesFromSelection(selected);
   const estimated = estimateTokens(messagesToPlainText(messages));
   const novelMemory = buildNovelMemory();
-  if (estimated > AUTO_CONTEXT_TOKEN_THRESHOLD && novelMemory && selected.length > COMPRESSED_CONTEXT_TAIL_COUNT) {
+  if (estimated > tokenThreshold && novelMemory && selected.length > COMPRESSED_CONTEXT_TAIL_COUNT) {
     selected = selected.slice(-COMPRESSED_CONTEXT_TAIL_COUNT);
     messages = buildMessagesFromSelection(selected, true);
   }
@@ -742,8 +1411,9 @@ function estimateFullContextTokens(extraUserText = "", includeDraftAssistantId =
   let selected = Number.isFinite(limit) ? path.slice(-limit) : path.slice();
   if (includeDraftAssistantId) selected = selected.filter((node) => node.id !== includeDraftAssistantId);
   const parts = [
-    settings.systemPrompt,
+    getMainSystemPrompt(),
     buildNovelMemory(),
+    buildWorkspaceMemory(),
     ...selected.map(renderMessagePlainContent),
     extraUserText,
   ].filter((part) => clean(part));
@@ -778,7 +1448,8 @@ function autoCompressionSourceSize() {
 async function ensureAutoCompressNovelMemory(extraUserText = "", includeDraftAssistantId = null) {
   syncNovelFromFields();
   const fullTokens = estimateFullContextTokens(extraUserText, includeDraftAssistantId);
-  if (fullTokens <= AUTO_CONTEXT_TOKEN_THRESHOLD) return false;
+  const tokenThreshold = getPrimaryContextTokenThreshold();
+  if (fullTokens <= tokenThreshold) return false;
   const novel = sessionNovel();
   const sourceSize = autoCompressionSourceSize();
   if (novel.autoCompression && Math.abs((Number(novel.autoCompression.sourceSize) || 0) - sourceSize) < 2000) {
@@ -801,9 +1472,16 @@ async function ensureAutoCompressNovelMemory(extraUserText = "", includeDraftAss
     "要求：保留已经发生的剧情、人物关系与动机、世界规则、后续目标、未回收伏笔；删除闲聊和重复表达；用中文。",
     source,
   ].join("\n\n");
+  const runtime = roundtableGenerating
+    ? { api: apiSettings(), settings: sessionSettings() }
+    : getPrimaryCreatorRuntimeConfig();
   const text = await aiClient.generateText({
-    api: apiSettings(),
-    settings: { ...sessionSettings(), temperature: 0.25, maxTokens: Math.max(1600, Number(sessionSettings().maxTokens) || 0) },
+    api: runtime.api,
+    settings: {
+      ...runtime.settings,
+      temperature: 0.25,
+      maxTokens: Math.max(1600, Number(runtime.settings.maxTokens) || 0),
+    },
     messages: [{ role: "user", content: prompt }],
   });
   const data = extractJsonObject(text);
@@ -829,7 +1507,10 @@ function getNovelSourceText() {
     .slice(-12)
     .map((node) => `${node.role === "user" ? "用户" : "AI"}：${getMessageContent(node)}`)
     .join("\n\n");
-  return buildNovelSourceText(novel, chat);
+  return [
+    buildNovelSourceText(novel, chat),
+    buildWorkspaceMemory(),
+  ].filter(Boolean).join("\n\n");
 }
 
 function contextInfo(extraUserText = "") {
@@ -866,6 +1547,32 @@ function showToast(message) {
   toastTimer = window.setTimeout(() => {
     els.toast.hidden = true;
   }, 1800);
+}
+
+function askThreeWayDelete({ title = "确认删除", message = "", confirmLabel = "确定", keepLabel = "保留", cancelLabel = "取消" } = {}) {
+  return new Promise((resolve) => {
+    const dialog = document.createElement("dialog");
+    dialog.className = "delete-choice-dialog";
+    dialog.innerHTML = `
+      <form method="dialog" class="delete-choice-card">
+        <strong>${escapeHtml(title)}</strong>
+        <p>${escapeHtml(message)}</p>
+        <div class="delete-choice-actions">
+          <button value="cancel" type="submit">${escapeHtml(cancelLabel)}</button>
+          <button value="confirm" type="submit" class="danger-button">${escapeHtml(confirmLabel)}</button>
+          <button value="keep" type="submit" class="primary-button">${escapeHtml(keepLabel)}</button>
+        </div>
+      </form>
+    `;
+    const cleanup = () => {
+      const value = dialog.returnValue || "cancel";
+      dialog.remove();
+      resolve(value);
+    };
+    dialog.addEventListener("close", cleanup, { once: true });
+    document.body.append(dialog);
+    dialog.showModal();
+  });
 }
 
 function prefersReducedMotion() {
@@ -1001,6 +1708,9 @@ function handleDialogClosed() {
     return;
   }
   if (dialogHistoryOpen && history.state?.tbirdDialogOpen) {
+    if (roundtableState().membersOpen) {
+      keepRoundtableMembersOnDialogBack = true;
+    }
     dialogHistoryOpen = false;
     history.back();
     return;
@@ -1009,70 +1719,11 @@ function handleDialogClosed() {
 }
 
 function closeRoundtableMembers(options = {}) {
-  const rt = roundtableState();
-  const hadMembers = Boolean(rt.membersOpen);
-  rt.membersOpen = false;
-  rt.materialsOpen = false;
-  render();
-  if (options.fromHistory) {
-    transientHistoryOpen = false;
-    return;
-  }
-  if (hadMembers && transientHistoryOpen && history.state?.tbirdTransientOpen) {
-    transientHistoryOpen = false;
-    history.back();
-  }
+  roundtableController.closeRoundtableMembers(options);
 }
 
 function ensureWorkspaceUi() {
-  const topActions = document.querySelector(".top-actions");
-  topActions?.querySelector('button[data-command="open-search"]')?.remove();
-  topActions?.querySelector('button[data-command="open-history"]')?.remove();
-  if (topActions && !topActions.querySelector('[data-command="open-workspace"]')) {
-    const button = document.createElement("button");
-    button.className = "icon-button workspace-entry";
-    button.type = "button";
-    button.dataset.command = "open-workspace";
-    button.setAttribute("aria-label", "工作区");
-    button.textContent = "工";
-    topActions.insertBefore(button, topActions.firstChild);
-  }
-  if (!els.workspacePanel) {
-    const panel = document.createElement("aside");
-    panel.id = "workspacePanel";
-    panel.className = "side-panel right-panel workspace-panel";
-    panel.hidden = true;
-    panel.innerHTML = `
-      <div class="panel-head">
-        <div>
-          <strong>工作区</strong>
-          <span class="muted">当前会话的小说文件夹</span>
-        </div>
-        <button class="icon-button" type="button" data-command="close-panels">×</button>
-      </div>
-      <label class="field">
-        <span>文件夹路径</span>
-        <input id="workspacePathInput" type="text" placeholder="例如 D:\\Novel\\圆桌小说盒子" />
-      </label>
-      <p class="workspace-hint">先记录路径与已加入文件，并按类型自动归类；安卓文件夹扫描需要后续增加原生文件夹授权桥。</p>
-      <input id="workspaceFileInput" type="file" multiple hidden />
-      <div class="workspace-actions">
-        <button type="button" data-command="open-novel">正文库</button>
-        <button type="button" data-command="choose-workspace-files">加入文件</button>
-        <button type="button" data-command="clear-workspace-files">清空列表</button>
-      </div>
-      <div id="workspaceStats" class="workspace-stats"></div>
-      <div id="workspaceFileGroups" class="workspace-file-groups"></div>
-    `;
-    document.body.appendChild(panel);
-    els.workspacePanel = panel;
-    els.workspacePathInput = panel.querySelector("#workspacePathInput");
-    els.workspaceFileInput = panel.querySelector("#workspaceFileInput");
-    els.workspaceStats = panel.querySelector("#workspaceStats");
-    els.workspaceFileGroups = panel.querySelector("#workspaceFileGroups");
-    els.workspacePathInput?.addEventListener("input", updateWorkspacePath);
-    els.workspaceFileInput?.addEventListener("change", handleWorkspaceFilesSelected);
-  }
+  workspaceController.ensureWorkspaceUi();
 }
 
 function ensureModelPickerUi() {
@@ -1083,18 +1734,10 @@ function ensureModelPickerUi() {
     button.id = "modelSelectButton";
     button.className = "model-select-button";
     button.type = "button";
-    button.dataset.command = "toggle-model-picker";
-    button.setAttribute("aria-label", "选择模型");
+    button.dataset.command = "open-model-config";
+    button.setAttribute("aria-label", "模型配置");
     els.modelSelect.before(button);
     els.modelSelectButton = button;
-  }
-  if (!els.modelPickerPanel) {
-    const panel = document.createElement("div");
-    panel.id = "modelPickerPanel";
-    panel.className = "model-picker-panel";
-    panel.hidden = true;
-    els.composer.after(panel);
-    els.modelPickerPanel = panel;
   }
 }
 
@@ -1148,6 +1791,7 @@ function applySessionAppearance() {
 
 function render() {
   const session = activeSession();
+  ensureSessionCreator(session);
   const rt = roundtableState(session);
   ensureWorkspaceUi();
   ensureModelPickerUi();
@@ -1179,17 +1823,23 @@ function renderRoundtable() {
   }
   els.roundtableWorkspace.hidden = !rt.enabled;
   els.messages.hidden = rt.enabled;
+  if (rt.enabled) modelPickerOpen = false;
   if (rt.enabled) {
     els.input.placeholder = "圆桌发言...";
   } else {
     els.input.placeholder = "在这里输入你的问题...";
   }
   if (els.composerToolButton) {
-    els.composerToolButton.textContent = rt.enabled ? "参会人" : "主";
-    els.composerToolButton.setAttribute("aria-label", rt.enabled ? "参会人" : "主创设置");
-    els.composerToolButton.setAttribute("title", rt.enabled ? "参会人" : "主创设置");
+    const sealedLocked = Boolean(clean(getCreatorIdentity(getPrimaryCreatorId())?.sourceTemplateId));
+    const creator = getRoundAssistant(getPrimaryCreatorId());
+    const creatorName = clean(creator?.name) || "主创";
+    els.composerToolButton.hidden = false;
+    els.composerToolButton.textContent = rt.enabled ? "参会人" : (sealedLocked ? creatorName.slice(0, 1) : "主");
+    els.composerToolButton.setAttribute("aria-label", rt.enabled ? "参会人" : `${creatorName}设置`);
+    els.composerToolButton.setAttribute("title", rt.enabled ? "参会人" : `${creatorName}设置`);
     els.composerToolButton.classList.toggle("is-roundtable-members", rt.enabled);
     els.composerToolButton.classList.toggle("is-writer-settings", !rt.enabled);
+    els.composerToolButton.classList.toggle("is-sealed-creator", !rt.enabled && sealedLocked);
   }
   if (els.roundtableCycleButton) {
     els.roundtableCycleButton.hidden = !rt.enabled;
@@ -1252,7 +1902,7 @@ function renderRoundtableMentionPicker() {
   picker.innerHTML = items.length
     ? `<div class="roundtable-mention-picker-title">选择要 @ 的成员</div>${items.map((assistant) => {
         const profile = getRoundtableSpeakerProfile({ speakerId: assistant.id, speakerName: assistant.name });
-        const order = assistant.id === "writer" ? "写" : String((rt.selectedIds || []).indexOf(assistant.id) + 1 || "");
+        const order = assistant.id === getPrimaryCreatorId() ? "主" : assistant.id === "writer" ? "写" : String((rt.selectedIds || []).indexOf(assistant.id) + 1 || "");
         return `
           <button class="roundtable-mention-choice ${profile.tone}" type="button" data-command="insert-roundtable-mention" data-member-id="${escapeHtml(assistant.id)}">
             <span class="roundtable-mention-choice-index">${escapeHtml(order)}</span>
@@ -1261,13 +1911,48 @@ function renderRoundtableMentionPicker() {
           </button>
         `;
       }).join("")}`
-    : `<div class="roundtable-mention-empty">没有可 @ 的议员</div>`;
+    : `<div class="roundtable-mention-empty">没有可 @ 的成员</div>`;
 }
 
 function renderRoundtableMembers(rt) {
-  const order = new Map(rt.selectedIds.map((id, index) => [id, index + 1]));
-  const members = getRoundAssistantBases()
-    .filter((base) => base.id !== "writer")
+  const selectedIds = Array.isArray(rt.selectedIds) ? rt.selectedIds : [];
+  const speakerOrderIds = getRoundtableSpeakerOrderIds(rt);
+  const order = new Map(speakerOrderIds.map((id, index) => [id, index + 1]));
+  const primaryId = getPrimaryCreatorId();
+  const primary = getRoundAssistant(primaryId);
+  const primaryModel = primary?.model || sessionSettings().model || "未选模型";
+  const primaryCreator = getCreatorIdentity(primaryId);
+  const primaryTemplate = clean(primaryCreator?.sealedTemplateCode) || getCreatorSourceTemplateId(primaryId);
+  const primaryEnabled = rt.primaryInRound !== false;
+  const primarySeat = primary ? `
+    <div class="roundtable-member-option primary fixed ${roundtableActiveSpeakerId === primary.id ? "speaking" : ""}">
+      <button class="roundtable-member-main" type="button" data-command="roundtable-toggle-primary-speaking" data-member-id="${escapeHtml(primary.id)}">
+        <span>${primaryEnabled ? escapeHtml(order.get(primary.id) || "主") : "休"}</span>
+        <b>${escapeHtml(primary.name || "主创")}</b>
+        <small>${primaryEnabled ? "本轮发言" : "本轮旁听"} · ${escapeHtml(primaryModel)}${primaryTemplate ? ` · ${escapeHtml(primaryTemplate)}` : ""}</small>
+      </button>
+      <div class="roundtable-member-actions">
+        <button type="button" data-command="roundtable-edit-assistant" data-member-id="${escapeHtml(primary.id)}">改</button>
+      </div>
+    </div>
+  ` : "";
+  const selectedCreatorBases = (rt.selectedIds || [])
+    .map((id) => getCreatorIdentity(id))
+    .filter((creator) => creator && creator.id !== primaryId)
+    .map((creator) => ({
+      id: creator.id,
+      name: creator.name || "主创",
+      role: "议员",
+      prompt: creator.prompt || "",
+      avatarUrl: creator.avatarDataUrl || "",
+    }));
+  const baseItems = [
+    ...getRoundAssistantBases()
+    .filter((base) => base.id !== "writer" && base.id !== "plot" && !isSealedRoundtableCreatorId(base.id))
+    .filter((base) => !selectedCreatorBases.some((creator) => creator.id === base.id)),
+    ...selectedCreatorBases,
+  ];
+  const members = baseItems
     .map((base) => {
       const assistant = getRoundAssistant(base.id);
       const rawConfig = rt.assistantConfigs?.[assistant.id] || {};
@@ -1284,20 +1969,37 @@ function renderRoundtableMembers(rt) {
             <b>${escapeHtml(assistant.name)}</b>
             <small>${escapeHtml(roleLabel)} · ${escapeHtml(model)}${escapeHtml(sourceLabel)}</small>
           </button>
-          <button class="roundtable-member-edit" type="button" data-command="roundtable-edit-assistant" data-member-id="${assistant.id}">改</button>
+          <div class="roundtable-member-actions">
+            <button type="button" data-command="roundtable-edit-assistant" data-member-id="${escapeHtml(assistant.id)}">改</button>
+          </div>
         </div>
       `;
     })
     .join("");
-  return `<div class="roundtable-member-sheet-title"><span>参会人设置</span><small>${rt.selectedIds.length} 位已入席</small></div>
+  return `<div class="roundtable-member-sheet-title"><span>参会人设置</span><small>主创 + ${selectedIds.length} 位议员</small></div>
+    ${primarySeat}
     ${members}
     <button class="roundtable-material-toggle ${rt.materialsOpen ? "active" : ""}" type="button" data-command="toggle-roundtable-materials">材料</button>
     ${rt.materialsOpen ? renderRoundtableContextControls(rt) : ""}
     <div class="roundtable-member-tools">
-      <button class="roundtable-member-add" type="button" data-command="roundtable-add-assistant">+ 添加主创</button>
+      <button class="roundtable-member-add" type="button" data-command="roundtable-add-assistant">+ 添加议员</button>
       <button class="roundtable-member-add ${rt.sessionImportOpen ? "active" : ""}" type="button" data-command="toggle-roundtable-session-import">从会话拉人</button>
     </div>
     ${rt.sessionImportOpen ? renderRoundtableSessionImport() : ""}`;
+}
+
+function getRoundtableSpeakerOrderIds(rt = roundtableState()) {
+  const primaryId = getPrimaryCreatorId();
+  const selectedIds = Array.isArray(rt.selectedIds) ? rt.selectedIds : [];
+  const activeIds = [
+    ...(rt.primaryInRound === false ? [] : [primaryId]),
+    ...selectedIds,
+  ].filter(Boolean);
+  const storedIds = Array.isArray(rt.speakerOrderIds) ? rt.speakerOrderIds : [];
+  return [
+    ...storedIds.filter((id) => activeIds.includes(id)),
+    ...activeIds.filter((id) => !storedIds.includes(id)),
+  ];
 }
 
 function assistantConfigHasSavedIdentity(config = {}) {
@@ -1310,33 +2012,16 @@ function assistantConfigHasSavedIdentity(config = {}) {
     || clean(config.activationProfile)
     || clean(config.avatarDataUrl)
     || normalizeAssistantMemories(config.memories).length
-    || normalizeAssistantPrivateMessages(config.privateMessages).length
+    || assistantController.normalizePrivateMessages(config.privateMessages).length
   );
 }
 
 function getRoundtableSessionImportCandidates() {
-  const currentId = activeSession()?.id;
-  return state.sessions
-    .filter((session) => session && session.id !== currentId)
-    .flatMap((session) => {
-      const rt = roundtableState(session);
-      const customIds = new Set((rt.customAssistants || []).map((assistant) => assistant.id));
-      return getRoundAssistantBases(session)
-        .filter((base) => base.id !== "writer")
-        .filter((base) => customIds.has(base.id) || assistantConfigHasSavedIdentity(rt.assistantConfigs?.[base.id]))
-        .map((base) => {
-          const assistant = getRoundAssistantFromSession(session, base.id);
-          return assistant ? { session, assistant, isCustom: customIds.has(base.id) } : null;
-        })
-        .filter(Boolean);
-    });
+  return roundtableController.getSessionImportCandidates();
 }
 
 function isSessionMemberAlreadyImported(sessionId, memberId) {
-  return Object.values(roundtableState().assistantConfigs || {}).some((config) => (
-    config?.importedFrom?.sessionId === sessionId
-    && config?.importedFrom?.memberId === memberId
-  ));
+  return roundtableController.isSessionMemberAlreadyImported(sessionId, memberId);
 }
 
 function renderRoundtableSessionImport() {
@@ -1345,15 +2030,18 @@ function renderRoundtableSessionImport() {
     return `<section class="roundtable-session-import"><p class="muted">其他会话里还没有可拉入的议员。</p></section>`;
   }
   return `<section class="roundtable-session-import">
-    ${candidates.slice(0, 18).map(({ session, assistant, isCustom }) => {
+    ${candidates.slice(0, 18).map(({ session, assistant, isCustom, isPrimary }) => {
       const imported = isSessionMemberAlreadyImported(session.id, assistant.id);
+      const pending = roundtableController.isImportPending(session.id, assistant.id);
       return `
-      <article class="roundtable-import-candidate">
+      <article class="roundtable-import-candidate ${pending ? "pending" : ""}">
         <div>
           <b>${escapeHtml(assistant.name)}</b>
-          <small>${escapeHtml(titleForSession(session))} · ${escapeHtml(isCustom ? "自定义议员" : "会话身份")}</small>
+          <small>${escapeHtml(titleForSession(session))} · ${escapeHtml(isPrimary ? "会话主创" : isCustom ? "自定义议员" : "会话身份")}${pending ? " · 正在压缩记忆" : ""}</small>
         </div>
-        <button type="button" data-command="roundtable-import-session-member" data-session-id="${escapeHtml(session.id)}" data-member-id="${escapeHtml(assistant.id)}" ${imported ? "disabled" : ""}>${imported ? "已在席" : "拉入"}</button>
+        <button type="button" data-command="roundtable-import-session-member" data-session-id="${escapeHtml(session.id)}" data-member-id="${escapeHtml(assistant.id)}" ${imported || pending ? "disabled" : ""}>
+          ${pending ? `<span class="mini-spinner" aria-hidden="true"></span>入席中` : imported ? "已在席" : isPrimary ? "克隆入席" : "拉入"}
+        </button>
       </article>
     `;
     }).join("")}
@@ -1463,12 +2151,13 @@ function renderRoundtableAvatar(profile, memberId = "") {
   const content = profile.avatarDataUrl
     ? `<img src="${escapeHtml(profile.avatarDataUrl)}" alt="${escapeHtml(profile.name)}" />`
     : escapeHtml(profile.avatar);
+  const sealedBClass = isSealedBTemplateCreator(memberId) ? " sealed-b-roundtable-avatar" : "";
   const attrs = memberId && memberId !== "user"
     ? ` type="button" data-command="roundtable-edit-assistant" data-member-id="${escapeHtml(memberId)}" title="打开${escapeHtml(profile.name)}设置" aria-label="打开${escapeHtml(profile.name)}设置"`
     : "";
   return attrs
-    ? `<button class="roundtable-avatar ${profile.tone} avatar-button" ${attrs}>${content}</button>`
-    : `<div class="roundtable-avatar ${profile.tone}">${content}</div>`;
+    ? `<button class="roundtable-avatar ${profile.tone}${sealedBClass} avatar-button" ${attrs}>${content}</button>`
+    : `<div class="roundtable-avatar ${profile.tone}${sealedBClass}">${content}</div>`;
 }
 
 function renderRoundtableMessage(message) {
@@ -1582,7 +2271,13 @@ function getRoundtableManuscript() {
 function getRoundtablePaperStatus() {
   const source = getRoundtablePaperSource();
   const length = clean(source.text).length;
-  return `${source.source} · ${length} 字 · ${getRoundtableRevealLabel()} · ${formatTime(source.updatedAt)}`;
+  const ws = writerState();
+  const writerLabel = ws.inheritingStyle
+    ? "写手正在继承文风"
+    : ws.styleCache
+      ? "写手已继承文风"
+      : "写手待继承";
+  return `${source.source} · ${length} 字 · ${writerLabel} · ${getRoundtableRevealLabel()} · ${formatTime(source.updatedAt)}`;
 }
 
 function getRoundtablePromptExcerpt(max = roundtableState().contextOptions.excerptMax) {
@@ -1740,10 +2435,66 @@ function toggleRoundtablePaperReveal() {
 function renderMessages() {
   const path = activePath();
   if (!path.length) {
-    els.messages.innerHTML = "";
+    if (els.messages.childElementCount) els.messages.replaceChildren();
     return;
   }
-  els.messages.innerHTML = path.map(renderMessage).join("");
+  const nextIds = new Set(path.map((node) => node.id));
+  const existing = new Map(
+    Array.from(els.messages.querySelectorAll(".chat-row[data-node-id]"))
+      .map((row) => [row.dataset.nodeId, row])
+  );
+  path.forEach((node, index) => {
+    const signature = getMessageRenderSignature(node);
+    let row = existing.get(node.id);
+    if (!row || row.dataset.renderSignature !== signature) {
+      const nextRow = createMessageElement(node);
+      nextRow.dataset.renderSignature = signature;
+      if (row) {
+        row.replaceWith(nextRow);
+      }
+      row = nextRow;
+    }
+    const current = els.messages.children[index];
+    if (current !== row) {
+      els.messages.insertBefore(row, current || null);
+    }
+  });
+  Array.from(els.messages.querySelectorAll(".chat-row[data-node-id]")).forEach((row) => {
+    if (!nextIds.has(row.dataset.nodeId)) row.remove();
+  });
+}
+
+function createMessageElement(node) {
+  const template = document.createElement("template");
+  template.innerHTML = renderMessage(node).trim();
+  return template.content.firstElementChild;
+}
+
+function getMessageRenderSignature(node) {
+  const content = getMessageContent(node);
+  const version = getAssistantVersion(node);
+  const parent = getNode(node.parentId);
+  const attachments = normalizeChatAttachments(node.attachments);
+  return [
+    node.id,
+    node.role,
+    node.activeVersionId || "",
+    node.versions?.length || 0,
+    version?.createdAt || node.createdAt || 0,
+    version?.usage?.total_tokens || 0,
+    content,
+    attachments.map((item) => `${item.id}:${item.name}:${item.dataUrl?.length || 0}`).join("|"),
+    parent?.activeChildId || "",
+    parent?.children?.length || 0,
+    isGenerating && generatingNodeId === node.id ? "streaming" : "",
+  ].join("::");
+}
+
+function renderGenerationChrome() {
+  renderMenu();
+  renderContextBadge();
+  els.body.classList.toggle("is-generating", isGenerating);
+  els.body.classList.toggle("is-ready", Boolean(clean(els.input.value)) || pendingChatAttachments.length > 0);
 }
 
 function renderAvatar(role) {
@@ -1755,7 +2506,12 @@ function renderAvatar(role) {
       : escapeHtml(label);
     return `<div class="avatar">${avatar}</div>`;
   }
-  return `<div class="avatar">AI</div>`;
+  const creator = getRoundAssistant(getPrimaryCreatorId());
+  const name = clean(creator?.name) || "AI";
+  const avatar = clean(creator?.avatarDataUrl)
+    ? `<img src="${escapeHtml(creator.avatarDataUrl)}" alt="${escapeHtml(name)}" />`
+    : escapeHtml(name.slice(0, 1) || "AI");
+  return `<div class="avatar assistant-avatar">${avatar}</div>`;
 }
 
 function renderChatAvatar(role) {
@@ -1767,7 +2523,14 @@ function renderChatAvatar(role) {
       : escapeHtml(label);
     return `<div class="chat-avatar user-chat-avatar">${avatar}</div>`;
   }
-  return `<div class="chat-avatar assistant-chat-avatar">AI</div>`;
+  const creator = getRoundAssistant(getPrimaryCreatorId());
+  const name = clean(creator?.name) || "AI";
+  const avatar = clean(creator?.avatarDataUrl)
+    ? `<img src="${escapeHtml(creator.avatarDataUrl)}" alt="${escapeHtml(name)}" />`
+    : escapeHtml(name.slice(0, 1) || "AI");
+  const sealedClass = getCreatorSourceTemplateId(creator?.id) ? " sealed-chat-avatar" : "";
+  const sealedBClass = isSealedBTemplateCreator(creator?.id) ? " sealed-b-chat-avatar" : "";
+  return `<div class="chat-avatar assistant-chat-avatar${sealedClass}${sealedBClass}" title="${escapeHtml(name)}">${avatar}</div>`;
 }
 
 function renderChatAttachments(attachments = [], options = {}) {
@@ -1801,15 +2564,20 @@ function renderMessage(node) {
       </div>`
     : ""
     : renderBranchSwitcher(node);
+  const isStreamingThisNode = isGenerating && generatingNodeId === node.id;
+  const loadingContent = isStreamingThisNode && !content;
+  const bubbleContent = [
+    attachments.length ? renderChatAttachments(attachments) : "",
+    loadingContent
+      ? `<span class="message-content message-loading-dots" aria-label="正在生成"><i></i><i></i><i></i></span>`
+      : (content || isStreamingThisNode) ? `<span class="message-content">${escapeHtml(content)}</span>` : "",
+    isStreamingThisNode ? '<span class="stream-caret"></span>' : "",
+  ].join("");
   return `
     <article class="chat-row ${isUser ? "is-user" : "is-assistant"}${failedClass}" data-node-id="${node.id}">
       ${renderChatAvatar(node.role)}
       <div class="chat-main">
-        <div class="chat-bubble chat-speech" data-command="toggle-menu" data-node-id="${node.id}">
-          ${attachments.length ? renderChatAttachments(attachments) : ""}
-          ${content ? `<span class="message-content">${escapeHtml(content)}</span>` : ""}
-          ${isGenerating && generatingNodeId === node.id ? '<span class="stream-caret"></span>' : ""}
-        </div>
+        <div class="chat-bubble" data-command="toggle-menu" data-node-id="${node.id}">${bubbleContent}</div>
         ${isUser ? "" : `<div class="message-meta chat-message-meta">${escapeHtml(meta)}</div>`}
         ${switcher}
       </div>
@@ -1920,9 +2688,23 @@ function renderSettingsPage() {
   });
 }
 
+function renderProviderSwitcher(api = apiSettings()) {
+  if (!els.providerSwitcher) return;
+  els.providerSwitcher.innerHTML = api.providers.map((provider) => `
+    <button class="${provider.id === api.currentProviderId ? "selected" : ""}" type="button" data-command="select-provider" data-provider-id="${escapeHtml(provider.id)}">
+      <span>${escapeHtml(provider.name || "未命名提供方")}</span>
+    </button>
+  `).join("");
+}
+
 function openSettingsPage(page) {
   if (!settingsPageMeta[page]) return;
   activeSettingsPage = page;
+  if (page !== "creators") {
+    activeCreatorDetailId = null;
+    activeCreatorRecordId = null;
+    activeCreatorMemoryId = null;
+  }
   settingsModelPickerOpen = false;
   renderSettingsPage();
 }
@@ -1948,10 +2730,14 @@ function renderSettings() {
       .join("");
     els.providerSelect.value = api.currentProviderId;
   }
+  renderProviderSwitcher(api);
   if (els.providerName && document.activeElement !== els.providerName) els.providerName.value = provider?.name || "";
   if (document.activeElement !== els.baseUrl) els.baseUrl.value = api.baseUrl;
   if (document.activeElement !== els.apiKey) els.apiKey.value = api.apiKey;
   if (document.activeElement !== els.modelInput) els.modelInput.value = s.model;
+  if (els.contextTokenBudget && document.activeElement !== els.contextTokenBudget) {
+    els.contextTokenBudget.value = Number(api.contextTokenBudget) || 200000;
+  }
   if (els.userNameInput && document.activeElement !== els.userNameInput) els.userNameInput.value = clean(appearance.userName) || "我";
   renderAvatarPreview(els.userAvatarPreview, appearance.userAvatarDataUrl, clean(appearance.userName) || "我");
   renderBackgroundPreview(els.sessionBackgroundPreview, appearance.backgroundDataUrl);
@@ -1970,6 +2756,7 @@ function renderSettings() {
     value.textContent = formatLayoutValue(key, s.layout[key]);
   });
   renderSettingsModelPicker();
+  renderCreatorsPage();
   renderSettingsPage();
 }
 
@@ -1984,6 +2771,388 @@ function renderCustomLayoutPresets() {
       </div>
     `).join("")
     : `<p class="muted">还没有自定义排版预设。</p>`;
+}
+
+function getCreatorUsageSummary(creatorId) {
+  const primarySessions = state.sessions.filter((session) => session.creatorId === creatorId);
+  const roundtableSessions = state.sessions.filter((session) => (
+    session.creatorId !== creatorId
+    && Array.isArray(session.roundtable?.selectedIds)
+    && session.roundtable.selectedIds.includes(creatorId)
+  ));
+  const records = [
+    ...getCreatorParticipationRecords(state.creatorParticipationRecords, creatorId, { limit: 500 }),
+    ...(state.councilParticipationRecords?.filter((record) => record?.councilId === creatorId) || []),
+  ];
+  return {
+    primarySessions,
+    roundtableSessions,
+    records,
+  };
+}
+
+function openCreatorDetail(creatorId) {
+  if (!getCreatorIdentity(creatorId)) return;
+  activeCreatorDetailId = creatorId;
+  activeCreatorRecordId = null;
+  activeCreatorMemoryId = null;
+  if (els.assistantConfigDialog?.open) closeAssistantConfig();
+  activeSettingsPage = "creators";
+  if (panelManager.getActivePanel() !== "settings") showPanel("settings");
+  renderSettingsPage();
+  renderCreatorsPage();
+}
+
+function closeCreatorDetail() {
+  if (activeCreatorRecordId || activeCreatorMemoryId) {
+    activeCreatorRecordId = null;
+    activeCreatorMemoryId = null;
+    renderCreatorsPage();
+    return;
+  }
+  activeCreatorDetailId = null;
+  renderCreatorsPage();
+}
+
+function queryCreatorMemory(creatorId) {
+  const creator = getCreatorIdentity(creatorId);
+  if (!creator) return;
+  const query = window.prompt("输入要查询的记忆关键词或问题", "");
+  if (query === null) return;
+  const snippets = getCreatorMemorySnippets(creatorId, query, {
+    includeRecent: true,
+    limit: 12,
+    sessionId: activeSession()?.id,
+  });
+  creatorMemoryLookupPreviews.set(creatorId, {
+    query: clean(query) || "最近记忆",
+    snippets,
+    updatedAt: Date.now(),
+  });
+  activeCreatorDetailId = creatorId;
+  renderCreatorsPage();
+  showToast(snippets.length ? `召回 ${snippets.length} 条记忆` : "没有召回到相关记忆");
+}
+
+function clearCreatorMemoryLookup(creatorId) {
+  creatorMemoryLookupPreviews.delete(creatorId);
+  renderCreatorsPage();
+}
+
+function renderCreatorMemorySnapshotItem(creatorId, item, options = {}) {
+  const canDelete = options.canDelete !== false;
+  const canOpen = options.canOpen !== false;
+  return `
+    <article class="creator-memory-snapshot">
+      <time>${escapeHtml(formatTime(item.createdAt))}</time>
+      <p>${escapeHtml(clean(item.text).slice(0, Number(options.maxLength) || 260))}</p>
+      <div class="creator-inline-actions">
+        ${canOpen ? `<button type="button" data-command="open-creator-memory-detail" data-creator-id="${escapeHtml(creatorId)}" data-memory-id="${escapeHtml(item.id)}">查看</button>` : ""}
+        ${canDelete ? `<button type="button" data-command="delete-creator-memory-snapshot" data-creator-id="${escapeHtml(creatorId)}" data-memory-id="${escapeHtml(item.id)}">删除这条记忆</button>` : ""}
+      </div>
+    </article>
+  `;
+}
+
+function renderCreatorRecordItem(record, options = {}) {
+  const session = state.sessions.find((item) => item.id === record.sessionId);
+  const canDelete = options.canDelete !== false;
+  const canOpen = options.canOpen !== false;
+  return `
+    <article class="creator-memory-snapshot">
+      <time>${escapeHtml(formatTime(record.updatedAt || record.createdAt))}</time>
+      <p>${escapeHtml(`${session ? titleForSession(session) : "未知圆桌"}｜${clean(record.topic) || "无主题"}｜${formatTime(record.createdAt)}`)}</p>
+      <div class="creator-inline-actions">
+        ${canOpen ? `<button type="button" data-command="open-creator-record-detail" data-record-id="${escapeHtml(record.id)}">查看</button>` : ""}
+        ${canDelete ? `<button type="button" data-command="delete-creator-record" data-record-id="${escapeHtml(record.id)}">删除这条记录</button>` : ""}
+      </div>
+    </article>
+  `;
+}
+
+function openCreatorRecordDetail(recordId) {
+  const id = clean(recordId);
+  const record = (state.creatorParticipationRecords || []).find((item) => item?.id === id && !item.deleted);
+  if (!record) return;
+  activeCreatorDetailId = record.creatorId;
+  activeCreatorRecordId = id;
+  activeCreatorMemoryId = null;
+  activeSettingsPage = "creators";
+  if (panelManager.getActivePanel() !== "settings") showPanel("settings");
+  renderCreatorsPage();
+}
+
+function openCreatorMemoryDetail(creatorId, memoryId) {
+  const creator = getCreatorIdentity(creatorId);
+  const id = clean(memoryId);
+  const item = normalizeAssistantMemories(creator?.memory?.compressedSnapshots).find((memory) => memory.id === id);
+  if (!creator || !item) return;
+  activeCreatorDetailId = creator.id;
+  activeCreatorMemoryId = id;
+  activeCreatorRecordId = null;
+  activeSettingsPage = "creators";
+  if (panelManager.getActivePanel() !== "settings") showPanel("settings");
+  renderCreatorsPage();
+}
+
+function renderCreatorLookupPreview(creatorId) {
+  const preview = creatorMemoryLookupPreviews.get(creatorId);
+  if (!preview) return "";
+  const rows = preview.snippets?.length
+    ? preview.snippets.map((item) => `
+      <article class="creator-memory-snapshot lookup">
+        <time>${escapeHtml(item.type)} · ${escapeHtml(formatTime(item.createdAt))}</time>
+        <p>${escapeHtml(clean(item.text).slice(0, 360))}</p>
+      </article>
+    `).join("")
+    : `<p class="muted">没有召回到相关记忆。</p>`;
+  return `
+    <section class="creator-detail-section">
+      <div class="creator-detail-section-head">
+        <strong>记忆召回预览</strong>
+        <button type="button" data-command="clear-creator-memory-lookup" data-creator-id="${escapeHtml(creatorId)}">清除预览</button>
+      </div>
+      <p class="muted">查询：${escapeHtml(preview.query || "最近记忆")} · ${escapeHtml(formatTime(preview.updatedAt))}</p>
+      ${rows}
+    </section>
+  `;
+}
+
+function renderCreatorDetailPage(creator) {
+  const currentCreatorId = getPrimaryCreatorId();
+  const usage = getCreatorUsageSummary(creator.id);
+  const isCurrent = creator.id === currentCreatorId;
+  const avatar = clean(creator.avatarDataUrl)
+    ? `<img src="${escapeHtml(creator.avatarDataUrl)}" alt="${escapeHtml(creator.name || "创作者")}" />`
+    : escapeHtml((creator.name || "创").slice(0, 1));
+  const model = clean(creator.modelConfig?.model) || sessionSettings().model || "未选模型";
+  const provider = clean(creator.modelConfig?.providerId) || apiSettings().currentProviderId || "默认提供方";
+  const memorySnapshots = normalizeAssistantMemories(creator.memory?.compressedSnapshots).reverse();
+  const creatorRecords = getCreatorParticipationRecords(state.creatorParticipationRecords, creator.id, { limit: 80 }).reverse();
+  const activeMemory = activeCreatorMemoryId
+    ? memorySnapshots.find((item) => item.id === activeCreatorMemoryId)
+    : null;
+  if (activeMemory) {
+    return `
+      <div class="creator-detail-page">
+        <div class="creator-detail-head">
+          <button type="button" data-command="back-creators-list">← ${escapeHtml(creator.name || "创作者")}</button>
+          <span>记忆库</span>
+        </div>
+        <section class="creator-detail-section long-record">
+          <div class="creator-detail-section-head">
+            <strong>${escapeHtml(clean(creator.memory?.displayName) || `${creator.name || "创作者"}记忆`)}</strong>
+            <button type="button" data-command="delete-creator-memory-snapshot" data-creator-id="${escapeHtml(creator.id)}" data-memory-id="${escapeHtml(activeMemory.id)}">删除这条记忆</button>
+          </div>
+          <time>${escapeHtml(formatTime(activeMemory.createdAt))}</time>
+          <pre>${escapeHtml(clean(activeMemory.text) || "空记忆")}</pre>
+        </section>
+      </div>
+    `;
+  }
+  const activeRecord = activeCreatorRecordId
+    ? creatorRecords.find((record) => record.id === activeCreatorRecordId)
+    : null;
+  if (activeRecord) {
+    const session = state.sessions.find((item) => item.id === activeRecord.sessionId);
+    return `
+      <div class="creator-detail-page">
+        <div class="creator-detail-head">
+          <button type="button" data-command="back-creators-list">← ${escapeHtml(creator.name || "创作者")}</button>
+          <span>参会记录</span>
+        </div>
+        <section class="creator-detail-section long-record">
+          <div class="creator-detail-section-head">
+            <strong>${escapeHtml(session ? titleForSession(session) : "未知圆桌")}</strong>
+            <button type="button" data-command="delete-creator-record" data-record-id="${escapeHtml(activeRecord.id)}">删除这条记录</button>
+          </div>
+          <p class="muted">${escapeHtml(clean(activeRecord.topic) || "无主题")} · ${escapeHtml(formatTime(activeRecord.createdAt))}</p>
+          <pre>${escapeHtml(clean(activeRecord.content || activeRecord.summary) || "空记录")}</pre>
+        </section>
+      </div>
+    `;
+  }
+  const sessionRows = usage.primarySessions.length
+    ? usage.primarySessions.map((session) => `
+      <div class="creator-subitem">
+        <span>${escapeHtml(titleForSession(session))}</span>
+        <button type="button" data-command="switch-session" data-session-id="${escapeHtml(session.id)}">打开</button>
+      </div>
+    `).join("")
+    : `<p class="muted">还没有主会话。</p>`;
+  const roundtableRows = usage.roundtableSessions.length
+    ? usage.roundtableSessions.map((session) => `
+      <div class="creator-subitem">
+        <span>${escapeHtml(titleForSession(session))}</span>
+        <button type="button" data-command="open-creator-roundtable" data-session-id="${escapeHtml(session.id)}">打开</button>
+        <button type="button" data-command="remove-creator-from-roundtable" data-session-id="${escapeHtml(session.id)}" data-creator-id="${escapeHtml(creator.id)}">移除</button>
+      </div>
+    `).join("")
+    : `<p class="muted">还没有加入其他圆桌。</p>`;
+  return `
+    <div class="creator-detail-page">
+      <div class="creator-detail-head">
+        <button type="button" data-command="back-creators-list">← 创作者们</button>
+        <span>${escapeHtml(isCurrent ? "当前主创" : usage.primarySessions.length ? "主创" : "议员")}</span>
+      </div>
+      <section class="creator-detail-hero">
+        <span class="creator-card-avatar large">${avatar}</span>
+        <div>
+          <h3>${escapeHtml(creator.name || "未命名创作者")}</h3>
+          <p>${escapeHtml(provider)} · ${escapeHtml(model)} · 上下文 ${escapeHtml(String(Number(creator.modelConfig?.contextTokenBudget) || apiSettings().contextTokenBudget || 200000))}</p>
+          <p>${escapeHtml(clean(creator.memory?.displayName) || `${creator.name || "创作者"}记忆`)} · ${memorySnapshots.length} 条压缩记忆 · ${creatorRecords.length} 条参会记录</p>
+        </div>
+      </section>
+      <div class="creator-card-actions detail-actions">
+        <button type="button" data-command="open-creator-config" data-creator-id="${escapeHtml(creator.id)}">设置</button>
+        <button type="button" data-command="open-creator-private-session" data-creator-id="${escapeHtml(creator.id)}">${isCurrent ? "打开会话" : "私聊"}</button>
+        <button type="button" data-command="query-creator-memory" data-creator-id="${escapeHtml(creator.id)}">查询记忆</button>
+        <button type="button" data-command="export-creator-package" data-creator-id="${escapeHtml(creator.id)}">导出</button>
+        <button type="button" data-command="clear-creator-records" data-creator-id="${escapeHtml(creator.id)}">清记录</button>
+        <button type="button" data-command="delete-creator-identity" data-creator-id="${escapeHtml(creator.id)}" ${isCurrent ? "disabled" : ""}>删除</button>
+      </div>
+      ${renderCreatorLookupPreview(creator.id)}
+      <section class="creator-detail-section">
+        <div class="creator-detail-section-head">
+          <strong>压缩记忆</strong>
+          <button type="button" data-command="rename-creator-memory" data-creator-id="${escapeHtml(creator.id)}">记忆库改名</button>
+        </div>
+        ${memorySnapshots.length ? memorySnapshots.map((item) => renderCreatorMemorySnapshotItem(creator.id, item, { maxLength: 420 })).join("") : `<p class="muted">还没有压缩记忆。</p>`}
+      </section>
+      <section class="creator-detail-section">
+        <div class="creator-detail-section-head">
+          <strong>参会记录</strong>
+          <button type="button" data-command="query-creator-memory" data-creator-id="${escapeHtml(creator.id)}">按问题召回</button>
+        </div>
+        ${creatorRecords.length ? creatorRecords.map((record) => renderCreatorRecordItem(record, { maxLength: 360 })).join("") : `<p class="muted">还没有参会记录。</p>`}
+      </section>
+      <section class="creator-detail-section">
+        <strong>主会话</strong>
+        ${sessionRows}
+      </section>
+      <section class="creator-detail-section">
+        <strong>所在圆桌</strong>
+        ${roundtableRows}
+      </section>
+    </div>
+  `;
+}
+
+function renderCreatorsPage() {
+  if (!els.creatorsList) return;
+  const currentCreatorId = getPrimaryCreatorId();
+  if (activeCreatorDetailId) {
+    const detailCreator = getCreatorIdentity(activeCreatorDetailId);
+    if (detailCreator) {
+      els.creatorsList.innerHTML = renderCreatorDetailPage(hydrateCreatorIdentity(detailCreator));
+      return;
+    }
+    activeCreatorDetailId = null;
+  }
+  const creators = Object.values(creatorsState())
+    .map((creator) => hydrateCreatorIdentity(creator))
+    .sort((a, b) => {
+      if (a.id === currentCreatorId) return -1;
+      if (b.id === currentCreatorId) return 1;
+      return Number(b.updatedAt || b.createdAt || 0) - Number(a.updatedAt || a.createdAt || 0);
+    });
+  els.creatorsList.innerHTML = creators.length
+    ? creators.map((creator) => {
+        const usage = getCreatorUsageSummary(creator.id);
+        const isCurrent = creator.id === currentCreatorId;
+        const avatar = clean(creator.avatarDataUrl)
+          ? `<img src="${escapeHtml(creator.avatarDataUrl)}" alt="${escapeHtml(creator.name || "创作者")}" />`
+          : escapeHtml((creator.name || "创").slice(0, 1));
+        const model = clean(creator.modelConfig?.model) || sessionSettings().model || "未选模型";
+        const templateCode = clean(creator.sealedTemplateCode);
+        const badges = [
+          isCurrent ? "当前主创" : usage.primarySessions.length ? "主创" : "议员",
+          templateCode ? `封装 ${templateCode}` : "",
+        ].filter(Boolean);
+        const memorySnapshots = normalizeAssistantMemories(creator.memory?.compressedSnapshots);
+        const memoryPreview = memorySnapshots.length
+          ? memorySnapshots.slice(-3).reverse().map((item) => `
+            ${renderCreatorMemorySnapshotItem(creator.id, item, { maxLength: 180 })}
+          `).join("")
+          : `<p class="muted">还没有压缩记忆。</p>`;
+        const creatorRecords = getCreatorParticipationRecords(state.creatorParticipationRecords, creator.id, { limit: 6 }).reverse();
+        const recordPreview = creatorRecords.length
+          ? creatorRecords.map((record) => renderCreatorRecordItem(record, { maxLength: 150 })).join("")
+          : `<p class="muted">还没有参会记录。</p>`;
+        const roundtableRows = usage.roundtableSessions.length
+          ? usage.roundtableSessions.slice(0, 8).map((session) => `
+            <div class="creator-subitem">
+              <span>${escapeHtml(titleForSession(session))}</span>
+              <button type="button" data-command="open-creator-roundtable" data-session-id="${escapeHtml(session.id)}">打开</button>
+              <button type="button" data-command="remove-creator-from-roundtable" data-session-id="${escapeHtml(session.id)}" data-creator-id="${escapeHtml(creator.id)}">移除</button>
+            </div>
+          `).join("")
+          : `<p class="muted">还没有加入其他圆桌。</p>`;
+        const sessionRows = usage.primarySessions.length
+          ? usage.primarySessions.slice(0, 6).map((session) => `
+            <div class="creator-subitem">
+              <span>${escapeHtml(titleForSession(session))}</span>
+              <button type="button" data-command="switch-session" data-session-id="${escapeHtml(session.id)}">打开</button>
+            </div>
+          `).join("")
+          : `<p class="muted">还没有主会话。</p>`;
+        return `
+          <article class="creator-card ${isCurrent ? "current" : ""}">
+            <button class="creator-card-main" type="button" data-command="open-creator-detail" data-creator-id="${escapeHtml(creator.id)}">
+              <span class="creator-card-avatar">${avatar}</span>
+              <span class="creator-card-copy">
+                <b>${escapeHtml(creator.name || "未命名创作者")}</b>
+                <small>${escapeHtml(badges.join(" · "))} · ${escapeHtml(model)}</small>
+                <em>${usage.primarySessions.length} 个主会话 · ${usage.roundtableSessions.length} 个圆桌 · ${usage.records.length} 条参会记录</em>
+              </span>
+            </button>
+            <div class="creator-card-actions">
+              <button type="button" data-command="open-creator-detail" data-creator-id="${escapeHtml(creator.id)}">详情</button>
+              <button type="button" data-command="open-creator-private-session" data-creator-id="${escapeHtml(creator.id)}">${isCurrent ? "打开会话" : "私聊"}</button>
+              <button type="button" data-command="query-creator-memory" data-creator-id="${escapeHtml(creator.id)}">查记忆</button>
+              <button type="button" data-command="export-creator-package" data-creator-id="${escapeHtml(creator.id)}">导出</button>
+              <button type="button" data-command="clear-creator-records" data-creator-id="${escapeHtml(creator.id)}">清记录</button>
+              <button type="button" data-command="open-creator-config" data-creator-id="${escapeHtml(creator.id)}">设置</button>
+              <button type="button" data-command="delete-creator-identity" data-creator-id="${escapeHtml(creator.id)}" ${isCurrent ? "disabled" : ""}>删除</button>
+            </div>
+          </article>
+        `;
+      }).join("")
+    : `<p class="muted">还没有创作者。</p>`;
+}
+
+function renameCreatorMemory(creatorId) {
+  creatorController.renameCreatorMemory(creatorId);
+}
+
+function openCreatorRoundtable(sessionId) {
+  creatorController.openCreatorRoundtable(sessionId);
+}
+
+function removeCreatorFromRoundtable(sessionId, creatorId) {
+  creatorController.removeCreatorFromRoundtable(sessionId, creatorId);
+}
+
+function clearCreatorRecords(creatorId) {
+  creatorController.clearCreatorRecords(creatorId);
+}
+
+function deleteCreatorRecord(recordId) {
+  if (activeCreatorRecordId === clean(recordId)) activeCreatorRecordId = null;
+  creatorController.deleteCreatorRecord(recordId);
+}
+
+function deleteCreatorMemorySnapshot(creatorId, memoryId) {
+  if (activeCreatorMemoryId === clean(memoryId)) activeCreatorMemoryId = null;
+  creatorController.deleteCreatorMemorySnapshot(creatorId, memoryId);
+}
+
+function deleteCreatorIdentity(creatorId) {
+  creatorController.deleteCreatorIdentity(creatorId);
+}
+
+function openCreatorPrivateSession(creatorId) {
+  creatorController.openCreatorPrivateSession(creatorId);
 }
 
 function renderNovelPanel() {
@@ -2012,67 +3181,8 @@ function formatBytes(bytes) {
   return `${size} B`;
 }
 
-function workspaceCategoryForFile(file) {
-  const name = clean(file.name).toLowerCase();
-  const type = clean(file.type).toLowerCase();
-  const ext = name.includes(".") ? name.split(".").pop() : "";
-  if (/(正文|章节|chapter|manuscript|draft)/i.test(name) && ["txt", "md", "markdown", "doc", "docx"].includes(ext)) return "正文草稿";
-  if (/(角色|人物|character|cast)/i.test(name)) return "角色资料";
-  if (/(世界|设定|setting|world|lore)/i.test(name)) return "世界观";
-  if (/(大纲|剧情|plot|outline|beat)/i.test(name)) return "剧情大纲";
-  if (/(伏笔|foreshadow|clue)/i.test(name)) return "伏笔线";
-  if (type.startsWith("image/") || ["png", "jpg", "jpeg", "webp", "gif", "svg"].includes(ext)) return "视觉参考";
-  if (type.startsWith("audio/") || ["mp3", "wav", "m4a", "flac"].includes(ext)) return "声音资料";
-  if (["txt", "md", "markdown", "rtf"].includes(ext)) return "文本资料";
-  if (["json", "yaml", "yml", "csv"].includes(ext)) return "结构化资料";
-  if (["pdf", "doc", "docx", "epub"].includes(ext)) return "参考文档";
-  return "未分类";
-}
-
 function renderWorkspacePanel() {
-  ensureWorkspaceUi();
-  if (!els.workspacePanel) return;
-  const workspace = sessionWorkspace();
-  if (els.workspacePathInput && document.activeElement !== els.workspacePathInput) {
-    els.workspacePathInput.value = workspace.path;
-  }
-  const files = workspace.files || [];
-  const totalSize = files.reduce((sum, file) => sum + (Number(file.size) || 0), 0);
-  if (els.workspaceStats) {
-    els.workspaceStats.innerHTML = [
-      `路径 ${workspace.path ? "已设置" : "未设置"}`,
-      `${files.length} 个文件`,
-      formatBytes(totalSize),
-    ].map((item) => `<span>${escapeHtml(item)}</span>`).join("");
-  }
-  if (!els.workspaceFileGroups) return;
-  if (!files.length) {
-    els.workspaceFileGroups.innerHTML = `<p class="muted">还没有加入文件。可以先添加 TXT、MD、图片、PDF、DOCX 等小说资料。</p>`;
-    return;
-  }
-  const groups = files.reduce((map, file) => {
-    const category = clean(file.category) || "未分类";
-    if (!map.has(category)) map.set(category, []);
-    map.get(category).push(file);
-    return map;
-  }, new Map());
-  els.workspaceFileGroups.innerHTML = [...groups.entries()].map(([category, items]) => `
-    <section class="workspace-group">
-      <div class="workspace-group-head">
-        <strong>${escapeHtml(category)}</strong>
-        <span>${items.length}</span>
-      </div>
-      ${items.map((file) => `
-        <article class="workspace-file-item">
-          <div>
-            <b>${escapeHtml(file.name)}</b>
-            <small>${escapeHtml(file.ext || "file")} · ${escapeHtml(formatBytes(file.size))} · ${escapeHtml(formatTime(file.addedAt))}</small>
-          </div>
-          <button type="button" data-command="remove-workspace-file" data-file-id="${escapeHtml(file.id)}">移除</button>
-        </article>
-      `).join("")}
-    </section>
-  `).join("");
+  workspaceController.renderWorkspacePanel();
 }
 
 function renderNovelVersions() {
@@ -2152,24 +3262,47 @@ function renderModelPicker() {
   ensureModelPickerUi();
   ensureAssistantModelPickerUi();
   const settings = sessionSettings();
-  const models = Array.from(new Set([settings.model, ...apiSettings().models].filter(Boolean)));
+  const api = apiSettings();
+  const activeProvider = activeApiProvider(api);
+  const models = Array.from(new Set([settings.model, ...(activeProvider?.models || []), ...api.models].filter(Boolean)));
   els.modelSelect.innerHTML = models.map((model) => `<option value="${escapeHtml(model)}">${escapeHtml(model)}</option>`).join("");
   els.modelSelect.value = settings.model;
   if (els.modelSelectButton) {
-    els.modelSelectButton.textContent = settings.model || "选择模型";
-    els.modelSelectButton.classList.toggle("active", modelPickerOpen);
-    els.modelSelectButton.setAttribute("aria-expanded", String(modelPickerOpen));
+    const runtime = getPrimaryCreatorRuntimeConfig();
+    const creator = runtime.creator;
+    const creatorName = clean(creator?.name) || "主创";
+    const creatorModel = clean(runtime.settings.model) || settings.model || "选择模型";
+    const creatorAvatar = clean(creator?.avatarDataUrl)
+      ? `<img src="${escapeHtml(creator.avatarDataUrl)}" alt="${escapeHtml(creatorName)}" />`
+      : escapeHtml(creatorName.slice(0, 1));
+    els.modelSelectButton.innerHTML = `
+      <span class="model-select-avatar ${isSealedBTemplateCreator(creator?.id) ? "is-sealed-b" : ""}">${creatorAvatar}</span>
+      <span class="model-select-copy">
+        <b>${escapeHtml(creatorName)}</b>
+        <small>${escapeHtml(creatorModel)}</small>
+      </span>
+    `;
+    els.modelSelectButton.classList.remove("active");
+    els.modelSelectButton.setAttribute("aria-expanded", "false");
+    els.modelSelectButton.setAttribute("title", `${creatorName} · ${creatorModel}`);
   }
   if (els.modelPickerPanel) {
     els.modelPickerPanel.hidden = !modelPickerOpen;
     els.modelPickerPanel.innerHTML = `
       <div class="model-picker-head">
-        <strong>选择模型</strong>
-        <button type="button" data-command="toggle-model-picker" aria-label="关闭模型列表">×</button>
+        <strong>${escapeHtml(activeProvider?.name || "模型配置")}</strong>
+        <button type="button" data-model-picker-close aria-label="关闭模型列表">×</button>
+      </div>
+      <div class="model-provider-strip" aria-label="选择供应商">
+        ${api.providers.map((provider) => `
+          <button class="${provider.id === api.currentProviderId ? "selected" : ""}" type="button" data-model-provider-option="${escapeHtml(provider.id)}">
+            ${escapeHtml(provider.name || "未命名")}
+          </button>
+        `).join("")}
       </div>
       <div class="model-picker-list">
         ${models.map((model) => `
-          <button class="${model === settings.model ? "selected" : ""}" type="button" data-command="select-model" data-model="${escapeHtml(model)}">
+          <button class="${model === settings.model ? "selected" : ""}" type="button" data-model-option="${escapeHtml(model)}">
             <span>${escapeHtml(model)}</span>
             ${model === settings.model ? "<b>当前</b>" : ""}
           </button>
@@ -2180,6 +3313,52 @@ function renderModelPicker() {
   els.modelDatalist.innerHTML = models.map((model) => `<option value="${escapeHtml(model)}"></option>`).join("");
   renderSettingsModelPicker(models);
   renderAssistantModelPicker();
+}
+
+function handleComposerModelPickerClick(event) {
+  const closeButton = event.target.closest("[data-model-picker-close]");
+  if (closeButton) {
+    event.preventDefault();
+    event.stopPropagation();
+    toggleModelPicker(false);
+    return;
+  }
+  const providerOption = event.target.closest("[data-model-provider-option]");
+  if (providerOption) {
+    event.preventDefault();
+    event.stopPropagation();
+    switchApiProvider(providerOption.dataset.modelProviderOption);
+    modelPickerOpen = true;
+    renderModelPicker();
+    return;
+  }
+  const option = event.target.closest("[data-model-option]");
+  if (!option) return;
+  event.preventDefault();
+  event.stopPropagation();
+  selectModelFromPicker(option.dataset.modelOption);
+}
+
+function captureComposerModelPickerClick(event) {
+  if (!modelPickerOpen) return;
+  const target = event.target;
+  const closeButton = target.closest?.("[data-model-picker-close]");
+  const providerOption = target.closest?.("[data-model-provider-option]");
+  const option = target.closest?.("[data-model-option]");
+  if (!closeButton && !providerOption && !option) return;
+  event.preventDefault();
+  event.stopPropagation();
+  if (closeButton) {
+    toggleModelPicker(false);
+    return;
+  }
+  if (providerOption) {
+    switchApiProvider(providerOption.dataset.modelProviderOption);
+    modelPickerOpen = true;
+    renderModelPicker();
+    return;
+  }
+  selectModelFromPicker(option.dataset.modelOption);
 }
 
 function renderSettingsModelPicker(models = null) {
@@ -2294,14 +3473,41 @@ function renderContextPanel() {
   drawContextPanel(els, info, sessionSettings(), escapeHtml, formatK);
 }
 
+function rememberProviderModel(providerId, model) {
+  const value = clean(model);
+  if (!value) return;
+  const api = apiSettings();
+  const providerApi = providerId ? apiForProvider(providerId) : api;
+  const provider = api.providers.find((item) => item.id === providerApi.currentProviderId) || activeApiProvider(api);
+  provider.models = Array.from(new Set([value, ...(provider.models || [])].filter(Boolean)));
+  syncApiFromProvider(api);
+}
+
 function setActiveModel(model) {
   const value = clean(model);
   if (!value) return;
-  sessionSettings().model = value;
-  const api = apiSettings();
-  const provider = activeApiProvider(api);
-  provider.models = Array.from(new Set([value, ...(provider.models || [])].filter(Boolean)));
-  syncApiFromProvider(api);
+  const session = activeSession();
+  const settings = sessionSettings(session);
+  const previousModel = clean(settings.model);
+  const creator = getCreatorIdentity(getPrimaryCreatorId(session));
+  const shouldSyncName = creator && isAutoPrimaryCreatorName(creator, {
+    session,
+    previousModel,
+    nextModel: value,
+  });
+  settings.model = value;
+  if (creator) {
+    saveCreatorIdentity({
+      ...creator,
+      name: shouldSyncName ? value : creator.name,
+      modelConfig: {
+        ...(creator.modelConfig || {}),
+        model: value,
+      },
+      updatedAt: Date.now(),
+    });
+  }
+  rememberProviderModel("", value);
 }
 
 function switchApiProvider(id) {
@@ -2320,6 +3526,18 @@ function updateActiveProviderName() {
   provider.name = clean(els.providerName.value) || "未命名提供方";
   renderSettings();
   persistState(state);
+}
+
+function renameApiProvider() {
+  const api = apiSettings();
+  const provider = activeApiProvider(api);
+  if (!provider) return;
+  const nextName = window.prompt("提供方改名", provider.name || "未命名提供方");
+  if (nextName === null) return;
+  provider.name = clean(nextName) || "未命名提供方";
+  render();
+  persistState(state);
+  showToast("提供方已改名");
 }
 
 function updateActiveProviderCredential(key, value) {
@@ -2392,7 +3610,8 @@ async function saveEditor(sendAfterSave = false) {
     version.createdAt = Date.now();
     closeEditor();
     touchSession(activeSession());
-    render();
+    renderMessages();
+    renderGenerationChrome();
     if (sendAfterSave) await continueFromAssistant(node.id);
     else showToast("已直接修改 AI 输出");
     return;
@@ -2406,7 +3625,8 @@ async function saveEditor(sendAfterSave = false) {
   node.createdAt = Date.now();
   closeEditor();
   touchSession(activeSession());
-  render();
+  renderMessages();
+  renderGenerationChrome();
   showToast("已修改用户内容");
 }
 
@@ -2423,63 +3643,80 @@ async function appendUserMessage(text, attachments = []) {
   appendChild(session, user, assistant);
   touchSession(session);
   activeMenuNodeId = null;
-  render();
+  renderMessages();
+  renderGenerationChrome();
   await generateIntoAssistant(assistant.id, text, assistant.versions[0].id);
 }
 
 async function editUserBranch(nodeId, text) {
-  if (isGenerating) return;
-  const old = getNode(nodeId);
-  const parent = getNode(old?.parentId);
+  if (isGenerating) return showToast("生成中，请先停止当前生成");
+  const session = activeSession();
+  const old = getNode(nodeId, session);
+  const parent = getNode(old?.parentId, session);
   if (!old || !parent) return;
+  activateBranchToNode(parent.id, session);
   const user = createNode("user", parent.id, text);
-  appendChild(activeSession(), parent, user);
+  appendChild(session, parent, user);
   const assistant = createNode("assistant", user.id, "");
   assistant.activeVersionId = assistant.versions[0].id;
-  appendChild(activeSession(), user, assistant);
-  touchSession(activeSession());
+  appendChild(session, user, assistant);
+  touchSession(session);
   activeMenuNodeId = null;
-  render();
+  renderMessages();
+  renderGenerationChrome();
   await generateIntoAssistant(assistant.id, text, assistant.versions[0].id);
 }
 
 async function resendUser(nodeId) {
-  if (isGenerating) return;
-  const user = getNode(nodeId);
+  if (isGenerating) return showToast("生成中，请先停止当前生成");
+  const session = activeSession();
+  const user = getNode(nodeId, session);
   if (!user || user.role !== "user") return;
-  const assistant = getNode(user.activeChildId);
+  const assistant = getNode(user.activeChildId, session);
   if (!assistant || assistant.role !== "assistant") return;
+  activateBranchToNode(assistant.id, session);
   const version = createAssistantVersion("");
   assistant.versions.push(version);
   assistant.activeVersionId = version.id;
+  setAssistantVersionContent(assistant, version, "");
+  touchSession(session);
   activeMenuNodeId = null;
-  render();
+  renderMessages();
+  renderGenerationChrome();
   await generateIntoAssistant(assistant.id, user.content, version.id);
 }
 
 async function regenerateAssistant(nodeId) {
-  if (isGenerating) return;
-  const assistant = getNode(nodeId);
-  const user = getNode(assistant?.parentId);
+  if (isGenerating) return showToast("生成中，请先停止当前生成");
+  const session = activeSession();
+  const assistant = getNode(nodeId, session);
+  const user = getNode(assistant?.parentId, session);
   if (!assistant || assistant.role !== "assistant" || !user) return;
+  activateBranchToNode(assistant.id, session);
   const version = createAssistantVersion("");
   assistant.versions.push(version);
   assistant.activeVersionId = version.id;
+  setAssistantVersionContent(assistant, version, "");
+  touchSession(session);
   activeMenuNodeId = null;
-  render();
+  renderMessages();
+  renderGenerationChrome();
   await generateIntoAssistant(assistant.id, user.role === "user" ? user.content : "", version.id);
 }
 
 async function continueFromAssistant(nodeId) {
-  if (isGenerating) return;
-  const assistant = getNode(nodeId);
+  if (isGenerating) return showToast("生成中，请先停止当前生成");
+  const session = activeSession();
+  const assistant = getNode(nodeId, session);
   if (!assistant || assistant.role !== "assistant") return;
+  activateBranchToNode(assistant.id, session);
   const next = createNode("assistant", assistant.id, "");
   next.activeVersionId = next.versions[0].id;
-  appendChild(activeSession(), assistant, next);
-  touchSession(activeSession());
+  appendChild(session, assistant, next);
+  touchSession(session);
   activeMenuNodeId = null;
-  render();
+  renderMessages();
+  renderGenerationChrome();
   await generateIntoAssistant(next.id, "", next.versions[0].id, true);
 }
 
@@ -2489,7 +3726,6 @@ function validateApi(settings = sessionSettings(), api = apiSettings()) {
 }
 
 async function generateIntoAssistant(nodeId, userText, versionId, continueMode = false) {
-  validateApi();
   const node = getNode(nodeId);
   const version = node?.versions.find((item) => item.id === versionId);
   if (!node || !version) return;
@@ -2497,19 +3733,21 @@ async function generateIntoAssistant(nodeId, userText, versionId, continueMode =
   abortController = new AbortController();
   streamRequestId = null;
   generatingNodeId = nodeId;
-  activeMenuNodeId = nodeId;
+  activeMenuNodeId = null;
   setAssistantVersionContent(node, version, "");
   version.usage = null;
+  renderMessages();
+  renderGenerationChrome();
   try {
-    await ensureAutoCompressNovelMemory(continueMode ? CONTINUE_PROMPT : userText, nodeId);
-  } catch (error) {
-    if (error.name === "AbortError") throw error;
-    showToast(humanizeError(error, "自动压缩失败，已改用现有资料继续"));
-  }
-  const contextCompression = getAutoContextCompressedInfo(continueMode ? CONTINUE_PROMPT : userText);
-  if (contextCompression.compressed) showToast("上下文过长，已自动使用小说资料压缩续写");
-  render();
-  try {
+    validatePrimaryCreatorApi();
+    try {
+      await ensureAutoCompressNovelMemory(continueMode ? CONTINUE_PROMPT : userText, nodeId);
+    } catch (error) {
+      if (error.name === "AbortError") throw error;
+      showToast(humanizeError(error, "自动压缩失败，已改用现有资料继续"));
+    }
+    const contextCompression = getAutoContextCompressedInfo(continueMode ? CONTINUE_PROMPT : userText);
+    if (contextCompression.compressed) showToast("上下文过长，已自动使用小说资料压缩续写");
     const result = sessionSettings().stream
       ? await callOpenAIStream((partial) => {
           setAssistantVersionContent(node, version, partial);
@@ -2517,7 +3755,9 @@ async function generateIntoAssistant(nodeId, userText, versionId, continueMode =
         }, nodeId, continueMode)
       : await callOpenAI(nodeId, continueMode);
     cancelStreamDomUpdate(`main:${nodeId}`);
-    setAssistantVersionContent(node, version, result.content);
+    const content = clean(result.content);
+    if (!content) throw new Error("模型没有返回内容，请检查模型是否支持当前接口或关闭流式输出后重试");
+    setAssistantVersionContent(node, version, content);
     version.usage = result.usage || null;
     version.createdAt = Date.now();
     touchSession(activeSession());
@@ -2525,6 +3765,8 @@ async function generateIntoAssistant(nodeId, userText, versionId, continueMode =
     if (error.name !== "AbortError") {
       const message = humanizeError(error, "生成失败");
       version.content = version.content || `请求失败：${message}`;
+      version.createdAt = Date.now();
+      touchSession(activeSession());
       showToast(message);
     }
   } finally {
@@ -2534,25 +3776,50 @@ async function generateIntoAssistant(nodeId, userText, versionId, continueMode =
     streamRequestId = null;
     generatingNodeId = null;
     cancelStreamDomUpdate(`main:${nodeId}`);
-    render();
+    renderStreamingNode(nodeId, versionId, { final: true });
+    renderGenerationChrome();
+    renderContextBadge();
+    renderSessions();
+    persistState(state);
   }
 }
 
-function renderStreamingNode(nodeId, versionId) {
+function renderStreamingNode(nodeId, versionId, options = {}) {
   const node = getNode(nodeId);
   const version = node?.versions.find((item) => item.id === versionId);
-  const card = els.messages.querySelector(`[data-node-id="${nodeId}"] .chat-speech`);
+  const card = els.messages.querySelector(`[data-node-id="${cssEscape(nodeId)}"] .chat-bubble`);
   if (!card || !version) {
-    render();
+    if (node && version) {
+      renderMessages();
+      renderGenerationChrome();
+    } else {
+      render();
+    }
     return;
   }
-  const contentElement = card.querySelector(".message-content");
-  if (!contentElement) return render();
   scheduleStreamDomUpdate(`main:${nodeId}`, () => {
-    contentElement.textContent = version.content || "";
-    if (!card.querySelector(".stream-caret")) {
+    const follow = shouldFollowBottom();
+    let contentElement = card.querySelector(".message-content");
+    if (!contentElement) {
+      contentElement = document.createElement("span");
+      contentElement.className = "message-content";
+      card.prepend(contentElement);
+    }
+    const nextContent = version.content || "";
+    if (nextContent) {
+      contentElement.classList.remove("message-loading-dots");
+      contentElement.textContent = nextContent;
+    } else if (!contentElement.classList.contains("message-loading-dots")) {
+      contentElement.classList.add("message-loading-dots");
+      contentElement.innerHTML = "<i></i><i></i><i></i>";
+    }
+    card.querySelector(".stream-caret")?.remove();
+    if (!options.final) {
       contentElement.insertAdjacentHTML("afterend", '<span class="stream-caret"></span>');
     }
+    const row = card.closest(".chat-row[data-node-id]");
+    if (row) row.dataset.renderSignature = getMessageRenderSignature(node);
+    if (follow) scrollBottom();
   });
 }
 
@@ -2578,9 +3845,10 @@ function requestMessages(assistantNodeId, continueMode = false) {
 }
 
 async function callOpenAI(assistantNodeId, continueMode = false) {
+  const runtime = getPrimaryCreatorRuntimeConfig();
   return aiClient.generate({
-    api: apiSettings(),
-    settings: sessionSettings(),
+    api: runtime.api,
+    settings: runtime.settings,
     messages: requestMessages(assistantNodeId),
     continueMode,
     continuePrompt: CONTINUE_PROMPT,
@@ -2643,9 +3911,10 @@ async function callOpenAITextStreamWithSettings(messages, settingsOverride, apiO
 }
 
 async function callOpenAIStream(onChunk, assistantNodeId, continueMode = false) {
+  const runtime = getPrimaryCreatorRuntimeConfig();
   return aiClient.generateStream({
-    api: apiSettings(),
-    settings: sessionSettings(),
+    api: runtime.api,
+    settings: runtime.settings,
     messages: requestMessages(assistantNodeId),
     onChunk,
     continueMode,
@@ -2772,6 +4041,7 @@ async function copyText(text) {
 
 function newSession() {
   const session = createSession();
+  ensureSessionCreator(session);
   state.sessions.unshift(session);
   state.activeSessionId = session.id;
   activeMenuNodeId = null;
@@ -2811,10 +4081,16 @@ function switchSession(sessionId) {
   if (isGenerating) return showToast("生成中不能切换会话");
   if (!state.sessions.some((session) => session.id === sessionId)) return;
   state.activeSessionId = sessionId;
+  const rt = roundtableState(activeSession());
+  rt.enabled = false;
+  rt.membersOpen = false;
+  rt.materialsOpen = false;
+  rt.contextOpen = false;
   activeMenuNodeId = null;
   activeRoundtableMessageId = null;
   closePanels();
   render();
+  persistState(state);
   scrollBottom();
 }
 
@@ -2846,17 +4122,54 @@ function copySession(sessionId) {
   showToast("已复制会话");
 }
 
-function deleteSession(sessionId) {
+function removeCreatorIfUnused(creatorId) {
+  const id = clean(creatorId);
+  if (!id) return false;
+  const stillPrimary = state.sessions.some((session) => session.creatorId === id);
+  const stillInRoundtable = state.sessions.some((session) => Array.isArray(session.roundtable?.selectedIds) && session.roundtable.selectedIds.includes(id));
+  if (stillPrimary || stillInRoundtable) return false;
+  delete creatorsState()[id];
+  state.councilParticipationRecords = (state.councilParticipationRecords || [])
+    .filter((record) => record?.councilId !== id);
+  state.creatorParticipationRecords = (state.creatorParticipationRecords || [])
+    .filter((record) => record?.creatorId !== id);
+  return true;
+}
+
+async function deleteSession(sessionId) {
+  const target = state.sessions.find((session) => session.id === sessionId);
+  if (!target) return;
+  const title = titleForSession(target);
+  const isLastSession = state.sessions.length <= 1;
+  const creatorId = target.creatorId;
+  const choice = await askThreeWayDelete({
+    title: "删除会话",
+    message: isLastSession
+      ? `清空最后一个会话「${title}」并新建空会话？`
+      : `删除会话「${title}」？`,
+    confirmLabel: "确定",
+    keepLabel: "删除但保留主创",
+  });
+  if (choice === "cancel") return;
+  const keepCreator = choice === "keep";
   if (state.sessions.length <= 1) {
-    state.sessions = [createSession()];
+    const session = createSession();
+    ensureSessionCreator(session);
+    state.sessions = [session];
     state.activeSessionId = state.sessions[0].id;
+    if (!keepCreator) removeCreatorIfUnused(creatorId);
     render();
+    persistState(state);
+    showToast("会话已清空");
     return;
   }
   state.sessions = state.sessions.filter((session) => session.id !== sessionId);
   if (state.activeSessionId === sessionId) state.activeSessionId = state.sessions[0].id;
+  if (!keepCreator) removeCreatorIfUnused(creatorId);
   activeMenuNodeId = null;
   render();
+  persistState(state);
+  showToast(keepCreator ? "会话已删除，主创已保留" : "会话已删除");
 }
 
 function syncNovelFromFields() {
@@ -2926,7 +4239,7 @@ function deleteManuscriptVersion(id) {
 function readLocalImageDataUrl(file) {
   return new Promise((resolve, reject) => {
     if (!file) return reject(new Error("没有选择图片"));
-    if (!LOCAL_IMAGE_TYPES.has(file.type)) return reject(new Error("请使用 PNG、JPG 或 WebP 图片"));
+    if (!LOCAL_IMAGE_TYPES.has(file.type)) return reject(new Error("请使用 PNG、JPG、WebP 或 ICO 图片"));
     if (file.size > LOCAL_IMAGE_MAX_BYTES) return reject(new Error("图片过大，请选择 2.5MB 以内的图片"));
     const reader = new FileReader();
     reader.addEventListener("load", () => resolve(String(reader.result || "")));
@@ -3020,15 +4333,11 @@ function clearSessionBackground() {
 }
 
 function updateWorkspacePath() {
-  sessionWorkspace().path = clean(els.workspacePathInput?.value);
-  touchSession(activeSession());
-  renderWorkspacePanel();
-  persistState(state);
+  workspaceController.updateWorkspacePath();
 }
 
 function chooseWorkspaceFiles() {
-  ensureWorkspaceUi();
-  els.workspaceFileInput?.click();
+  workspaceController.chooseWorkspaceFiles();
 }
 
 function chooseChatImage() {
@@ -3114,46 +4423,15 @@ async function handleChatImageSelected() {
 }
 
 async function handleWorkspaceFilesSelected() {
-  const selected = Array.from(els.workspaceFileInput?.files || []);
-  if (!selected.length) return;
-  const workspace = sessionWorkspace();
-  const existing = new Map(workspace.files.map((file) => [`${file.name}:${file.size}:${file.lastModified || ""}`, file]));
-  selected.forEach((file) => {
-    const key = `${file.name}:${file.size}:${file.lastModified || ""}`;
-    const ext = file.name.includes(".") ? file.name.split(".").pop().toLowerCase() : "";
-    existing.set(key, {
-      id: existing.get(key)?.id || uid("wfile"),
-      name: file.name,
-      size: file.size,
-      type: file.type || "",
-      ext,
-      category: workspaceCategoryForFile(file),
-      lastModified: file.lastModified || 0,
-      addedAt: existing.get(key)?.addedAt || Date.now(),
-    });
-  });
-  workspace.files = Array.from(existing.values()).slice(-WORKSPACE_FILE_LIMIT);
-  touchSession(activeSession());
-  renderWorkspacePanel();
-  persistState(state);
-  if (els.workspaceFileInput) els.workspaceFileInput.value = "";
-  showToast(`已加入 ${selected.length} 个工作区文件`);
+  await workspaceController.handleWorkspaceFilesSelected();
 }
 
 function clearWorkspaceFiles() {
-  sessionWorkspace().files = [];
-  touchSession(activeSession());
-  renderWorkspacePanel();
-  persistState(state);
-  showToast("工作区文件列表已清空");
+  workspaceController.clearWorkspaceFiles();
 }
 
 function removeWorkspaceFile(id) {
-  const workspace = sessionWorkspace();
-  workspace.files = workspace.files.filter((file) => file.id !== id);
-  touchSession(activeSession());
-  renderWorkspacePanel();
-  persistState(state);
+  workspaceController.removeWorkspaceFile(id);
 }
 
 function exportBodyFile() {
@@ -3188,6 +4466,46 @@ function downloadText(filename, text, type = "text/plain;charset=utf-8") {
   anchor.click();
   anchor.remove();
   URL.revokeObjectURL(url);
+}
+
+function exportGlobalBackup() {
+  importExportController.exportGlobalBackup();
+}
+
+function importGlobalBackup() {
+  importExportController.importGlobalBackup();
+}
+
+async function handleGlobalBackupImportSelected() {
+  await importExportController.handleGlobalBackupImportSelected();
+}
+
+function exportCreatorPackage(creatorId) {
+  importExportController.exportCreatorPackage(creatorId);
+}
+
+function importCreatorPackage() {
+  importExportController.importCreatorPackage();
+}
+
+function replaceCurrentCreatorPackage() {
+  importExportController.replaceCurrentCreatorPackage();
+}
+
+async function handleCreatorImportSelected() {
+  await importExportController.handleCreatorImportSelected();
+}
+
+function exportSessionPackage(sessionId) {
+  importExportController.exportSessionPackage(sessionId);
+}
+
+function importSessionPackage() {
+  importExportController.importSessionPackage();
+}
+
+async function handleSessionImportSelected() {
+  await importExportController.handleSessionImportSelected();
 }
 
 function novelPromptFor(target) {
@@ -3242,52 +4560,23 @@ async function generateNovelMaterial(target) {
 }
 
 function toggleRoundtable() {
-  const rt = roundtableState();
-  rt.enabled = !rt.enabled;
-  rt.membersOpen = false;
-  activeMenuNodeId = null;
-  activeRoundtableMessageId = null;
-  closePanels();
-  render();
-  resizeInput();
-  if (rt.enabled) showToast("已进入圆桌共创模式");
+  roundtableController.toggleRoundtable();
 }
 
 function setRoundtableEnabled(enabled, toastText = "") {
-  const rt = roundtableState();
-  if (rt.enabled === enabled) return;
-  rt.enabled = enabled;
-  rt.membersOpen = false;
-  rt.materialsOpen = false;
-  activeMenuNodeId = null;
-  activeRoundtableMessageId = null;
-  closePanels();
-  render();
-  resizeInput();
-  if (toastText) showToast(toastText);
+  roundtableController.setRoundtableEnabled(enabled, toastText);
 }
 
 function toggleRoundtableMembers() {
-  const rt = roundtableState();
-  if (rt.membersOpen) {
-    closeRoundtableMembers();
-    return;
-  }
-  rt.membersOpen = true;
-  pushTransientHistory();
-  render();
+  roundtableController.toggleRoundtableMembers();
 }
 
 function toggleRoundtableMaterials() {
-  const rt = roundtableState();
-  rt.materialsOpen = !rt.materialsOpen;
-  render();
+  roundtableController.toggleRoundtableMaterials();
 }
 
 function toggleRoundtableSessionImport() {
-  const rt = roundtableState();
-  rt.sessionImportOpen = !rt.sessionImportOpen;
-  render();
+  roundtableController.toggleRoundtableSessionImport();
 }
 
 function handleComposerTool() {
@@ -3298,11 +4587,201 @@ function handleComposerTool() {
   openAssistantConfig(getPrimaryCreatorId(), { mode: "creator" });
 }
 
-function getPrimaryCreatorId() {
+function openComposerModelConfig() {
+  modelPickerOpen = false;
+  openAssistantConfig(getPrimaryCreatorId(), { mode: "creator-model" });
+}
+
+function getPrimaryCreatorId(session = activeSession()) {
+  return ensureSessionCreator(session).id;
+}
+
+function syncPrimaryCreatorIntoRoundtable() {
   const rt = roundtableState();
-  const selected = (Array.isArray(rt.selectedIds) ? rt.selectedIds : [])
-    .find((id) => id && id !== "writer" && getRoundAssistant(id));
-  return selected || "plot";
+  const primaryId = getPrimaryCreatorId();
+  const primary = getRoundAssistant(primaryId);
+  if (!primary || primary.id === "writer") return;
+  const existingIds = Array.isArray(rt.selectedIds) ? rt.selectedIds : [];
+  const nextIds = existingIds.filter((id) => {
+    if (!id || id === "writer" || id === primaryId) return false;
+    if (id === "plot" || isSealedRoundtableCreatorId(id)) return false;
+    return Boolean(getRoundAssistant(id));
+  });
+  rt.selectedIds = nextIds;
+  rt.hiddenAssistantIds = (Array.isArray(rt.hiddenAssistantIds) ? rt.hiddenAssistantIds : [])
+    .filter((id) => id !== primaryId);
+  rt.speakerOrderIds = getRoundtableSpeakerOrderIds(rt);
+}
+
+function isSealedCreatorLocked() {
+  return Boolean(clean(getCreatorIdentity(getPrimaryCreatorId())?.sourceTemplateId));
+}
+
+function getCreatorSourceTemplateId(creatorId) {
+  return clean(getCreatorIdentity(creatorId)?.sourceTemplateId);
+}
+
+function isSealedBTemplateCreator(creatorId) {
+  return getCreatorSourceTemplateId(creatorId) === "sealed-b";
+}
+
+function isCurrentAssistantSealed() {
+  return Boolean(clean(getCreatorIdentity(assistantConfigTargetId)?.sourceTemplateId));
+}
+
+function getMainSystemPrompt(session = activeSession()) {
+  return clean(getCreatorIdentity(getPrimaryCreatorId(session))?.prompt) || clean(sessionSettings(session).systemPrompt);
+}
+
+function getPrimaryCreatorRuntimeConfig() {
+  const settings = sessionSettings();
+  const creator = getRoundAssistant(getPrimaryCreatorId());
+  const maxTokens = Number(creator?.maxTokens);
+  const temperature = Number(creator?.temperature);
+  const providerId = clean(creator?.providerId);
+  return {
+    creator,
+    settings: {
+      ...settings,
+      systemPrompt: getMainSystemPrompt(),
+      model: clean(creator?.model) || settings.model,
+      maxTokens: maxTokens > 0 ? maxTokens : settings.maxTokens,
+      temperature: Number.isFinite(temperature) ? temperature : settings.temperature,
+    },
+    api: apiForProvider(providerId),
+  };
+}
+
+function validatePrimaryCreatorApi() {
+  const runtime = getPrimaryCreatorRuntimeConfig();
+  validateApi(runtime.settings, runtime.api);
+  return runtime;
+}
+
+function renderSealedCreatorOverlay() {
+  if (!els.sealedCreatorList) return;
+  const currentCreator = getCreatorIdentity(getPrimaryCreatorId());
+  const lockedId = clean(currentCreator?.sourceTemplateId);
+  const lockedBase = SEALED_ROUNDTABLE_CREATORS.find((base) => base.id === lockedId);
+  const statusText = lockedBase ? "LOCKED" : "SELECT";
+  els.sealedCreatorList.innerHTML = SEALED_ROUNDTABLE_CREATORS.map((base) => {
+    const assistant = lockedId === base.id ? getRoundAssistant(getPrimaryCreatorId()) : base;
+    const locked = lockedId === base.id;
+    const avatar = clean(assistant.avatarDataUrl || base.avatarUrl)
+      ? `<img src="${escapeHtml(assistant.avatarDataUrl || base.avatarUrl)}" alt="${escapeHtml(assistant.name || base.name)}" />`
+      : escapeHtml((assistant.name || base.name).slice(0, 1));
+    return `
+      <button class="sealed-creator-card ${base.id} ${locked ? "locked" : ""}" type="button" data-command="select-sealed-creator" data-sealed-id="${escapeHtml(base.id)}" title="${escapeHtml(assistant.name || base.name)}" aria-label="${escapeHtml(locked ? `${assistant.name || base.name}已套用` : `套用${assistant.name || base.name}`)}">
+        <span class="sealed-creator-avatar">${avatar}</span>
+        <span class="sealed-creator-name">${escapeHtml(assistant.name || base.name)}</span>
+      </button>
+    `;
+  }).join("") + `<div class="sealed-creator-status">${escapeHtml(statusText)}</div>`;
+}
+
+function pushSealedCreatorHistory() {
+  if (history.state?.tbirdSealedCreatorOpen) {
+    sealedCreatorHistoryOpen = true;
+    return;
+  }
+  try {
+    history.pushState({ ...(history.state || {}), tbirdSealedCreatorOpen: true }, "");
+    sealedCreatorHistoryOpen = true;
+  } catch {
+    sealedCreatorHistoryOpen = false;
+  }
+}
+
+function openSealedCreatorOverlay() {
+  if (!els.sealedCreatorOverlay) return;
+  if (roundtableState().membersOpen) closeRoundtableMembers({ fromHistory: true });
+  modelPickerOpen = false;
+  renderModelPicker();
+  renderSealedCreatorOverlay();
+  sealedCreatorOverlayOpen = true;
+  els.sealedCreatorOverlay.hidden = false;
+  els.body?.classList.add("sealed-creator-active");
+  pushSealedCreatorHistory();
+}
+
+function closeSealedCreatorOverlay(options = {}) {
+  if (!els.sealedCreatorOverlay || !sealedCreatorOverlayOpen) return;
+  sealedCreatorOverlayOpen = false;
+  els.sealedCreatorOverlay.hidden = true;
+  els.body?.classList.remove("sealed-creator-active");
+  if (options.fromButton && sealedCreatorHistoryOpen && history.state?.tbirdSealedCreatorOpen) {
+    closingSealedCreatorFromButton = true;
+    sealedCreatorHistoryOpen = false;
+    history.back();
+  }
+}
+
+function selectSealedCreator(id) {
+  const base = getSealedRoundtableCreatorBase(id);
+  if (!base) return;
+  const session = activeSession();
+  const currentCreator = getRoundAssistant(getPrimaryCreatorId());
+  const previous = getCreatorIdentity(getPrimaryCreatorId());
+  const previousTemplateId = clean(previous?.sourceTemplateId);
+  const shouldSyncName = !previous || isAutoPrimaryCreatorName(previous, {
+    session,
+    extraNames: [currentCreator?.name],
+  });
+  const creator = saveCreatorIdentity({
+    ...previous,
+    name: shouldSyncName ? base.name : (clean(previous?.name) || base.name),
+    avatarDataUrl: previousTemplateId && previousTemplateId !== base.id ? base.avatarUrl : (clean(previous?.avatarDataUrl) || base.avatarUrl),
+    sourceTemplateId: base.id,
+    sealedTemplateCode: base.id === "sealed-t" ? "T" : base.id === "sealed-b" ? "B" : "",
+    prompt: clean(base.prompt),
+    modelConfig: {
+      ...(previous?.modelConfig || {}),
+      providerId: clean(previous?.modelConfig?.providerId) || clean(currentCreator?.providerId),
+      model: clean(previous?.modelConfig?.model) || clean(currentCreator?.model) || clean(sessionSettings().model),
+    },
+  });
+  session.creatorId = creator.id;
+  touchSession(session);
+  persistState(state);
+  render();
+  renderSealedCreatorOverlay();
+  closeSealedCreatorOverlay({ fromButton: true });
+  openAssistantConfig(creator.id, { mode: "creator" });
+  showToast(`已套用封装模板 ${creator.name || base.name}`);
+}
+
+function handleAssistantAvatarSecretTap() {
+  if (assistantConfigMode !== "creator") return;
+  sealedCreatorTapCount += 1;
+  clearTimeout(sealedCreatorTapTimer);
+  sealedCreatorTapTimer = setTimeout(() => {
+    sealedCreatorTapCount = 0;
+  }, 1600);
+  if (sealedCreatorTapCount < 5) return;
+  sealedCreatorTapCount = 0;
+  clearTimeout(sealedCreatorTapTimer);
+  if (els.assistantConfigDialog?.open) {
+    closeAssistantConfig();
+    requestAnimationFrame(() => openSealedCreatorOverlay());
+    return;
+  }
+  openSealedCreatorOverlay();
+}
+
+function handleModelSelectSecretTap(event) {
+  if (roundtableState().enabled) return;
+  sealedCreatorTapCount += 1;
+  clearTimeout(sealedCreatorTapTimer);
+  sealedCreatorTapTimer = setTimeout(() => {
+    sealedCreatorTapCount = 0;
+  }, 1600);
+  if (sealedCreatorTapCount < 5) return;
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation?.();
+  sealedCreatorTapCount = 0;
+  clearTimeout(sealedCreatorTapTimer);
+  openSealedCreatorOverlay();
 }
 
 function toggleRoundtableRound() {
@@ -3314,20 +4793,33 @@ function toggleRoundtableRound() {
 }
 
 function toggleRoundtableContextDock() {
-  const rt = roundtableState();
-  if (!rt.enabled) return;
-  rt.contextOpen = !rt.contextOpen;
-  render();
-  resizeInput();
+  roundtableController.toggleRoundtableContextDock();
 }
 
 function toggleRoundtableMember(id) {
   const rt = roundtableState();
   if (!getRoundAssistantBase(id) || id === "writer") return;
+  if (id === getPrimaryCreatorId()) return showToast("主创固定在本会话");
   const index = rt.selectedIds.indexOf(id);
-  if (index >= 0) rt.selectedIds.splice(index, 1);
-  else rt.selectedIds.push(id);
+  if (index >= 0) {
+    rt.selectedIds.splice(index, 1);
+    rt.speakerOrderIds = getRoundtableSpeakerOrderIds(rt).filter((item) => item !== id);
+  } else {
+    rt.selectedIds.push(id);
+    rt.speakerOrderIds = getRoundtableSpeakerOrderIds(rt);
+  }
+  touchSession(activeSession());
   render();
+  persistState(state);
+}
+
+function togglePrimaryRoundtableSpeaking() {
+  const rt = roundtableState();
+  rt.primaryInRound = rt.primaryInRound === false;
+  rt.speakerOrderIds = getRoundtableSpeakerOrderIds(rt);
+  touchSession(activeSession());
+  render();
+  persistState(state);
 }
 
 function updateRoundtableContextOption(key, rawValue) {
@@ -3367,22 +4859,40 @@ function handleRoundtableContextOptionInput(event) {
   updateRoundtableContextOption(key, value);
 }
 
-function createCustomRoundAssistant() {
+function discardPendingCustomAssistantDraft(options = {}) {
+  const id = pendingCustomAssistantDraftId;
+  if (!id) return false;
   const rt = roundtableState();
-  const id = uid("round_member");
-  const assistant = normalizeCustomAssistant({
-    id,
-    name: `新主创${rt.customAssistants.length + 1}`,
-    role: "议员",
-    prompt: DEFAULT_CUSTOM_ROUNDTABLE_ASSISTANT_PROMPT,
+  const existed = rt.customAssistants.some((assistant) => assistant?.id === id);
+  rt.customAssistants = rt.customAssistants.filter((assistant) => assistant?.id !== id);
+  rt.selectedIds = rt.selectedIds.filter((selectedId) => selectedId !== id);
+  delete rt.assistantConfigs[id];
+  delete creatorsState()[id];
+  pendingCustomAssistantDraftId = null;
+  if (existed && options.render !== false) render();
+  return existed;
+}
+
+function createCustomRoundAssistant() {
+  discardPendingCustomAssistantDraft({ render: false });
+  const rt = roundtableState();
+  const creator = createCreatorIdentity({
+    name: `新议员${rt.selectedIds.length + 1}`,
+    prompt: createRandomTraitPrompt(),
+    modelConfig: {
+      providerId: apiSettings().currentProviderId,
+      baseUrl: apiSettings().baseUrl,
+      model: sessionSettings().model,
+      temperature: sessionSettings().temperature,
+      maxTokens: sessionSettings().maxTokens,
+      contextTokenBudget: apiSettings().contextTokenBudget,
+    },
   });
-  if (!assistant) return;
-  rt.customAssistants.push(assistant);
-  rt.selectedIds.push(assistant.id);
-  touchSession(activeSession());
+  saveCreatorIdentity(creator);
+  rt.selectedIds.push(creator.id);
+  pendingCustomAssistantDraftId = creator.id;
   render();
-  persistState(state);
-  openAssistantConfig(assistant.id);
+  openAssistantConfig(creator.id);
 }
 
 function uniqueRoundAssistantName(name, sourceTitle = "") {
@@ -3399,52 +4909,22 @@ function uniqueRoundAssistantName(name, sourceTitle = "") {
   return candidate;
 }
 
-function importRoundtableMemberFromSession(sessionId, memberId) {
-  const source = state.sessions.find((session) => session.id === sessionId);
-  if (!source || source.id === activeSession()?.id) return showToast("没有找到可拉入的来源会话");
-  const assistant = getRoundAssistantFromSession(source, memberId);
-  if (!assistant || assistant.id === "writer") return showToast("没有找到可拉入的议员");
-  const rt = roundtableState();
-  const existingId = Object.entries(rt.assistantConfigs || {}).find(([, config]) => (
-    config?.importedFrom?.sessionId === source.id
-    && config?.importedFrom?.memberId === assistant.id
-  ))?.[0];
-  if (existingId && getRoundAssistantBase(existingId)) {
-    if (!rt.selectedIds.includes(existingId)) rt.selectedIds.push(existingId);
-    touchSession(activeSession());
-    render();
-    persistState(state);
-    return showToast("这位议员已经在当前圆桌");
-  }
-  const id = uid("round_member");
-  const name = uniqueRoundAssistantName(assistant.name, titleForSession(source));
-  const imported = normalizeCustomAssistant({
-    id,
-    name,
-    role: "议员",
-    prompt: assistant.prompt || DEFAULT_CUSTOM_ROUNDTABLE_ASSISTANT_PROMPT,
-  }, rt.customAssistants.length);
-  if (!imported) return showToast("议员拉入失败");
-  const config = createRoundAssistantConfigView(assistant, sessionSettings(source).temperature) || {};
-  rt.customAssistants.push(imported);
-  rt.assistantConfigs[id] = {
-    ...config,
-    name,
-    prompt: imported.prompt,
-    memories: normalizeAssistantMemories(config.memories),
-    privateMessages: normalizeAssistantPrivateMessages(config.privateMessages),
-    importedFrom: {
-      sessionId: source.id,
-      memberId: assistant.id,
-      sessionTitle: titleForSession(source),
-      importedAt: Date.now(),
-    },
+async function callCompressionModel(prompt, settingsOverride, apiOverride) {
+  const settings = {
+    ...settingsOverride,
+    temperature: 0.25,
+    maxTokens: Math.max(1000, Number(settingsOverride?.maxTokens) || 0),
   };
-  if (!rt.selectedIds.includes(id)) rt.selectedIds.push(id);
-  touchSession(activeSession());
-  render();
-  persistState(state);
-  showToast(`已拉入 ${name}`);
+  validateApi(settings, apiOverride);
+  return aiClient.generateText({
+    api: apiOverride,
+    settings,
+    messages: [{ role: "user", content: prompt }],
+  });
+}
+
+async function importRoundtableMemberFromSession(sessionId, memberId) {
+  await roundtableController.importMemberFromSession(sessionId, memberId);
 }
 
 function openAssistantConfig(id, options = {}) {
@@ -3453,28 +4933,44 @@ function openAssistantConfig(id, options = {}) {
   if (!assistant || !config) return;
   const rawConfig = roundtableState().assistantConfigs?.[id] || {};
   assistantConfigTargetId = id;
-  assistantConfigMode = options.mode || "member";
+  const sealedCreator = Boolean(clean(getCreatorIdentity(id)?.sourceTemplateId)) || isSealedRoundtableCreatorId(id);
+  assistantConfigMode = options.mode || (sealedCreator ? "creator" : "member");
   assistantModelPickerOpen = false;
   ensureAssistantModelPickerUi();
-  els.assistantConfigTitle.textContent = assistantConfigMode === "creator" ? `${assistant.name}主创设置` : `${assistant.name}设置`;
+  const isCreatorMode = assistantConfigMode === "creator" || assistantConfigMode === "creator-model";
+  const isCreatorModelMode = assistantConfigMode === "creator-model";
+  els.assistantConfigDialog?.classList.toggle("sealed-assistant-config", sealedCreator);
+  els.assistantConfigDialog?.classList.toggle("sealed-b-config", isSealedBTemplateCreator(id) || id === "sealed-b");
+  els.assistantConfigDialog?.classList.toggle("assistant-model-config-only", isCreatorModelMode);
+  els.assistantConfigTitle.textContent = isCreatorModelMode
+    ? `${assistant.name || "主创"}模型配置`
+    : (sealedCreator ? "封装主创" : (isCreatorMode ? "主创设置" : `${assistant.name}设置`));
   if (els.assistantSourceLabel) {
     const imported = rawConfig.importedFrom;
     const sourceTitle = clean(imported?.sessionTitle);
-    els.assistantSourceLabel.hidden = !sourceTitle;
-    els.assistantSourceLabel.textContent = sourceTitle ? `来自：${sourceTitle}` : "";
+    els.assistantSourceLabel.hidden = sealedCreator || !sourceTitle;
+    els.assistantSourceLabel.textContent = sealedCreator ? "" : (sourceTitle ? `来自：${sourceTitle}` : "");
   }
-  els.assistantNameInput.value = config.name;
+  const rawName = clean(rawConfig.name);
+  const creatorUsesFallbackName = isCreatorMode && !sealedCreator && (!rawName || isLegacyDefaultCreatorName(rawName));
+  els.assistantNameInput.value = creatorUsesFallbackName ? "" : config.name;
+  els.assistantNameInput.placeholder = sealedCreator ? assistant.name : (isCreatorMode ? clean(assistant.model) || getCreatorFallbackName() : "");
   if (els.assistantAvatarPreview) {
     els.assistantAvatarPreview.dataset.avatarDataUrl = config.avatarDataUrl || "";
     renderAvatarPreview(els.assistantAvatarPreview, config.avatarDataUrl, config.name || assistant.name || "议");
   }
   renderAssistantProviderOptions(config.providerId);
+  if (els.assistantModelFold) {
+    els.assistantModelFold.hidden = assistantConfigMode === "creator" && !sealedCreator;
+    els.assistantModelFold.open = isCreatorModelMode || els.assistantModelFold.open;
+  }
   if (els.assistantBaseUrlInput) els.assistantBaseUrlInput.value = config.apiBaseUrl || "";
   if (els.assistantApiKeyInput) els.assistantApiKeyInput.value = config.apiKey || "";
   syncAssistantApiOverrideUi(Boolean(clean(config.apiBaseUrl) || clean(config.apiKey)));
   els.assistantModelInput.value = config.model;
   if (els.assistantNetworkEnabledInput) els.assistantNetworkEnabledInput.checked = Boolean(config.networkEnabled);
   if (els.assistantMaxTokensInput) els.assistantMaxTokensInput.value = config.maxTokens || "";
+  if (els.assistantContextTokenBudgetInput) els.assistantContextTokenBudgetInput.value = config.contextTokenBudget || "";
   els.assistantTemperatureInput.value = config.temperature;
   els.assistantTemperatureLabel.textContent = Number(config.temperature).toFixed(2);
   const contextOptions = normalizeRoundtableContextOptions(config.contextOptions);
@@ -3489,7 +4985,7 @@ function openAssistantConfig(id, options = {}) {
   if (els.assistantIncludeDiscussionInput) els.assistantIncludeDiscussionInput.checked = contextOptions.includeDiscussion;
   if (els.assistantExcerptMaxInput) els.assistantExcerptMaxInput.value = contextOptions.excerptMax;
   if (els.assistantDiscussionCountInput) els.assistantDiscussionCountInput.value = contextOptions.discussionCount;
-  if (els.assistantActivationProfileInput) els.assistantActivationProfileInput.value = config.activationProfile || "";
+  if (els.assistantActivationProfileInput) els.assistantActivationProfileInput.value = sealedCreator ? "" : (config.activationProfile || "");
   if (els.assistantActivationStatus) els.assistantActivationStatus.textContent = config.activationProfile ? "已激活" : "未激活";
   if (els.activateAssistant) els.activateAssistant.textContent = config.activationProfile ? "重新激活" : "激活";
   if (els.assistantModelStatus) els.assistantModelStatus.textContent = config.model ? `当前：${config.model}` : "未拉取";
@@ -3498,11 +4994,23 @@ function openAssistantConfig(id, options = {}) {
   renderAssistantPrivateChat(id);
   if (els.assistantPrivateChatInput) els.assistantPrivateChatInput.value = "";
   if (els.assistantPrivateFold) {
-    els.assistantPrivateFold.hidden = assistantConfigMode === "creator" || id === "writer";
+    els.assistantPrivateFold.hidden = isCreatorMode || id === "writer" || sealedCreator;
   }
-  els.assistantPromptInput.value = config.prompt;
+  if (els.assistantActivationFold) els.assistantActivationFold.hidden = sealedCreator || isCreatorModelMode;
+  if (els.sealedActivationBar) els.sealedActivationBar.hidden = true;
+  if (els.assistantParticipationFold) els.assistantParticipationFold.hidden = isCreatorModelMode;
+  if (els.assistantPromptFold) els.assistantPromptFold.hidden = sealedCreator || isCreatorModelMode;
+  if (els.assistantMaterialsFold) els.assistantMaterialsFold.hidden = sealedCreator || isCreatorModelMode;
+  if (els.sealedPromptBar) els.sealedPromptBar.hidden = true;
+  const creatorPrompt = isCreatorMode && !sealedCreator
+    ? clean(sessionSettings().systemPrompt) || config.prompt
+    : config.prompt;
+  els.assistantPromptInput.value = sealedCreator ? "" : creatorPrompt;
+  if (els.importAssistant) els.importAssistant.hidden = sealedCreator || isCreatorModelMode;
+  if (els.exportAssistant) els.exportAssistant.hidden = sealedCreator || isCreatorModelMode;
+  if (els.resetAssistantConfig) els.resetAssistantConfig.hidden = sealedCreator || isCreatorModelMode;
   if (els.deleteAssistant) {
-    els.deleteAssistant.hidden = id === "writer";
+    els.deleteAssistant.hidden = id === "writer" || sealedCreator || isCreatorModelMode;
   }
   els.assistantConfigDialog.showModal();
   pushDialogHistory();
@@ -3527,137 +5035,35 @@ function currentAssistantContextOptions() {
 
 function currentAssistantFormConfig() {
   const previous = assistantConfigTargetId ? roundtableState().assistantConfigs[assistantConfigTargetId] || {} : {};
+  const creatorMode = assistantConfigMode === "creator";
+  const modelOnlyMode = assistantConfigMode === "creator-model";
+  const sealedCreator = Boolean(clean(getCreatorIdentity(assistantConfigTargetId)?.sourceTemplateId)) || isSealedRoundtableCreatorId(assistantConfigTargetId);
+  const followsMainModel = creatorMode && !sealedCreator;
   return {
-    name: clean(els.assistantNameInput.value),
-    providerId: clean(els.assistantProviderSelect?.value),
+    name: modelOnlyMode ? clean(previous.name) : clean(els.assistantNameInput.value),
+    providerId: followsMainModel ? "" : clean(els.assistantProviderSelect?.value),
     apiBaseUrl: "",
     apiKey: "",
-    model: clean(els.assistantModelInput.value),
+    model: followsMainModel ? "" : clean(els.assistantModelInput.value),
     networkEnabled: Boolean(els.assistantNetworkEnabledInput?.checked),
-    maxTokens: Number(els.assistantMaxTokensInput?.value) || 0,
-    temperature: Number(els.assistantTemperatureInput.value),
-    contextOptions: currentAssistantContextOptions(),
-    activationProfile: clean(els.assistantActivationProfileInput?.value),
+    maxTokens: followsMainModel ? 0 : Number(els.assistantMaxTokensInput?.value) || 0,
+    contextTokenBudget: followsMainModel ? 0 : Number(els.assistantContextTokenBudgetInput?.value) || 0,
+    temperature: followsMainModel ? sessionSettings().temperature : Number(els.assistantTemperatureInput.value),
+    contextOptions: modelOnlyMode ? normalizeRoundtableContextOptions(previous.contextOptions) : currentAssistantContextOptions(),
+    activationProfile: (sealedCreator || modelOnlyMode) ? clean(previous.activationProfile) : clean(els.assistantActivationProfileInput?.value),
     memories: normalizeAssistantMemories(previous.memories),
-    privateMessages: normalizeAssistantPrivateMessages(previous.privateMessages),
-    avatarDataUrl: clean(els.assistantAvatarPreview?.dataset.avatarDataUrl),
-    prompt: clean(els.assistantPromptInput.value),
+    privateMessages: assistantController.normalizePrivateMessages(previous.privateMessages),
+    avatarDataUrl: modelOnlyMode ? clean(previous.avatarDataUrl) : clean(els.assistantAvatarPreview?.dataset.avatarDataUrl),
+    prompt: (sealedCreator || modelOnlyMode) ? clean(previous.prompt) : clean(els.assistantPromptInput.value),
   };
-}
-
-function createAssistantPersonaPayload(config, assistantId = assistantConfigTargetId) {
-  return {
-    type: "tbird-council-persona",
-    version: 1,
-    exportedAt: Date.now(),
-    assistantId: assistantId || "",
-    config: {
-      name: clean(config.name),
-      providerId: clean(config.providerId),
-      model: clean(config.model),
-      networkEnabled: Boolean(config.networkEnabled),
-      maxTokens: Number(config.maxTokens) || 0,
-      temperature: Number.isFinite(Number(config.temperature)) ? Number(config.temperature) : sessionSettings().temperature,
-      contextOptions: normalizeRoundtableContextOptions(config.contextOptions),
-      activationProfile: clean(config.activationProfile),
-      memories: normalizeAssistantMemories(config.memories),
-      avatarDataUrl: clean(config.avatarDataUrl),
-      prompt: clean(config.prompt),
-    },
-  };
-}
-
-function formatAssistantPersonaText(payload) {
-  const config = payload.config || {};
-  const context = normalizeRoundtableContextOptions(config.contextOptions);
-  const readableContext = [
-    context.includeManuscript ? "正文" : "",
-    context.includeMainChat ? "主线对话" : "",
-    context.includeDiscussion ? "圆桌记录" : "",
-    context.includePlotline ? "剧情线" : "",
-    context.includeCharacters ? "角色卡" : "",
-    context.includeWorld ? "世界观" : "",
-    context.includeOutline ? "大纲" : "",
-    context.includeForeshadows ? "伏笔" : "",
-  ].filter(Boolean).join("、") || "无";
-  return [
-    "TBIRD-COUNCIL-PERSONA v1",
-    `名称: ${config.name || "未命名议员"}`,
-    `模型: ${config.model || "跟随默认"}`,
-    `联网: ${config.networkEnabled ? "允许" : "不允许"}`,
-    `温度: ${Number.isFinite(Number(config.temperature)) ? Number(config.temperature).toFixed(2) : "跟随默认"}`,
-    `阅读范围: ${readableContext}`,
-    `正文读取字数: ${context.excerptMax}`,
-    `圆桌记录条数: ${context.discussionCount}`,
-    "",
-    "--- 角色提示词 ---",
-    config.prompt || "",
-    "",
-    "--- 演员身份卡 ---",
-    config.activationProfile || "",
-    "",
-    "--- 记忆 ---",
-    config.memories?.length ? config.memories.map((item) => `- ${item.text}`).join("\n") : "无",
-    "",
-    "--- TBIRD JSON ---",
-    JSON.stringify(payload, null, 2),
-    "--- END TBIRD JSON ---",
-  ].join("\n");
-}
-
-function parseAssistantPersonaPayload(text) {
-  const source = clean(text);
-  if (!source) throw new Error("导入内容为空");
-  try {
-    return JSON.parse(source);
-  } catch {}
-  const match = source.match(/--- TBIRD JSON ---\s*([\s\S]*?)\s*--- END TBIRD JSON ---/);
-  if (!match) throw new Error("没有找到 TBird 议员人格数据块");
-  return JSON.parse(match[1]);
-}
-
-function extractAssistantPersonaConfigs(payload) {
-  if (Array.isArray(payload)) return payload.map((item) => item?.config || item).filter(Boolean);
-  if (Array.isArray(payload?.personas)) return payload.personas.map((item) => item?.config || item).filter(Boolean);
-  if (payload?.config) return [payload.config];
-  return payload ? [payload] : [];
-}
-
-function parseAssistantPersonaConfigs(text) {
-  return extractAssistantPersonaConfigs(parseAssistantPersonaPayload(text));
-}
-
-function parseAssistantPersonaText(text) {
-  const config = parseAssistantPersonaConfigs(text)[0];
-  if (!config) throw new Error("没有找到可导入的议员人格");
-  return config;
-}
-
-function formatAssistantPersonaBundleText(personas) {
-  const payload = {
-    type: "tbird-council-persona-bundle",
-    version: 1,
-    exportedAt: Date.now(),
-    personas,
-  };
-  return [
-    "TBIRD-COUNCIL-PERSONA-BUNDLE v1",
-    `数量: ${personas.length}`,
-    "",
-    personas.map((persona, index) => `${index + 1}. ${persona.config?.name || "未命名议员"}`).join("\n"),
-    "",
-    "--- TBIRD JSON ---",
-    JSON.stringify(payload, null, 2),
-    "--- END TBIRD JSON ---",
-  ].join("\n");
 }
 
 async function exportAssistantConfig() {
   if (!assistantConfigTargetId) return;
   const config = currentAssistantFormConfig();
   if (!config.name && !config.prompt) return showToast("议员配置为空");
-  const payload = createAssistantPersonaPayload(config);
-  await copyText(formatAssistantPersonaText(payload));
+  const payload = assistantController.createPersonaPayload(config, assistantConfigTargetId);
+  await copyText(assistantController.formatPersonaText(payload));
   showToast("议员人格文本已复制");
 }
 
@@ -3667,7 +5073,7 @@ async function importAssistantConfig() {
   try {
     const text = await navigator.clipboard?.readText?.();
     if (clean(text).includes("TBIRD-COUNCIL-PERSONA") || clean(text).includes("--- TBIRD JSON ---")) {
-      applyAssistantImportConfig(parseAssistantPersonaText(text));
+      applyAssistantImportConfig(assistantController.parsePersonaText(text));
       saveAssistantConfigFromForm({ close: false, toast: false, render: true });
       showToast("已从剪贴板覆盖当前主创人格");
       return;
@@ -3684,7 +5090,7 @@ async function handleAssistantImportSelected() {
     if (assistantImportMode === "bundle") {
       importRoundtablePersonasFromText(text);
     } else {
-      applyAssistantImportConfig(parseAssistantPersonaText(text));
+      applyAssistantImportConfig(assistantController.parsePersonaText(text));
       saveAssistantConfigFromForm({ close: false, toast: false, render: true });
       showToast("已覆盖当前主创人格");
     }
@@ -3708,6 +5114,7 @@ function applyAssistantImportConfig(config) {
   els.assistantModelInput.value = clean(config.model);
   if (els.assistantNetworkEnabledInput) els.assistantNetworkEnabledInput.checked = Boolean(config.networkEnabled);
   if (els.assistantMaxTokensInput) els.assistantMaxTokensInput.value = Number(config.maxTokens) || "";
+  if (els.assistantContextTokenBudgetInput) els.assistantContextTokenBudgetInput.value = Number(config.contextTokenBudget) || "";
   const temperature = Number(config.temperature);
   els.assistantTemperatureInput.value = Number.isFinite(temperature) ? clamp(temperature, 0, 2) : sessionSettings().temperature;
   els.assistantTemperatureLabel.textContent = Number(els.assistantTemperatureInput.value).toFixed(2);
@@ -3743,23 +5150,44 @@ function renderAssistantParticipationRecords(assistantId) {
     els.assistantParticipationList.innerHTML = `<p class="assistant-participation-empty">写手是输出通道，不保存议员参会记录。</p>`;
     return;
   }
-  const records = getCouncilParticipationRecords(state.councilParticipationRecords, assistantId, { limit: 10 }).reverse();
-  if (!records.length) {
+  const records = getCouncilParticipationRecords(state.councilParticipationRecords, assistantId, { limit: 80 }).reverse();
+  const creatorRecords = getCreatorParticipationRecords(state.creatorParticipationRecords, assistantId, { limit: 80 }).reverse();
+  const combinedRecords = creatorRecords.length ? creatorRecords.map((record) => ({
+    ...record,
+    councilId: record.creatorId,
+    speakerName: record.displayName,
+    content: record.content || record.summary,
+  })) : records;
+  if (!combinedRecords.length) {
     els.assistantParticipationList.innerHTML = `<p class="assistant-participation-empty">还没有参会记录。</p>`;
     return;
   }
-  els.assistantParticipationList.innerHTML = records.map((record) => {
-    const session = state.sessions.find((item) => item.id === record.sessionId);
-    const roleLabel = getRoundtableRoleLabel(record.roleState, "议员");
-    const title = session ? titleForSession(session) : "未知会话";
+  const groups = [];
+  combinedRecords.forEach((record) => {
+    let group = groups.find((item) => item.sessionId === record.sessionId);
+    if (!group) {
+      const session = state.sessions.find((item) => item.id === record.sessionId);
+      group = {
+        sessionId: record.sessionId,
+        title: session ? titleForSession(session) : "未知会话",
+        records: [],
+      };
+      groups.push(group);
+    }
+    group.records.push(record);
+  });
+  els.assistantParticipationList.innerHTML = groups.map((group) => {
+    const latest = group.records[0];
+    const roleLabel = getRoundtableRoleLabel(latest.roleState, "议员");
+    const topics = [...new Set(group.records.map((record) => clean(record.topic)).filter(Boolean))].slice(0, 3);
     return `
-      <article class="assistant-participation-item">
+      <article class="assistant-participation-item compact">
         <div>
-          <b>${escapeHtml(title)}</b>
-          <span>${escapeHtml(roleLabel)} · ${escapeHtml(formatTime(record.createdAt))}</span>
+          <b>${escapeHtml(group.title)}</b>
+          <span>${escapeHtml(roleLabel)} · ${group.records.length} 条 · ${escapeHtml(formatTime(latest.createdAt))}</span>
+          ${topics.length ? `<small>${escapeHtml(topics.join(" / "))}</small>` : ""}
         </div>
-        ${record.topic ? `<small>${escapeHtml(record.topic)}</small>` : ""}
-        <p>${escapeHtml(record.content.slice(0, 120))}</p>
+        <button type="button" data-command="open-creator-detail" data-creator-id="${escapeHtml(assistantId)}">去创作者们查看</button>
       </article>
     `;
   }).join("");
@@ -3767,11 +5195,21 @@ function renderAssistantParticipationRecords(assistantId) {
 
 function getAssistantPrivateMessages(assistantId) {
   const config = roundtableState().assistantConfigs?.[assistantId] || {};
-  return normalizeAssistantPrivateMessages(config.privateMessages);
+  return assistantController.normalizePrivateMessages(config.privateMessages);
 }
 
 function renderAssistantPrivateChat(assistantId = assistantConfigTargetId) {
   if (!els.assistantPrivateChatList) return;
+  const creator = getCreatorIdentity(assistantId);
+  if (creator && assistantId !== getPrimaryCreatorId()) {
+    els.assistantPrivateChatList.innerHTML = `
+      <p class="assistant-participation-empty">这个议员是完整创作者身份。私聊会打开他的独立会话，并保留自己的上下文。</p>
+      <button type="button" data-command="open-creator-private-session" data-creator-id="${escapeHtml(assistantId)}">打开独立私聊</button>
+    `;
+    if (els.assistantPrivateChatInput) els.assistantPrivateChatInput.disabled = true;
+    if (els.sendAssistantPrivateChat) els.sendAssistantPrivateChat.disabled = true;
+    return;
+  }
   if (!assistantId || assistantId === "writer") {
     els.assistantPrivateChatList.innerHTML = `<p class="assistant-participation-empty">写手是输出通道，不开启议员私聊。</p>`;
     if (els.assistantPrivateChatInput) els.assistantPrivateChatInput.disabled = true;
@@ -3793,27 +5231,6 @@ function renderAssistantPrivateChat(assistantId = assistantConfigTargetId) {
     </article>
   `).join("");
   els.assistantPrivateChatList.scrollTop = els.assistantPrivateChatList.scrollHeight;
-}
-
-function buildAssistantPrivateChatMessages(assistant, config, userText, history = null) {
-  const records = getCouncilParticipationRecords(state.councilParticipationRecords, assistant.id, { limit: 8 })
-    .map((record) => `- ${formatTime(record.createdAt)}｜${record.topic || "无主题"}｜${record.content}`)
-    .join("\n");
-  const privateMessages = normalizeAssistantPrivateMessages(history || roundtableState().assistantConfigs[assistant.id]?.privateMessages)
-    .slice(-12)
-    .map((message) => ({ role: message.role, content: message.content }));
-  const context = [
-    `你正在和用户进行议员私聊。你是${assistant.name}，这段私聊不会自动进入主线对话。`,
-    "请保持你的主创人格和独立判断。默认短答，除非用户要求展开。",
-    clean(config.activationProfile) ? `【身份卡】\n${clean(config.activationProfile)}` : "",
-    clean(assistant.prompt) ? `【角色提示】\n${clean(assistant.prompt)}` : "",
-    records ? `【最近参会记录】\n${records}` : "",
-  ].filter(Boolean).join("\n\n");
-  return [
-    { role: "system", content: context },
-    ...privateMessages,
-    { role: "user", content: userText },
-  ];
 }
 
 async function sendAssistantPrivateChat() {
@@ -3843,15 +5260,15 @@ async function sendAssistantPrivateChat() {
     validateApi(settings, api);
     const rt = roundtableState();
     rt.assistantConfigs[id] ||= {};
-    const history = normalizeAssistantPrivateMessages(rt.assistantConfigs[id].privateMessages);
+    const history = assistantController.normalizePrivateMessages(rt.assistantConfigs[id].privateMessages);
     rt.assistantConfigs[id].privateMessages = [...history, { id: uid("private"), role: "user", content: userText, createdAt: Date.now() }].slice(-40);
     if (els.assistantPrivateChatInput) els.assistantPrivateChatInput.value = "";
     renderAssistantPrivateChat(id);
     if (els.sendAssistantPrivateChat) els.sendAssistantPrivateChat.disabled = true;
-    const reply = await callOpenAITextWithSettings(buildAssistantPrivateChatMessages(assistant, formConfig, userText, history), settings, api);
+    const reply = await callOpenAITextWithSettings(assistantController.buildPrivateChatMessages(assistant, formConfig, userText, history), settings, api);
     const cleanReply = clean(reply);
     if (cleanReply) {
-      rt.assistantConfigs[id].privateMessages = normalizeAssistantPrivateMessages([
+      rt.assistantConfigs[id].privateMessages = assistantController.normalizePrivateMessages([
         ...rt.assistantConfigs[id].privateMessages,
         { id: uid("private"), role: "assistant", content: cleanReply, createdAt: Date.now() },
       ]);
@@ -3871,7 +5288,7 @@ function getAssistantPersonaPayload(id) {
   if (!assistant || assistant.id === "writer") return null;
   const config = createRoundAssistantConfigView(assistant, sessionSettings().temperature);
   if (!config) return null;
-  return createAssistantPersonaPayload(config, id);
+  return assistantController.createPersonaPayload(config, id);
 }
 
 async function exportRoundtablePersonas() {
@@ -3880,7 +5297,7 @@ async function exportRoundtablePersonas() {
     .filter((id) => id && id !== "writer");
   const personas = ids.map(getAssistantPersonaPayload).filter(Boolean);
   if (!personas.length) return showToast("没有可导出的入席议员");
-  await copyText(formatAssistantPersonaBundleText(personas));
+  await copyText(assistantController.formatPersonaBundleText(personas));
   showToast(`已复制 ${personas.length} 位议员人格`);
 }
 
@@ -3897,38 +5314,17 @@ async function importRoundtablePersonas() {
 }
 
 function importRoundtablePersonasFromText(text) {
-  const configs = parseAssistantPersonaConfigs(text);
+  const configs = assistantController.parsePersonaConfigs(text);
   if (!configs.length) throw new Error("没有找到可导入的议员人格");
   const rt = roundtableState();
   let imported = 0;
   configs.forEach((config) => {
-    const name = clean(config?.name);
-    const prompt = clean(config?.prompt);
-    if (!name || !prompt) return;
-    const assistant = normalizeCustomAssistant({
-      id: uid("round_member"),
-      name,
-      role: "议员",
-      prompt,
-    }, rt.customAssistants.length + imported);
-    if (!assistant) return;
-    rt.customAssistants.push(assistant);
-    rt.assistantConfigs[assistant.id] = {
-      name: assistant.name,
-      providerId: clean(config.providerId),
-      apiBaseUrl: "",
-      apiKey: "",
-      model: clean(config.model),
-      networkEnabled: Boolean(config.networkEnabled),
-      maxTokens: Number(config.maxTokens) || 0,
-      temperature: Number.isFinite(Number(config.temperature)) ? Number(config.temperature) : sessionSettings().temperature,
-      contextOptions: normalizeRoundtableContextOptions(config.contextOptions),
-      activationProfile: clean(config.activationProfile),
-      memories: normalizeAssistantMemories(config.memories),
-      avatarDataUrl: clean(config.avatarDataUrl),
-      prompt: assistant.prompt,
-    };
-    if (!rt.selectedIds.includes(assistant.id)) rt.selectedIds.push(assistant.id);
+    const seat = assistantController.createImportedPersonaSeat(config, apiSettings());
+    if (!seat) return;
+    const { creator, assistantConfig } = seat;
+    saveCreatorIdentity(creator);
+    rt.assistantConfigs[creator.id] = assistantConfig;
+    if (!rt.selectedIds.includes(creator.id)) rt.selectedIds.push(creator.id);
     imported += 1;
   });
   if (!imported) throw new Error("议员人格缺少名称或角色提示词");
@@ -3972,41 +5368,13 @@ function closeAssistantConfig() {
 
 function buildAssistantActivationMessages(base, config) {
   const options = normalizeRoundtableContextOptions(config.contextOptions);
-  const novelMaterials = buildRoundtableNovelMaterials(options);
-  const discussion = options.includeDiscussion
-    ? roundtableState().messages
-      .slice(-Math.min(options.discussionCount || DEFAULT_ROUNDTABLE_CONTEXT.discussionCount, 12))
-      .map((message) => `${message.speakerName}：${message.content}`)
-      .join("\n")
-    : "";
-  const sections = [
-    `【要激活的议员】${config.name || base.name}（${base.role || "议员"}）`,
-    `【原始职责提示词】\n${config.prompt || base.prompt}`,
-    options.includeManuscript ? `【当前正文】\n${getRoundtablePromptExcerpt(Math.min(options.excerptMax || 520, 900))}` : "",
-    novelMaterials ? `【小说材料】\n${novelMaterials}` : "",
-    options.includeMainChat ? `【主线对话】\n${getNovelSourceText() || "暂无主线对话。"}` : "",
-    options.includeDiscussion ? `【圆桌记录】\n${discussion || "暂无圆桌记录。"}` : "",
-  ].filter(Boolean).join("\n\n");
-  return [{
-    role: "user",
-    content: [
-      "你正在为一个小说圆桌共创工具生成“演员身份卡”。",
-      "设计参考 generative_agents 的 persona / memory stream 思路：这个身份卡用于之后形成稳定记忆和立场。",
-      "目标：让这个议员以后像稳定的参会者一样发言，而不是像泛用助手答题。",
-      "请结合当前小说信息、圆桌记录和它的职责，构建一个现实感很强但明确虚构的参会身份。",
-      "不要声称它是真实存在的人；不要写系统提示词；不要输出解释。",
-      "注意：它激活后可以把成员加入、离席、删除、沉默、失败理解为会议动态，并形成简短社交判断；但这些判断必须服务创作，不要长篇情绪表演。",
-      "输出中文，控制在220字以内，格式如下：",
-      "称呼：",
-      "身份质感：",
-      "创作偏见：",
-      "说话方式：",
-      "会反驳什么：",
-      "禁区：",
-      "默认发言：1-3句，短、准、像真人开会。",
-      sections,
-    ].join("\n\n"),
-  }];
+  return assistantController.buildActivationMessages(base, config, {
+    defaultDiscussionCount: DEFAULT_ROUNDTABLE_CONTEXT.discussionCount,
+    roundtableMessages: roundtableState().messages,
+    manuscriptExcerpt: options.includeManuscript ? getRoundtablePromptExcerpt(Math.min(options.excerptMax || 520, 900)) : "",
+    novelMaterials: buildRoundtableNovelMaterials(options),
+    mainChatText: getNovelSourceText(),
+  });
 }
 
 async function activateAssistantIdentity() {
@@ -4068,32 +5436,68 @@ function saveAssistantConfigFromForm(options = {}) {
   const id = assistantConfigTargetId;
   const base = getRoundAssistantBase(id);
   if (!base) return false;
+  const formConfig = currentAssistantFormConfig();
+  const creatorIdentity = getCreatorIdentity(id);
+  if (creatorIdentity) {
+    const wasPendingDraft = pendingCustomAssistantDraftId === id;
+    const creatorMode = assistantConfigMode === "creator";
+    const modelOnlyMode = assistantConfigMode === "creator-model";
+    const nextCreatorDraft = assistantController.buildCreatorIdentitySave({
+      creatorIdentity,
+      base,
+      formConfig,
+      mode: assistantConfigMode,
+      apiContextTokenBudget: apiSettings().contextTokenBudget,
+    });
+    const nextCreator = saveCreatorIdentity(nextCreatorDraft);
+    if (activeSession().creatorId === id) {
+      const settings = sessionSettings();
+      settings.systemPrompt = clean(nextCreator.prompt) || settings.systemPrompt;
+      settings.model = clean(nextCreator.modelConfig?.model) || settings.model;
+      settings.maxTokens = Number(nextCreator.modelConfig?.maxTokens) || settings.maxTokens;
+      settings.temperature = Number.isFinite(Number(nextCreator.modelConfig?.temperature))
+        ? Number(nextCreator.modelConfig.temperature)
+        : settings.temperature;
+    }
+    if (modelOnlyMode && clean(nextCreator.modelConfig?.model)) {
+      rememberProviderModel(nextCreator.modelConfig.providerId, nextCreator.modelConfig.model);
+    }
+    if (wasPendingDraft) {
+      pendingCustomAssistantDraftId = null;
+      rememberCreatorRoundtableJoin(id, {
+        summary: `${nextCreator.name || "新议员"}在当前圆桌被创建并入席。`,
+      });
+    }
+    if (options.close !== false) closeAssistantConfig();
+    touchSession(activeSession());
+    if (options.render !== false) render();
+    persistState(state);
+    if (options.toast !== false) showToast(creatorMode ? "主创设置已保存" : "创作者设置已保存");
+    return true;
+  }
   const rt = roundtableState();
-  const model = clean(els.assistantModelInput.value);
+  const creatorMode = assistantConfigMode === "creator";
+  const modelOnlyMode = assistantConfigMode === "creator-model";
+  const sealedCreator = Boolean(clean(getCreatorIdentity(id)?.sourceTemplateId)) || isSealedRoundtableCreatorId(id);
   const previous = rt.assistantConfigs[id] || {};
-  rt.assistantConfigs[id] = {
-    name: clean(els.assistantNameInput.value) || base.name,
-    providerId: clean(els.assistantProviderSelect?.value),
-    apiBaseUrl: "",
-    apiKey: "",
-    model,
-    networkEnabled: Boolean(els.assistantNetworkEnabledInput?.checked),
-    maxTokens: Number(els.assistantMaxTokensInput?.value) || 0,
-    temperature: Number(els.assistantTemperatureInput.value),
-    contextOptions: currentAssistantContextOptions(),
-    activationProfile: clean(els.assistantActivationProfileInput?.value),
-    memories: normalizeAssistantMemories(previous.memories),
-    privateMessages: normalizeAssistantPrivateMessages(previous.privateMessages),
-    importedFrom: previous.importedFrom,
-    avatarDataUrl: clean(els.assistantAvatarPreview?.dataset.avatarDataUrl),
-    prompt: clean(els.assistantPromptInput.value) || base.prompt,
-  };
-  if (model) {
-    const providerApi = apiForProvider(rt.assistantConfigs[id].providerId);
-    const api = apiSettings();
-    const provider = api.providers.find((item) => item.id === providerApi.currentProviderId) || activeApiProvider(api);
-    provider.models = Array.from(new Set([model, ...(provider.models || [])].filter(Boolean)));
-    syncApiFromProvider(api);
+  const assistantSave = assistantController.buildLegacyAssistantSave({
+    id,
+    base,
+    previous,
+    formConfig,
+    mode: assistantConfigMode,
+    sealedCreator,
+  });
+  rt.assistantConfigs[id] = assistantSave.config;
+  if (creatorMode && !sealedCreator && !modelOnlyMode) {
+    const prompt = clean(rt.assistantConfigs[id].prompt);
+    if (prompt) sessionSettings().systemPrompt = prompt;
+  }
+  if (assistantSave.modelToRemember) {
+    rememberProviderModel(rt.assistantConfigs[id].providerId, assistantSave.modelToRemember);
+  }
+  if (pendingCustomAssistantDraftId === id) {
+    pendingCustomAssistantDraftId = null;
   }
   if (options.close !== false) closeAssistantConfig();
   touchSession(activeSession());
@@ -4110,6 +5514,9 @@ function saveAssistantConfig() {
 function resetAssistantConfig() {
   const id = assistantConfigTargetId;
   if (!getRoundAssistantBase(id)) return;
+  if (id === getPrimaryCreatorId()) return showToast("主创不能在这里重置");
+  if (getCreatorIdentity(id)) return showToast("创作者身份不能在这里重置");
+  if (isSealedRoundtableCreatorId(id)) return showToast("封装主创已锁定，不能重置");
   delete roundtableState().assistantConfigs[id];
   closeAssistantConfig();
   touchSession(activeSession());
@@ -4121,8 +5528,12 @@ function resetAssistantConfig() {
 function deleteCustomRoundAssistant() {
   const id = assistantConfigTargetId;
   if (!id || id === "writer") return;
+  if (id === getPrimaryCreatorId()) return showToast("主创不能从当前会话删除");
+  if (isSealedRoundtableCreatorId(id)) return showToast("封装主创已锁定，不能删除");
   const rt = roundtableState();
-  if (isCustomRoundAssistant(id)) {
+  if (getCreatorIdentity(id)) {
+    rt.selectedIds = rt.selectedIds.filter((selectedId) => selectedId !== id);
+  } else if (isCustomRoundAssistant(id)) {
     rt.customAssistants = rt.customAssistants.filter((assistant) => assistant.id !== id);
   } else if (getRoundAssistantBase(id)) {
     rt.hiddenAssistantIds = Array.from(new Set([...(rt.hiddenAssistantIds || []), id]));
@@ -4171,10 +5582,14 @@ async function addAssistantRoundtableReply(assistant, content, extra = {}, instr
   return message;
 }
 
-function updateRoundtableMessageContent(message, content) {
+function updateRoundtableMessageContent(message, content, options = {}) {
   if (!message) return;
   updateRoundtableMessageText(message, content);
   touchSession(activeSession());
+  if (options.render === false) {
+    renderStreamingRoundtableMessage(message);
+    return;
+  }
   render();
 }
 
@@ -4186,7 +5601,7 @@ function renderStreamingRoundtableMessage(message) {
     : els.roundtableDiscussion?.querySelector(`.roundtable-speech${selector}`);
   if (!target) return;
   scheduleStreamDomUpdate(`round:${message.id}`, () => {
-    target.innerHTML = `${renderRoundtableRichText(message.content || "")}<span class="stream-caret"></span>`;
+    target.innerHTML = `${renderRoundtableRichText(message.content || "")}${message.streaming ? '<span class="stream-caret"></span>' : ""}`;
   });
 }
 
@@ -4203,7 +5618,7 @@ async function streamAssistantRoundtableReply(assistant, instruction, extra = {}
   cancelStreamDomUpdate(`round:${message.id}`);
   message.streaming = false;
   const cleanText = cleanRoundtableAssistantOutput(assistant, text);
-  updateRoundtableMessageContent(message, cleanText);
+  updateRoundtableMessageContent(message, cleanText, { render: false });
   rememberCouncilParticipation(assistant, message, instruction);
   await rememberActivatedAssistantTurn(assistant, cleanText, instruction);
   return { message, text: cleanText };
@@ -4212,6 +5627,27 @@ async function streamAssistantRoundtableReply(assistant, instruction, extra = {}
 function appendAssistantMemory(assistantId, text, source = "roundtable") {
   const memory = clean(text);
   if (!assistantId || !memory) return;
+  const creator = getCreatorIdentity(assistantId);
+  if (creator) {
+    const snapshots = normalizeAssistantMemories(creator.memory?.compressedSnapshots);
+    snapshots.push({
+      id: uid("memory"),
+      text: memory,
+      source,
+      createdAt: Date.now(),
+    });
+    saveCreatorIdentity({
+      ...creator,
+      memory: {
+        ...(creator.memory || {}),
+        compressedSnapshots: snapshots.slice(-GENERATIVE_AGENT_MEMORY_LIMIT),
+      },
+      updatedAt: Date.now(),
+    });
+    touchSession(activeSession());
+    persistState(state);
+    return;
+  }
   const rt = roundtableState();
   rt.assistantConfigs[assistantId] ||= {};
   const memories = normalizeAssistantMemories(rt.assistantConfigs[assistantId].memories);
@@ -4519,12 +5955,14 @@ function jumpRoundtablePaperLatest() {
 
 function moveRoundtableMember(id, delta) {
   const rt = roundtableState();
-  const index = rt.selectedIds.indexOf(id);
+  const orderIds = getRoundtableSpeakerOrderIds(rt);
+  const index = orderIds.indexOf(id);
   if (index < 0) return;
-  const next = clamp(index + delta, 0, rt.selectedIds.length - 1);
+  const next = clamp(index + delta, 0, orderIds.length - 1);
   if (next === index) return;
-  const [item] = rt.selectedIds.splice(index, 1);
-  rt.selectedIds.splice(next, 0, item);
+  const [item] = orderIds.splice(index, 1);
+  orderIds.splice(next, 0, item);
+  rt.speakerOrderIds = orderIds;
   touchSession(activeSession());
   render();
   persistState(state);
@@ -4589,23 +6027,12 @@ async function handleRoundtableUser(text) {
 
 async function generateMentionedRoundtableAssistants(assistants, userText) {
   if (roundtableGenerating || isGenerating || materialGenerating) return showToast("已有生成任务进行中");
-  const targets = assistants.filter((assistant) => assistant.id !== "writer");
-  if (!targets.length) return;
+  if (!assistants.some((assistant) => assistant.id !== "writer")) return;
   roundtableShouldStop = false;
   roundtableGenerating = true;
   render();
   try {
-    for (const assistant of targets) {
-      if (roundtableShouldStop) break;
-      showToast(`${assistant.name}正在回应`);
-      try {
-        const { text } = await streamAssistantRoundtableReply(assistant, `用户刚刚点名你发言：${userText}`);
-        if (roundtableShouldStop) break;
-      } catch (error) {
-        if (error.name === "AbortError" || roundtableShouldStop) break;
-        addRoundtableFailureMessage(assistant, error);
-      }
-    }
+    await roundtableController.generateMentionedAssistants(assistants, userText, () => roundtableShouldStop);
   } catch (error) {
     if (!roundtableShouldStop && error.name !== "AbortError") {
       showToast(humanizeError(error, "点名发言失败"));
@@ -4622,8 +6049,7 @@ async function generateMentionedRoundtableAssistants(assistants, userText) {
 async function startRoundtableRound() {
   const rt = roundtableState();
   if (roundtableGenerating || isGenerating || materialGenerating) return showToast("已有生成任务进行中");
-  if (!rt.selectedIds.length) return showToast("先在参会人里选择至少一个议员");
-  rt.roundProgress = createRoundProgress(rt.selectedIds, rt.contextOptions?.roundTopic);
+  if (!roundtableController.prepareRoundProgress()) return;
   await runRoundtableProgress();
 }
 
@@ -4635,50 +6061,12 @@ async function resumeRoundtableRound() {
 }
 
 async function runRoundtableProgress() {
-  const rt = roundtableState();
-  const progress = rt.roundProgress;
-  if (!progress?.ids?.length) return;
+  if (!roundtableState().roundProgress?.ids?.length) return;
   roundtableShouldStop = false;
   roundtableGenerating = true;
   render();
   try {
-    for (let index = Number(progress.nextIndex) || 0; index < progress.ids.length; index += 1) {
-      progress.nextIndex = index;
-      progress.updatedAt = Date.now();
-      if (roundtableShouldStop) break;
-      const id = progress.ids[index];
-      const assistant = getRoundAssistant(id);
-      if (!assistant) {
-        progress.nextIndex = index + 1;
-        continue;
-      }
-      showToast(`${assistant.name}正在发言`);
-      const topic = clean(progress.topic || rt.contextOptions?.roundTopic);
-      try {
-        const roleState = getRoundtableRoleState(rt.selectedIds, assistant.id);
-        const roleInstruction = roleState === "creator"
-          ? "请以本轮临时主创的身份发言：先给独立判断，再给一个可执行建议。保持短句，不要替写手直接写正文。"
-          : "请以参会议员身份发言：补充、质疑或修正前面的意见，只说最关键的一点和一个可执行建议。保持短句，不要替写手直接写正文。";
-        const instruction = [
-          roleInstruction,
-          buildRoundProgressInstruction(topic),
-        ].join("\n");
-        const { text } = await streamAssistantRoundtableReply(assistant, instruction);
-        if (roundtableShouldStop) break;
-        const moved = moveRoundtableMentionsAfter(progress, index, text);
-        if (moved.length) {
-          showToast(`${moved.map((item) => item.name).join("、")}已加入后续发言`);
-        }
-      } catch (error) {
-        if (error.name === "AbortError" || roundtableShouldStop) break;
-        addRoundtableFailureMessage(assistant, error);
-      }
-      progress.nextIndex = index + 1;
-    }
-    if (!roundtableShouldStop && progress.nextIndex >= progress.ids.length) {
-      rt.roundProgress = null;
-      showToast("本轮圆桌已完成");
-    }
+    await roundtableController.runProgress(() => roundtableShouldStop);
   } catch (error) {
     if (!roundtableShouldStop && error.name !== "AbortError") {
       showToast(humanizeError(error, "圆桌发言失败"));
@@ -4698,23 +6086,7 @@ async function generateRoundtableWriter(userText) {
   roundtableGenerating = true;
   render();
   try {
-    const writer = getRoundAssistant("writer");
-    const message = addRoundtableMessage("writer", writer.name || "写手", "", {
-      streaming: Boolean(sessionSettings().stream),
-    });
-    const text = await callRoundtableAssistant(writer, userText || "请根据圆桌讨论继续完成用户要的产出。", (partial) => {
-      message.streaming = true;
-      message.content = cleanRoundtableAssistantOutput(writer, partial);
-      renderStreamingRoundtableMessage(message);
-    });
-    cancelStreamDomUpdate(`round:${message.id}`);
-    if (roundtableShouldStop) return;
-    const cleanText = cleanRoundtableAssistantOutput(writer, text);
-    message.streaming = false;
-    updateRoundtableMessageContent(message, cleanText);
-    syncWriterMessageToNovel(message, cleanText);
-    persistState(state);
-    showToast("写手已更新正文，并同步到正文库");
+    await writerController.generateWriterText(userText, () => roundtableShouldStop);
   } catch (error) {
     if (!roundtableShouldStop && error.name !== "AbortError") {
       showToast(humanizeError(error, "写手续写失败"));
@@ -4728,102 +6100,15 @@ async function generateRoundtableWriter(userText) {
 }
 
 async function runAssistantMentionFollowUps(originAssistant, originText, options = {}) {
-  const maxFollowUps = Number.isFinite(Number(options.maxFollowUps)) ? Number(options.maxFollowUps) : 2;
-  const visitedIds = options.visitedIds instanceof Set ? options.visitedIds : new Set(options.visitedIds || []);
-  let remaining = Math.max(0, maxFollowUps);
-  let currentAssistant = originAssistant;
-  let currentText = clean(originText);
-  const queuedIds = new Set();
-  const queue = [];
-  const enqueueTargets = (sourceAssistant, text) => {
-    parseRoundtableMentions(text, {
-      allowWriter: false,
-      excludeIds: new Set([...visitedIds, sourceAssistant.id]),
-    }).forEach((assistant) => {
-      if (visitedIds.has(assistant.id) || queuedIds.has(assistant.id)) return;
-      queue.push({ sourceAssistant, targetAssistant: assistant, sourceText: text });
-      queuedIds.add(assistant.id);
-    });
-  };
-  enqueueTargets(currentAssistant, currentText);
-  while (queue.length && remaining > 0 && !roundtableShouldStop) {
-    const { sourceAssistant: source, targetAssistant, sourceText } = queue.shift();
-    queuedIds.delete(targetAssistant.id);
-    visitedIds.add(targetAssistant.id);
-    showToast(`${targetAssistant.name}被@，正在回应`);
-    try {
-      const reply = await callRoundtableAssistant(targetAssistant, buildAssistantMentionInstruction(source, targetAssistant, sourceText));
-      if (roundtableShouldStop) break;
-      await addAssistantRoundtableReply(targetAssistant, reply, {
-        mentionMeta: {
-          triggeredById: source.id,
-          triggeredByName: source.name,
-        },
-      }, buildAssistantMentionInstruction(source, targetAssistant, sourceText));
-      remaining -= 1;
-      currentAssistant = targetAssistant;
-      currentText = cleanRoundtableAssistantOutput(targetAssistant, reply);
-      enqueueTargets(currentAssistant, currentText);
-    } catch (error) {
-      if (error.name === "AbortError" || roundtableShouldStop) break;
-      addRoundtableFailureMessage(targetAssistant, error);
-      break;
-    }
-  }
+  await roundtableController.runAssistantMentionFollowUps(originAssistant, originText, options, () => roundtableShouldStop);
 }
 
 async function callRoundtableAssistant(assistant, instruction, onChunk = null) {
-  setRoundtableActiveSpeaker(assistant.id);
-  try {
-    try {
-      await ensureAutoCompressNovelMemory(instruction);
-    } catch (error) {
-      if (error.name === "AbortError") throw error;
-      showToast(humanizeError(error, "圆桌自动压缩失败，已改用现有资料继续"));
-    }
-    const messages = buildRoundtableMessages(assistant, instruction);
-    const settings = {
-      ...sessionSettings(),
-      model: assistant.model || sessionSettings().model,
-      maxTokens: Number(assistant.maxTokens) || sessionSettings().maxTokens,
-      temperature: Number.isFinite(Number(assistant.temperature)) ? Number(assistant.temperature) : sessionSettings().temperature,
-    };
-    const api = {
-      ...apiSettings(),
-      baseUrl: assistant.apiBaseUrl || apiSettings().baseUrl,
-      apiKey: assistant.apiKey || apiSettings().apiKey,
-    };
-    if (sessionSettings().stream) {
-      return await callOpenAITextStreamWithSettings(messages, settings, api, onChunk);
-    }
-    return await callOpenAITextWithSettings(messages, settings, api);
-  } finally {
-    if (roundtableActiveSpeakerId === assistant.id) setRoundtableActiveSpeaker(null);
-  }
+  return roundtableController.callAssistant(assistant, instruction, onChunk);
 }
 
 function buildRoundtableMessages(assistant, instruction) {
-  const rt = roundtableState();
-  const options = normalizeRoundtableContextOptions({
-    ...rt.contextOptions,
-    ...(assistant.contextOptions || {}),
-  });
-  const result = buildRoundtablePromptMessages({
-    assistant,
-    instruction,
-    options,
-    mentionableAssistants: getRoundtableMentionableAssistants(),
-    roundtableMessages: rt.messages,
-    participationRecords: assistant.id === "writer" ? [] : getCouncilParticipationRecords(state.councilParticipationRecords, assistant.id, { limit: 6 }),
-    novel: sessionNovel(),
-    manuscriptText: getRoundtableManuscript(),
-    mainChatText: getNovelSourceText(),
-    tokenThreshold: AUTO_CONTEXT_TOKEN_THRESHOLD,
-  });
-  if (result.compressed) {
-    showToast("圆桌上下文过长，已自动压缩本轮材料");
-  }
-  return result.messages;
+  return roundtableController.buildMessages(assistant, instruction);
 }
 
 const handleCommand = createCommandRegistry({
@@ -4831,6 +6116,27 @@ const handleCommand = createCommandRegistry({
   "open-settings": () => openSettingsPanel(),
   "settings-home": () => openSettingsPage("home"),
   "open-settings-page": (target) => openSettingsPage(target.dataset.settingsPage),
+  "back-creators-list": () => closeCreatorDetail(),
+  "open-creator-detail": (target) => openCreatorDetail(target.dataset.creatorId),
+  "open-creator-config": (target) => openAssistantConfig(target.dataset.creatorId, { mode: target.dataset.creatorId === getPrimaryCreatorId() ? "creator" : "member" }),
+  "open-creator-private-session": (target) => openCreatorPrivateSession(target.dataset.creatorId),
+  "open-creator-roundtable": (target) => openCreatorRoundtable(target.dataset.sessionId),
+  "remove-creator-from-roundtable": (target) => removeCreatorFromRoundtable(target.dataset.sessionId, target.dataset.creatorId),
+  "rename-creator-memory": (target) => renameCreatorMemory(target.dataset.creatorId),
+  "query-creator-memory": (target) => queryCreatorMemory(target.dataset.creatorId),
+  "clear-creator-memory-lookup": (target) => clearCreatorMemoryLookup(target.dataset.creatorId),
+  "clear-creator-records": (target) => clearCreatorRecords(target.dataset.creatorId),
+  "open-creator-record-detail": (target) => openCreatorRecordDetail(target.dataset.recordId),
+  "open-creator-memory-detail": (target) => openCreatorMemoryDetail(target.dataset.creatorId, target.dataset.memoryId),
+  "delete-creator-record": (target) => deleteCreatorRecord(target.dataset.recordId),
+  "delete-creator-memory-snapshot": (target) => deleteCreatorMemorySnapshot(target.dataset.creatorId, target.dataset.memoryId),
+  "delete-creator-identity": (target) => deleteCreatorIdentity(target.dataset.creatorId),
+  "export-creator-package": (target) => exportCreatorPackage(target.dataset.creatorId),
+  "import-creator-package": () => importCreatorPackage(),
+  "replace-current-creator-package": () => replaceCurrentCreatorPackage(),
+  "export-global-backup": () => exportGlobalBackup(),
+  "import-global-backup": () => importGlobalBackup(),
+  "open-model-config": () => openComposerModelConfig(),
   "open-workspace": () => showPanel("workspace"),
   "open-novel": () => showPanel("novel"),
   "open-context": () => showPanel("context"),
@@ -4848,10 +6154,12 @@ const handleCommand = createCommandRegistry({
   "roundtable-export-personas": () => exportRoundtablePersonas(),
   "roundtable-import-session-member": (target) => importRoundtableMemberFromSession(target.dataset.sessionId, target.dataset.memberId),
   "send-assistant-private-chat": () => sendAssistantPrivateChat(),
+  "roundtable-toggle-primary-speaking": () => togglePrimaryRoundtableSpeaking(),
   "roundtable-toggle-member": (target) => toggleRoundtableMember(target.dataset.memberId),
   "roundtable-member-up": (target) => moveRoundtableMember(target.dataset.memberId, -1),
   "roundtable-member-down": (target) => moveRoundtableMember(target.dataset.memberId, 1),
   "roundtable-edit-assistant": (target) => openAssistantConfig(target.dataset.memberId),
+  "select-sealed-creator": (target) => selectSealedCreator(target.dataset.sealedId),
   "roundtable-cycle": () => toggleRoundtableRound(),
   "roundtable-start": () => startRoundtableRound(),
   "roundtable-resume": () => resumeRoundtableRound(),
@@ -4865,9 +6173,13 @@ const handleCommand = createCommandRegistry({
   "switch-session": (target) => switchSession(target.dataset.sessionId),
   "rename-session": (target) => renameSession(target.dataset.sessionId),
   "copy-session": (target) => copySession(target.dataset.sessionId),
+  "export-session": (target) => exportSessionPackage(target.dataset.sessionId),
+  "import-session-package": () => importSessionPackage(),
   "delete-session": (target) => deleteSession(target.dataset.sessionId),
   "fetch-models": () => fetchModels(),
+  "select-provider": (target) => switchApiProvider(target.dataset.providerId),
   "add-provider": () => addApiProvider(),
+  "rename-provider": () => renameApiProvider(),
   "delete-provider": () => deleteApiProvider(),
   "choose-workspace-files": () => chooseWorkspaceFiles(),
   "clear-workspace-files": () => clearWorkspaceFiles(),
@@ -4989,6 +6301,20 @@ bindCommandDelegation(document, renderMenu, () => activeMenuNodeId || activeRoun
   handleCommand(command, target);
 });
 
+els.menu?.addEventListener("click", (event) => {
+  const target = event.target.closest("[data-command]");
+  if (!target) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  const command = target.dataset.command;
+  els.menu.hidden = true;
+  els.menu.innerHTML = "";
+  activeMenuNodeId = null;
+  activeRoundtableMessageId = null;
+  showCommandFeedback(target, command, event);
+  handleCommand(command, target);
+});
+
 els.composer.addEventListener("submit", async (event) => {
   event.preventDefault();
   pulseElement(els.send);
@@ -5013,7 +6339,7 @@ els.composer.addEventListener("submit", async (event) => {
     return;
   }
   try {
-    validateApi();
+    validatePrimaryCreatorApi();
     const sendingAttachments = consumePendingChatAttachments();
     els.input.value = "";
     resizeInput();
@@ -5058,7 +6384,6 @@ function handleMessagePinchMove(event) {
   const inwardDelta = startDistance - currentDistance;
   if (startDistance > 120 && inwardDelta > 44 && currentDistance / startDistance < 0.78) {
     roundtableGesture.pinchTriggered = true;
-    event.preventDefault();
     setRoundtableEnabled(true, "已通过双指手势进入圆桌");
   }
 }
@@ -5067,6 +6392,12 @@ function resetMessagePinchGesture() {
   roundtableGesture.pinchActive = false;
   roundtableGesture.pinchTriggered = false;
   roundtableGesture.pinchStartDistance = 0;
+}
+
+function lockRootScroll() {
+  if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
+  if (document.documentElement.scrollTop) document.documentElement.scrollTop = 0;
+  if (document.body?.scrollTop) document.body.scrollTop = 0;
 }
 
 function handlePaperDoubleTap(event) {
@@ -5201,6 +6532,11 @@ els.historySearch.addEventListener("input", renderSessions);
   });
 });
 
+els.contextTokenBudget?.addEventListener("input", () => {
+  apiSettings().contextTokenBudget = Math.max(1000, Number(els.contextTokenBudget.value) || 200000);
+  persistState(state);
+});
+
 els.providerSelect?.addEventListener("change", () => switchApiProvider(els.providerSelect.value));
 els.providerName?.addEventListener("input", updateActiveProviderName);
 
@@ -5220,13 +6556,18 @@ document.addEventListener("click", (event) => {
   if (roundtableState().membersOpen) {
     const target = event.target;
     const path = typeof event.composedPath === "function" ? event.composedPath() : [];
+    const insideDialog = target.closest?.("#assistantConfigDialog, #editDialog")
+      || path.some((item) => item?.id === "assistantConfigDialog" || item?.id === "editDialog");
     const insideMembers = target.closest?.("#roundtableMembersPanel")
       || path.some((item) => item?.id === "roundtableMembersPanel");
     const onToggle = target.closest?.("#composerToolButton")
       || path.some((item) => item?.id === "composerToolButton");
+    if (insideDialog) return;
     if (!insideMembers && !onToggle) closeRoundtableMembers();
   }
 });
+
+document.addEventListener("click", captureComposerModelPickerClick, true);
 
 document.addEventListener("click", (event) => {
   if (!modelPickerOpen) return;
@@ -5259,8 +6600,22 @@ function bindDialogBackdropClose(dialog) {
 bindDialogBackdropClose(els.editDialog);
 bindDialogBackdropClose(els.assistantConfigDialog);
 
+els.assistantConfigDialog?.addEventListener("click", (event) => {
+  const summary = event.target.closest?.(".assistant-fold > summary");
+  if (!summary || !els.assistantConfigDialog.contains(summary)) return;
+  const details = summary.parentElement;
+  if (!details) return;
+  event.preventDefault();
+  event.stopPropagation();
+  details.open = !details.open;
+});
+
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
+  if (sealedCreatorOverlayOpen) {
+    event.preventDefault();
+    return;
+  }
   if (getOpenDialog()) {
     closeOpenDialog();
     event.preventDefault();
@@ -5268,6 +6623,11 @@ document.addEventListener("keydown", (event) => {
   }
   if (roundtableState().membersOpen) {
     closeRoundtableMembers();
+    event.preventDefault();
+    return;
+  }
+  if (panelManager.getActivePanel() === "settings" && activeSettingsPage === "creators" && activeCreatorDetailId) {
+    closeCreatorDetail();
     event.preventDefault();
     return;
   }
@@ -5283,12 +6643,40 @@ document.addEventListener("keydown", (event) => {
 });
 
 window.addEventListener("popstate", () => {
+  if (closingSealedCreatorFromButton) {
+    closingSealedCreatorFromButton = false;
+    return;
+  }
+  if (sealedCreatorOverlayOpen) {
+    try {
+      history.pushState({ ...(history.state || {}), tbirdSealedCreatorOpen: true }, "");
+      sealedCreatorHistoryOpen = true;
+    } catch {}
+    showToast("封装界面只能用关闭按钮退出");
+    return;
+  }
   if (getOpenDialog()) {
     closeOpenDialog({ fromHistory: true });
     return;
   }
+  if (keepRoundtableMembersOnDialogBack && roundtableState().membersOpen) {
+    keepRoundtableMembersOnDialogBack = false;
+    transientHistoryOpen = Boolean(history.state?.tbirdTransientOpen);
+    render();
+    return;
+  }
   if (roundtableState().membersOpen) {
     closeRoundtableMembers({ fromHistory: true });
+    return;
+  }
+  if (panelManager.getActivePanel() === "settings" && activeSettingsPage === "creators" && activeCreatorDetailId) {
+    closeCreatorDetail();
+    try {
+      history.pushState({ ...(history.state || {}), tbirdPanelOpen: true }, "");
+      panelHistoryOpen = true;
+    } catch {
+      panelHistoryOpen = false;
+    }
     return;
   }
   if (panelManager.getActivePanel() === "settings" && activeSettingsPage !== "home") {
@@ -5354,6 +6742,9 @@ els.novelFields.forEach((field) => {
 });
 
 els.bodyImportFile?.addEventListener("change", handleBodyFileSelected);
+els.sessionImportFile?.addEventListener("change", handleSessionImportSelected);
+els.creatorImportFile?.addEventListener("change", handleCreatorImportSelected);
+els.globalBackupImportFile?.addEventListener("change", handleGlobalBackupImportSelected);
 
 els.saveEdit.addEventListener("click", () => saveEditor(false));
 els.saveSendEdit.addEventListener("click", () => saveEditor(true));
@@ -5362,6 +6753,16 @@ els.editDialog?.addEventListener("close", () => {
   handleDialogClosed();
 });
 els.assistantConfigDialog?.addEventListener("close", () => {
+  els.assistantConfigDialog?.classList.remove("sealed-assistant-config");
+  els.assistantConfigDialog?.classList.remove("sealed-b-config");
+  els.assistantConfigDialog?.classList.remove("assistant-model-config-only");
+  if (els.sealedActivationBar) els.sealedActivationBar.hidden = true;
+  if (els.sealedPromptBar) els.sealedPromptBar.hidden = true;
+  if (els.assistantActivationFold) els.assistantActivationFold.hidden = false;
+  if (els.assistantParticipationFold) els.assistantParticipationFold.hidden = false;
+  if (els.assistantMaterialsFold) els.assistantMaterialsFold.hidden = false;
+  if (els.assistantPromptFold) els.assistantPromptFold.hidden = false;
+  discardPendingCustomAssistantDraft({ render: true });
   assistantConfigTargetId = null;
   assistantConfigMode = "member";
   assistantModelPickerOpen = false;
@@ -5393,6 +6794,8 @@ els.fetchAssistantModels?.addEventListener("click", fetchAssistantModels);
 els.chooseAssistantAvatar?.addEventListener("click", () => els.assistantAvatarFile?.click());
 els.clearAssistantAvatar?.addEventListener("click", clearAssistantAvatar);
 els.assistantAvatarFile?.addEventListener("change", handleAssistantAvatarSelected);
+els.assistantAvatarPreview?.addEventListener("click", handleAssistantAvatarSecretTap);
+els.closeSealedCreatorOverlay?.addEventListener("click", () => closeSealedCreatorOverlay({ fromButton: true }));
 els.importAssistant?.addEventListener("click", importAssistantConfig);
 els.exportAssistant?.addEventListener("click", exportAssistantConfig);
 els.assistantImportFile?.addEventListener("change", handleAssistantImportSelected);
@@ -5416,9 +6819,10 @@ els.roundtablePaperGrip?.addEventListener("pointercancel", finishRoundtablePaper
 els.roundtablePaperGrip?.addEventListener("click", (event) => event.preventDefault());
 els.roundtablePaperViewport?.addEventListener("scroll", handleRoundtablePaperScroll, { passive: true });
 els.messages?.addEventListener("touchstart", handleMessagePinchStart, { passive: true });
-els.messages?.addEventListener("touchmove", handleMessagePinchMove, { passive: false });
+els.messages?.addEventListener("touchmove", handleMessagePinchMove, { passive: true });
 els.messages?.addEventListener("touchend", resetMessagePinchGesture, { passive: true });
 els.messages?.addEventListener("touchcancel", resetMessagePinchGesture, { passive: true });
+window.addEventListener("scroll", lockRootScroll, { passive: true });
 els.roundtablePaper?.addEventListener("dblclick", handlePaperDoubleTap);
 els.roundtablePaper?.addEventListener("touchstart", handlePaperTouchStart, { passive: true });
 els.roundtablePaper?.addEventListener("touchend", handlePaperTouchEnd, { passive: false });
@@ -5426,6 +6830,8 @@ els.roundtablePaper?.addEventListener("touchend", handlePaperTouchEnd, { passive
 window.addEventListener("resize", resizeInput);
 window.visualViewport?.addEventListener("resize", resizeInput);
 
+if (syncSealedCreatorTemplatePrompts() || migrateImportedPrimaryCloneCreators()) persistState(state);
 render();
 resizeInput();
 scrollBottom();
+

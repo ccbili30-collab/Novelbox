@@ -22,23 +22,43 @@ export function createRootNode() {
   };
 }
 
-export function createSession(title = "新会话") {
+export function createWriterState(overrides = {}) {
+  return {
+    styleCache: overrides.styleCache || "",
+    styleCacheUpdatedAt: Number(overrides.styleCacheUpdatedAt) || 0,
+    styleCacheSourceHash: overrides.styleCacheSourceHash || "",
+    inheritingStyle: Boolean(overrides.inheritingStyle),
+    modelOverride: overrides.modelOverride && typeof overrides.modelOverride === "object"
+      ? { ...overrides.modelOverride }
+      : {},
+  };
+}
+
+export function hydrateWriterState(writerState = {}) {
+  return createWriterState(writerState);
+}
+
+export function createSession(title = "新会话", options = {}) {
   const root = createRootNode();
   return {
     id: uid("sess"),
     title,
     createdAt: Date.now(),
     updatedAt: Date.now(),
+    creatorId: options.creatorId || "",
     rootId: root.id,
     nodes: { [root.id]: root },
     settings: createSettings(),
     novel: createDefaultNovel(),
+    writerState: createWriterState(),
   };
 }
 
 export function hydrateSession(session, legacySettings = {}) {
   session.settings = hydrateSessionSettings(session.settings || legacySettings);
   session.novel = { ...createDefaultNovel(), ...(session.novel || {}) };
+  session.creatorId ||= "";
+  session.writerState = hydrateWriterState(session.writerState);
   session.rootId ||= "root";
   session.nodes ||= {};
   session.nodes[session.rootId] ||= createRootNode();
