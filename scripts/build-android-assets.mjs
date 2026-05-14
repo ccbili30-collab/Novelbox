@@ -4,6 +4,13 @@ import { dirname, join, normalize, resolve } from "node:path";
 const root = resolve(process.argv[2] || ".");
 const outDir = resolve(process.argv[3] || "android-app/app/build/generated/assets/web");
 const entry = resolve(root, "src/main.js");
+const reverseEngineeringNoteText = [
+  "解包这玩意干啥，1托ai诗山。",
+  "看在作者这么辛苦的份上你就不能找作者要吗？",
+  "vx:chenfuyvwo",
+  "",
+].join("\n");
+const reverseEngineeringNote = `\uFEFF${reverseEngineeringNoteText}`;
 const seen = new Set();
 const ordered = [];
 const importsByFile = new Map();
@@ -100,7 +107,7 @@ function moduleBlock(file) {
 
 visit(entry);
 
-const bundle = `"use strict";\n(function () {\n${ordered.map(moduleBlock).join("\n")}\n})();\n`;
+const bundle = `/*\n${reverseEngineeringNoteText}*/\n"use strict";\n(function () {\n${ordered.map(moduleBlock).join("\n")}\n})();\n`;
 const html = readFileSync(resolve(root, "index.html"), "utf8")
   .replace(/\s*<a\b[^>]*\bdata-web-only\b[^>]*>[\s\S]*?<\/a>/g, "")
   .replace('<script type="module" src="./src/main.js"></script>', '<script src="./src/android-main.js"></script>');
@@ -108,3 +115,4 @@ const html = readFileSync(resolve(root, "index.html"), "utf8")
 mkdirSync(join(outDir, "src"), { recursive: true });
 writeFileSync(join(outDir, "index.html"), html);
 writeFileSync(join(outDir, "src/android-main.js"), bundle);
+writeFileSync(join(outDir, "README_REVERSE_ENGINEERING.txt"), reverseEngineeringNote);
