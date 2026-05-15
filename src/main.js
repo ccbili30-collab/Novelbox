@@ -173,6 +173,10 @@ import {
   buildUserTextWithAttachments as _buildUserTextWithAttachments,
 } from "./app/runtime/attachment-prompts.js";
 import {
+  simpleHash as _simpleHash,
+  replaceMentionsWithHtml,
+} from "./app/runtime/text-utils.js";
+import {
   cssEscape as _cssEscape,
   renderChatContent as _renderChatContent,
   renderBranchSwitcher as _renderBranchSwitcher,
@@ -853,15 +857,8 @@ function cleanRoundtableAssistantOutput(assistant, content) {
   return stripRoundtableSpeakerPrefix(content, assistant?.name, assistant ? assistantAliases(assistant) : []);
 }
 
-function simpleHash(text) {
-  const source = clean(text);
-  let hash = 2166136261;
-  for (let index = 0; index < source.length; index += 1) {
-    hash ^= source.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return String(hash >>> 0);
-}
+// simpleHash lives in src/app/runtime/text-utils.js.
+const simpleHash = (text) => _simpleHash(clean(text));
 
 function writerState(session = activeSession()) {
   return writerController.writerState(session);
@@ -992,6 +989,8 @@ function moveRoundtableMentionsAfter(progress, currentIndex, text) {
 }
 
 function renderRoundtableRichText(text) {
+  // Build the alias \u2192 assistant lookup once per call. Pure mention
+  // replacement lives in src/app/runtime/text-utils.js.
   const mentionMap = new Map();
   getRoundtableMentionableAssistants().forEach((assistant) => {
     assistantAliases(assistant).forEach((alias) => {
@@ -1000,25 +999,17 @@ function renderRoundtableRichText(text) {
   });
   return renderMarkdown(text, {
     renderPlainText(source, { escapeHtml: escape }) {
-      const pattern = /@([A-Za-z0-9_\-\u4e00-\u9fff]+)/g;
-      let html = "";
-      let lastIndex = 0;
-      let match;
-      while ((match = pattern.exec(source))) {
-        html += escape(source.slice(lastIndex, match.index));
-        const raw = match[0];
-        const alias = normalizeMentionName(match[1]);
-        const target = mentionMap.get(alias);
-        if (!target) {
-          html += `<span class="roundtable-mention unknown">${escape(raw)}</span>`;
-        } else {
+      return replaceMentionsWithHtml({
+        source,
+        resolveTarget: (alias) => mentionMap.get(alias) || null,
+        normalizeAlias: normalizeMentionName,
+        escapeHtml: escape,
+        renderHit({ raw, target, escapeHtml: esc }) {
+          if (!target) return `<span class="roundtable-mention unknown">${esc(raw)}</span>`;
           const profile = getRoundtableSpeakerProfile({ speakerId: target.id, speakerName: target.name });
-          html += `<span class="roundtable-mention ${profile.tone}" data-mention-id="${escape(target.id)}">${escape(raw)}</span>`;
-        }
-        lastIndex = match.index + raw.length;
-      }
-      html += escape(source.slice(lastIndex));
-      return html;
+          return `<span class="roundtable-mention ${profile.tone}" data-mention-id="${esc(target.id)}">${esc(raw)}</span>`;
+        },
+      });
     },
   });
 }
