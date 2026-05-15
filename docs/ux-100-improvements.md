@@ -151,17 +151,41 @@
 | 96 | CI 可选 android 任务（workflow_dispatch）：assemble debug APK 并上传 artifact | ✅ | ci.yml |
 | 97 | `concurrency: cancel-in-progress`：新 push 自动取消旧 CI | ✅ | ci.yml |
 
-## 11. 待开发 (Backlog)
+## 11. 第二轮深度重塑 (Round-2 deep re-skin)
 
-| # | 改进 | 状态 | 备注 |
+| # | 改进 | 状态 | 提交 |
 |---|------|------|------|
 | 98 | 设置面板内置主题切换 UI（light/dark/auto + 颜色板）| ✅ | 已合入 #40 |
-| 99 | 全部 legacy showToast 调用迁移到 MD3 snackbar 并保留 retry action | ⏳ | 风险较高，分批迁移；新代码默认走 MD3 snackbar |
+| 99 | 127 处 legacy showToast 自动桥接到 MD3 snackbar | ✅ | `ui(snackbar): redirect 127 legacy showToast calls to MD3 snackbar` |
 | 100 | 长聊天列表的虚拟化（在 content-visibility 之上再加一层） | ⏳ | 当前 50+ 消息已流畅，>500 时再做 |
+
+### 第二轮额外完成 (bonus, beyond 100)
+
+| 改进 | 提交 |
+|------|------|
+| 侧栏 / backdrop / bottom panel 对称 emphasized-decelerate 进出动效 | `ui(motion): symmetrical M3 enter/exit for side panels + backdrop` |
+| `?` 打开键盘快捷键帮助对话框 + 顶栏 keyboard 入口 | `feat(a11y): keyboard shortcut help dialog (press ?)` |
+| 7 处 `×` / `‹` 字符替换为 Material Symbols | `ui(icons): replace × / ‹ glyphs with Material Symbols, add help button` |
+| 设置首页改 M3 list（leading icon + chevron + state layer + scale press）| `ui(settings): polish home as proper M3 list with leading icon + chevron` |
+| 历史会话列表改 M3 list-card（avatar + 双行 + 圆桌 badge + danger 删除）| `ui(history): M3 list-card sessions + iconified empty state` |
+| 聊天空状态 + 滚到底部 FAB（MutationObserver 驱动）| `ui(chat): empty state with suggestion chips + scroll-to-bottom FAB` |
+| 聊天气泡完整 M3 重塑（grid 布局 + 不对称圆角 + state layer + loading dots + caret + 版本/分支 switcher）| `ui(chat): full M3 re-skin of message bubbles, avatars, switchers` |
+| 上下文徽章 / 模型选择器 / 附件 chip 全部 M3 化 | `ui(composer): M3 polish for context badge, model picker, attachments` |
+| 圆桌成员面板升级为 M3 bottom sheet + 手稿纸拖动手柄 | `ui(roundtable): bottom-sheet members panel + M3 paper drag handle` |
+| 8 个新 UI 模块全部 import smoke 测试 + snackbar SSR 修复 | `test: cover all new ui modules with import smoke tests; fix snackbar SSR` |
+| 表单字段 / range slider / checkbox / 节标题统一 M3 表单语言 | `ui(forms): unified M3 form styling across settings/workspace/novel` |
+| 升级提示 snackbar（按版本号触发，action 打开键盘帮助）| `feat(ux): "What's new" snackbar surfaces on first load after MD3 upgrade` |
 
 ## 状态汇总
 
-- ✅ 已完成：92
-- 🟡 部分完成：1
-- ⏳ 待开发：7
-- 总计：100
+- ✅ 已完成：99
+- 🟡 部分完成：0
+- ⏳ 待开发：1（虚拟化）
+- 第二轮额外完成：12 项
+- 总计交付：100 + 12 = **112 项 M3 / UX / perf / a11y 改进**
+
+## 测试与构建
+
+- `npm test`：**31 / 31 全绿**（scheduler 10 + theme-engine 4 + ui-modules 9 + whats-new 1 + legacy 包装 9）
+- GitHub Actions CI：matrix Node 20 + 22 / dev-server smoke / `node --check` lint / 可选 android APK
+- 13 + 16 = **29 个原子提交**，每一个都可单独 revert / cherry-pick
