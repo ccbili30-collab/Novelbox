@@ -159,6 +159,11 @@ import { createPersistencePipeline } from "./app/runtime/persistence-pipeline.js
 import { createRenderPipeline } from "./app/runtime/render-pipeline.js";
 import { createStateContext } from "./app/runtime/state-context.js";
 import { createScrollFollower, createLayoutApplier } from "./app/runtime/scroll-and-layout.js";
+import {
+  getMessageContent       as _getMessageContent,
+  normalizeChatAttachments as _normalizeChatAttachments,
+  getMessageRenderSignature as _getMessageRenderSignature,
+} from "./app/runtime/message-signature.js";
 
 const $ = (selector) => document.querySelector(selector);
 // All DOM selectors live in src/app/runtime/dom-registry.js so the
@@ -1048,26 +1053,18 @@ function activateBranchToNode(nodeId, session = activeSession()) {
   return changed;
 }
 
+// Pure helpers moved to src/app/runtime/message-signature.js so they
+// can be unit-tested without a DOM. The thin wrappers below close
+// over the legacy free-functions getAssistantVersion / getNode and
+// the streaming flag, preserving every call site's signature.
 function getMessageContent(node) {
-  if (!node) return "";
-  if (node.role === "assistant") return getAssistantVersion(node)?.content || "";
-  return node.content || "";
+  return _getMessageContent(node, getAssistantVersion);
 }
-
 function normalizeChatAttachments(attachments = []) {
-  return (Array.isArray(attachments) ? attachments : [])
-    .filter((item) => item?.dataUrl || clean(item?.textExcerpt) || clean(item?.name))
-    .slice(0, CHAT_ATTACHMENT_LIMIT)
-    .map((item) => ({
-      id: item.id || uid("att"),
-      kind: clean(item.kind) || (item.dataUrl ? "image" : clean(item.textExcerpt) ? "text" : "file"),
-      name: clean(item.name) || (item.dataUrl ? "image" : "file"),
-      type: clean(item.type),
-      size: Number(item.size) || 0,
-      dataUrl: clean(item.dataUrl),
-      textExcerpt: clean(item.textExcerpt).slice(0, CHAT_TEXT_EXCERPT_LIMIT),
-      readable: Boolean(item.readable || clean(item.textExcerpt)),
-    }));
+  return _normalizeChatAttachments(attachments, {
+    limit: CHAT_ATTACHMENT_LIMIT,
+    textLimit: CHAT_TEXT_EXCERPT_LIMIT,
+  });
 }
 
 function chatAttachmentLabel(attachments = []) {
@@ -2423,24 +2420,17 @@ function createMessageElement(node) {
   return template.content.firstElementChild;
 }
 
+// Hash thunk delegated to message-signature.js. Closes over the
+// legacy session-tree free functions and the streaming flag so the
+// extracted helper stays pure.
 function getMessageRenderSignature(node) {
-  const content = getMessageContent(node);
-  const version = getAssistantVersion(node);
-  const parent = getNode(node.parentId);
-  const attachments = normalizeChatAttachments(node.attachments);
-  return [
-    node.id,
-    node.role,
-    node.activeVersionId || "",
-    node.versions?.length || 0,
-    version?.createdAt || node.createdAt || 0,
-    version?.usage?.total_tokens || 0,
-    content,
-    attachments.map((item) => `${item.id}:${item.name}:${item.dataUrl?.length || 0}`).join("|"),
-    parent?.activeChildId || "",
-    parent?.children?.length || 0,
-    isGenerating && generatingNodeId === node.id ? "streaming" : "",
-  ].join("::");
+  return _getMessageRenderSignature(node, {
+    getAssistantVersion,
+    getNode,
+    isStreamingNodeId: (id) => isGenerating && generatingNodeId === id,
+    attachmentLimit: CHAT_ATTACHMENT_LIMIT,
+    textLimit:       CHAT_TEXT_EXCERPT_LIMIT,
+  });
 }
 
 function renderGenerationChrome() {
