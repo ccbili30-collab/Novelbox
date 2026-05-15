@@ -113,7 +113,8 @@ import {
 import { createMemoryEntriesFromMessage } from "./domain/creator/creator-memory-writer.js";
 import { createAiClient } from "./services/api/ai-client.js";
 import { createBridgeClient, registerBridgeHooks } from "./services/bridge/bridge-client.js";
-import { hydrate, loadState, saveState as persistState } from "./state/persistence.js";
+import { hydrate, loadState, saveState as persistStateNow } from "./state/persistence.js";
+import { createFrameScheduler, createIdleDebouncer } from "./utils/scheduler.js";
 import { bindCommandDelegation } from "./ui/bindings/event-binding.js";
 import { createPanelManager } from "./ui/panels/panel-manager.js";
 import { renderContextBadge as drawContextBadge, renderContextPanel as drawContextPanel } from "./ui/renderers/context-renderer.js";
@@ -1956,7 +1957,24 @@ function applySessionAppearance() {
   els.body.classList.toggle("has-session-background", Boolean(background));
 }
 
-function render() {
+// Persist is debounced via requestIdleCallback so dozens of state writes
+// during streaming or rapid composer typing collapse to a single localStorage
+// write per idle frame. See src/utils/scheduler.js.
+const persistDebouncer = createIdleDebouncer(
+  (s) => { try { persistStateNow(s); } catch (_) { /* quota errors silenced */ } },
+  { timeout: 400 }
+);
+function persistState(s) { persistDebouncer.schedule(s); }
+function persistStateImmediate(s) { persistDebouncer.cancel(); persistStateNow(s); }
+
+// render() coalesces multiple synchronous schedule() calls within the same
+// task into a single rAF tick. Callers anywhere may call render() freely;
+// the body in renderNow() runs at most once per frame.
+const renderScheduler = createFrameScheduler(() => renderNow());
+function render() { renderScheduler.schedule(); }
+function renderImmediate() { renderScheduler.flush(); renderNow(); }
+
+function renderNow() {
   const session = activeSession();
   ensureSessionCreator(session);
   const rt = roundtableState(session);
@@ -7083,4 +7101,12 @@ if (syncSealedCreatorTemplatePrompts() || migrateImportedPrimaryCloneCreators())
 render();
 resizeInput();
 scrollBottom();
+
+// Flush any debounced state writes before the page unloads so we never lose
+// the trailing edit. pagehide is the iOS-friendly equivalent of beforeunload.
+window.addEventListener("pagehide", () => persistStateImmediate(state));
+window.addEventListener("beforeunload", () => persistStateImmediate(state));
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") persistStateImmediate(state);
+});
 

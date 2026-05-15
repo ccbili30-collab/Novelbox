@@ -630,3 +630,25 @@
   overflow: hidden; clip: rect(0,0,0,0);
   white-space: nowrap; border: 0;
 }
+
+/* ===== Performance: contain layout/paint and let the browser skip
+ * off-screen messages with content-visibility. content-visibility:auto
+ * needs a contain-intrinsic-size hint or the page jumps when the
+ * browser virtualises the row.
+ */
+.messages .chat-row,
+.roundtable-discussion > * {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 240px;
+}
+.side-panel,
+.panel,
+.message-menu,
+.roundtable-mention-picker {
+  contain: layout paint;
+}
+
+/* Promote streaming content updates so they don't trigger ancestor reflow. */
+.is-generating .messages .chat-row.is-streaming {
+  contain: layout style;
+}
