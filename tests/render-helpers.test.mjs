@@ -67,3 +67,31 @@ test("renderVersionSwitcher renders the active version index", () => {
   assert.match(html, /switcher__index">2\/3</);
   assert.match(html, /aria-label="版本切换"/);
 });
+
+import {
+  isFailedAssistantContent,
+  LOADING_DOTS_HTML,
+  STREAM_CARET_HTML,
+} from "../src/app/runtime/render-helpers.js";
+
+test("isFailedAssistantContent detects 请求失败 prefix in either punctuation", () => {
+  assert.equal(isFailedAssistantContent({ role: "assistant" }, "请求失败:网络异常"), true);
+  assert.equal(isFailedAssistantContent({ role: "assistant" }, "请求失败：超时"), true);
+  assert.equal(isFailedAssistantContent({ role: "assistant" }, " 请求失败：x "), true);
+});
+
+test("isFailedAssistantContent ignores non-assistant nodes", () => {
+  assert.equal(isFailedAssistantContent({ role: "user" }, "请求失败:network"), false);
+});
+
+test("isFailedAssistantContent returns false for non-error content", () => {
+  assert.equal(isFailedAssistantContent({ role: "assistant" }, "好的，我来回答"), false);
+  assert.equal(isFailedAssistantContent({ role: "assistant" }, ""), false);
+  assert.equal(isFailedAssistantContent(null, "请求失败:foo"), false);
+});
+
+test("LOADING_DOTS_HTML and STREAM_CARET_HTML are non-empty markup", () => {
+  assert.match(LOADING_DOTS_HTML, /message-loading-dots/);
+  assert.match(LOADING_DOTS_HTML, /aria-label="正在生成"/);
+  assert.match(STREAM_CARET_HTML, /stream-caret/);
+});

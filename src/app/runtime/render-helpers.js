@@ -49,6 +49,40 @@ export function renderBranchSwitcher(node, { getNode }) {
   </div>`;
 }
 
+/**
+ * Build the meta line shown under an assistant bubble:
+ *   "<n>字 · <time>[ · <K> tok]"
+ *
+ * Pure: deps must supply { formatTime, formatK }.
+ */
+export function buildMessageMeta(node, deps) {
+  if (!node || !deps) return "";
+  const { formatTime, formatK } = deps;
+  const content = node._renderedContent ?? "";
+  const versionUsage = node._renderedVersionUsage ?? 0;
+  const usage = versionUsage ? ` · ${formatK(versionUsage)} tok` : "";
+  return `${String(content).length}字 · ${formatTime(node._renderedTimestamp)}${usage}`;
+}
+
+/**
+ * Decide whether a chat row should carry the "failed" CSS marker.
+ * Any assistant content starting with "请求失败:" or "请求失败：" is
+ * considered a failure marker the renderer can highlight in error
+ * tones.
+ */
+export function isFailedAssistantContent(node, content) {
+  if (!node || node.role !== "assistant") return false;
+  return /^请求失败[:：]/.test(String(content || "").trim());
+}
+
+/** The 3-dot loading indicator used while a stream has produced no
+ *  characters yet. Returned as a single HTML string. */
+export const LOADING_DOTS_HTML =
+  '<span class="message-content message-loading-dots" aria-label="正在生成"><i></i><i></i><i></i></span>';
+
+/** The blinking caret while a stream is actively appending. */
+export const STREAM_CARET_HTML = '<span class="stream-caret"></span>';
+
 export function renderVersionSwitcher(node) {
   if (!node || node.role !== "assistant" || !Array.isArray(node.versions) || node.versions.length < 2) return "";
   const versionIndex = Math.max(0, node.versions.findIndex((item) => item.id === node.activeVersionId)) + 1;

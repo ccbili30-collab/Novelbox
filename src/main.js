@@ -170,6 +170,9 @@ import {
   renderChatContent as _renderChatContent,
   renderBranchSwitcher as _renderBranchSwitcher,
   renderVersionSwitcher as _renderVersionSwitcher,
+  isFailedAssistantContent,
+  LOADING_DOTS_HTML,
+  STREAM_CARET_HTML,
 } from "./app/runtime/render-helpers.js";
 
 const $ = (selector) => document.querySelector(selector);
@@ -2485,21 +2488,18 @@ function renderMessage(node) {
   const content = getMessageContent(node);
   const attachments = normalizeChatAttachments(node.attachments);
   const version = getAssistantVersion(node);
-  const usage = version?.usage?.total_tokens ? ` · ${formatK(version.usage.total_tokens)} tok` : "";
+  const tokens = version?.usage?.total_tokens || 0;
+  const usage = tokens ? ` · ${formatK(tokens)} tok` : "";
   const meta = `${content.length}字 · ${formatTime(version?.createdAt || node.createdAt)}${usage}`;
   const isUser = node.role === "user";
-  const failedClass = node.role === "assistant" && /^请求失败[:：]/.test(clean(content)) ? " failed" : "";
-  const versionSwitcher = _renderVersionSwitcher(node);
-  const branchSwitcher = renderBranchSwitcher(node);
-  const switcher = [versionSwitcher, branchSwitcher].filter(Boolean).join("");
+  const failedClass = isFailedAssistantContent(node, content) ? " failed" : "";
+  const switcher = [_renderVersionSwitcher(node), renderBranchSwitcher(node)].filter(Boolean).join("");
   const isStreamingThisNode = isGenerating && generatingNodeId === node.id;
   const loadingContent = isStreamingThisNode && !content;
   const bubbleContent = [
     attachments.length ? renderChatAttachments(attachments) : "",
-    loadingContent
-      ? `<span class="message-content message-loading-dots" aria-label="正在生成"><i></i><i></i><i></i></span>`
-      : renderChatContent(node, content, isStreamingThisNode),
-    isStreamingThisNode ? '<span class="stream-caret"></span>' : "",
+    loadingContent ? LOADING_DOTS_HTML : renderChatContent(node, content, isStreamingThisNode),
+    isStreamingThisNode ? STREAM_CARET_HTML : "",
   ].join("");
   return `
     <article class="chat-row ${isUser ? "is-user" : "is-assistant"}${failedClass}" data-node-id="${node.id}">
