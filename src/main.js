@@ -148,6 +148,13 @@ import {
   GENERATIVE_AGENT_SOURCE_NOTE,
 } from "./app/runtime/constants.js";
 import { createDomRegistry } from "./app/runtime/dom-registry.js";
+import {
+  prefersReducedMotion,
+  vibrateLight,
+  createPulse,
+  createRipple,
+  createToast,
+} from "./app/runtime/feedback.js";
 
 const $ = (selector) => document.querySelector(selector);
 // All DOM selectors live in src/app/runtime/dom-registry.js so the
@@ -1569,27 +1576,10 @@ function scrollBottom(force = false) {
 // through the new MD3 snackbar (FIFO queue, ARIA-live, M3 motion). The
 // legacy #toast element is kept as a graceful fallback if the snackbar
 // host isn't mounted yet (e.g. very early bootstrap or test envs).
-function showToast(message) {
-  if (message == null) return;
-  try {
-    showSnackbar(String(message), { short: true });
-    return;
-  } catch (_) { /* fall through to legacy DOM */ }
-  if (!els.toast) return;
-  window.clearTimeout(toastTimer);
-  window.clearTimeout(toastMotionTimer);
-  els.toast.textContent = message;
-  els.toast.hidden = false;
-  els.toast.classList.remove("toast-pop");
-  void els.toast.offsetWidth;
-  els.toast.classList.add("toast-pop");
-  toastMotionTimer = window.setTimeout(() => {
-    els.toast.classList.remove("toast-pop");
-  }, 420);
-  toastTimer = window.setTimeout(() => {
-    els.toast.hidden = true;
-  }, 1800);
-}
+// Bridged in from src/app/runtime/feedback.js. Captures the DOM els
+// registry + the MD3 snackbar so 127 call sites can keep using
+// showToast(msg) unchanged.
+const showToast = createToast(els, showSnackbar);
 
 function askThreeWayDelete({ title = "确认删除", message = "", confirmLabel = "确定", keepLabel = "保留", cancelLabel = "取消" } = {}) {
   return new Promise((resolve) => {
@@ -1617,40 +1607,11 @@ function askThreeWayDelete({ title = "确认删除", message = "", confirmLabel 
   });
 }
 
-function prefersReducedMotion() {
-  return window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-}
-
-function vibrateLight(command = "") {
-  if (!navigator.vibrate || prefersReducedMotion()) return;
-  const heavier = /delete|stop|close|reset|undo/.test(command);
-  try {
-    navigator.vibrate(heavier ? 16 : 8);
-  } catch {}
-}
-
-function pulseElement(element) {
-  if (!element || prefersReducedMotion()) return;
-  element.classList.remove("motion-press");
-  void element.offsetWidth;
-  element.classList.add("motion-press");
-  window.setTimeout(() => element.classList.remove("motion-press"), MOTION_PULSE_MS);
-}
-
-function addMotionRipple(element, event) {
-  if (!element || !event || prefersReducedMotion()) return;
-  const rect = element.getBoundingClientRect();
-  if (!rect.width || !rect.height) return;
-  const ripple = document.createElement("span");
-  const size = Math.max(rect.width, rect.height) * 1.45;
-  ripple.className = "motion-ripple";
-  ripple.style.width = `${size}px`;
-  ripple.style.height = `${size}px`;
-  ripple.style.left = `${event.clientX - rect.left - size / 2}px`;
-  ripple.style.top = `${event.clientY - rect.top - size / 2}px`;
-  element.appendChild(ripple);
-  window.setTimeout(() => ripple.remove(), MOTION_RIPPLE_MS);
-}
+// prefersReducedMotion / vibrateLight: imported from feedback.js.
+// pulseElement / addMotionRipple: built from factories so durations
+// are baked in at construction time.
+const pulseElement = createPulse(MOTION_PULSE_MS);
+const addMotionRipple = createRipple(MOTION_RIPPLE_MS);
 
 function showCommandFeedback(target, command, event) {
   if (!target) return;
