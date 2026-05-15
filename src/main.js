@@ -129,6 +129,7 @@ import {
   createPinchZoomGesture,
   createPaperDoubleTapGesture,
 } from "./app/runtime/gestures.js";
+import { createLayoutPresetController } from "./app/runtime/layout-presets.js";
 import { bindCommandDelegation } from "./ui/bindings/event-binding.js";
 import { createPanelManager } from "./ui/panels/panel-manager.js";
 import { renderContextBadge as drawContextBadge, renderContextPanel as drawContextPanel } from "./ui/renderers/context-renderer.js";
@@ -6225,57 +6226,30 @@ const handleCommand = createCommandRegistry(buildCommandMap({
   switchSibling,
 }));
 
-function applyLayoutPreset(name) {
-  const preset = layoutPresets[name];
-  if (!preset) return;
-  sessionSettings().layout = hydrateLayout(preset);
-  render();
-  resizeInput();
-  showToast("排版预设已应用");
-}
-
-function applyCustomLayoutPreset(id) {
-  const settings = sessionSettings();
-  const preset = settings.layoutPresets.find((item) => item.id === id);
-  if (!preset) return;
-  settings.layout = hydrateLayout(preset.layout);
-  render();
-  resizeInput();
-  showToast("排版预设已应用");
-}
-
-function saveLayoutPreset() {
-  const settings = sessionSettings();
-  const name = clean(els.layoutPresetName?.value) || `排版 ${settings.layoutPresets.length + 1}`;
-  const record = {
-    id: uid("layout"),
-    name,
-    layout: hydrateLayout(settings.layout),
-    createdAt: Date.now(),
-  };
-  settings.layoutPresets = [record, ...settings.layoutPresets].slice(0, 12);
-  if (els.layoutPresetName) els.layoutPresetName.value = "";
-  render();
-  showToast("已保存排版预设");
-}
-
-function deleteLayoutPreset(id) {
-  const settings = sessionSettings();
-  settings.layoutPresets = settings.layoutPresets.filter((item) => item.id !== id);
-  render();
-  showToast("已删除排版预设");
-}
-
-function resetLayoutParams() {
-  sessionSettings().layout = createDefaultLayout();
-  render();
-  resizeInput();
-  showToast("已恢复默认排版");
-}
-
-function copyLayoutParams() {
-  copyText(JSON.stringify(sessionSettings().layout, null, 2));
-}
+// Layout-preset commands moved to src/app/runtime/layout-presets.js.
+// The controller owns the same six functions; main.js binds them to
+// the existing identifier names so the command-registry config (and
+// every existing call site) keeps working.
+const _layoutPresetController = createLayoutPresetController({
+  presets: layoutPresets,
+  sessionSettings,
+  hydrateLayout,
+  createDefaultLayout,
+  uid,
+  clean,
+  render,
+  resizeInput,
+  persist: () => persistState(state),
+  showToast,
+  copyText,
+  get presetNameInput() { return els.layoutPresetName; },
+});
+const applyLayoutPreset       = _layoutPresetController.applyLayoutPreset;
+const applyCustomLayoutPreset = _layoutPresetController.applyCustomLayoutPreset;
+const saveLayoutPreset        = _layoutPresetController.saveLayoutPreset;
+const deleteLayoutPreset      = _layoutPresetController.deleteLayoutPreset;
+const resetLayoutParams       = _layoutPresetController.resetLayoutParams;
+const copyLayoutParams        = _layoutPresetController.copyLayoutParams;
 
 bindCommandDelegation(document, renderMenu, () => activeMenuNodeId || activeRoundtableMessageId, (value) => {
   activeMenuNodeId = value;
