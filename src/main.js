@@ -136,6 +136,7 @@ import {
   wireSessionFieldInputs,
   wireAssistantConfigInputs,
 } from "./app/runtime/wire-events.js";
+import { createSettingsRenderer } from "./ui/renderers/settings-renderer.js";
 import { bindCommandDelegation } from "./ui/bindings/event-binding.js";
 import { createPanelManager } from "./ui/panels/panel-manager.js";
 import { renderContextBadge as drawContextBadge, renderContextPanel as drawContextPanel } from "./ui/renderers/context-renderer.js";
@@ -2586,25 +2587,32 @@ function renderBackgroundPreview(element, dataUrl) {
   element.classList.toggle("empty", !clean(dataUrl));
 }
 
-function renderSettingsPage() {
-  const meta = settingsPageMeta[activeSettingsPage] || settingsPageMeta.home;
-  if (els.settingsPanel) els.settingsPanel.dataset.settingsPage = activeSettingsPage;
-  if (els.settingsPanelTitle) els.settingsPanelTitle.textContent = meta.title;
-  if (els.settingsPanelSubtitle) els.settingsPanelSubtitle.textContent = meta.subtitle;
-  if (els.settingsBack) els.settingsBack.hidden = activeSettingsPage === "home";
-  els.settingsViews.forEach((view) => {
-    view.hidden = view.dataset.settingsView !== activeSettingsPage;
-  });
-}
-
-function renderProviderSwitcher(api = apiSettings()) {
-  if (!els.providerSwitcher) return;
-  els.providerSwitcher.innerHTML = api.providers.map((provider) => `
-    <button class="${provider.id === api.currentProviderId ? "selected" : ""}" type="button" data-command="select-provider" data-provider-id="${escapeHtml(provider.id)}">
-      <span>${escapeHtml(provider.name || "未命名提供方")}</span>
-    </button>
-  `).join("");
-}
+// renderSettingsPage / renderProviderSwitcher / renderSettings moved
+// into src/ui/renderers/settings-renderer.js. The factory takes the
+// state-context bag, the live els registry and a few helper renderers
+// so it stays decoupled from main.js's mutable globals.
+const _settingsRenderer = createSettingsRenderer({
+  els,
+  doc: document,
+  ctx: {
+    apiSettings,
+    globalModelDefaults,
+    sessionSettings,
+    sessionAppearance,
+    activeApiProvider,
+  },
+  get settingsPageMeta() { return settingsPageMeta; },
+  getActiveSettingsPage: () => activeSettingsPage,
+  formatLayoutValue: (...args) => formatLayoutValue(...args),
+  renderAvatarPreview: (...args) => renderAvatarPreview(...args),
+  renderBackgroundPreview: (...args) => renderBackgroundPreview(...args),
+  renderSettingsModelPicker: () => renderSettingsModelPicker(),
+  renderCreatorsPage: () => renderCreatorsPage(),
+  clean,
+  escapeHtml,
+});
+const renderSettingsPage    = _settingsRenderer.renderSettingsPage;
+const renderProviderSwitcher = _settingsRenderer.renderProviderSwitcher;
 
 function openSettingsPage(page) {
   if (!settingsPageMeta[page]) return;
@@ -2627,48 +2635,8 @@ function stepLayoutValue(key, delta) {
   input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
-function renderSettings() {
-  const api = apiSettings();
-  const defaults = globalModelDefaults();
-  const s = sessionSettings();
-  const provider = activeApiProvider(api);
-  const appearance = sessionAppearance();
-  if (els.systemPrompt && document.activeElement !== els.systemPrompt) els.systemPrompt.value = "";
-  if (els.providerSelect) {
-    els.providerSelect.innerHTML = api.providers
-      .map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`)
-      .join("");
-    els.providerSelect.value = api.currentProviderId;
-  }
-  renderProviderSwitcher(api);
-  if (els.providerName && document.activeElement !== els.providerName) els.providerName.value = provider?.name || "";
-  if (document.activeElement !== els.baseUrl) els.baseUrl.value = api.baseUrl;
-  if (document.activeElement !== els.apiKey) els.apiKey.value = api.apiKey;
-  if (document.activeElement !== els.modelInput) els.modelInput.value = defaults.model;
-  if (els.contextTokenBudget && document.activeElement !== els.contextTokenBudget) {
-    els.contextTokenBudget.value = Number(api.contextTokenBudget) || 200000;
-  }
-  if (els.userNameInput && document.activeElement !== els.userNameInput) els.userNameInput.value = clean(appearance.userName) || "我";
-  renderAvatarPreview(els.userAvatarPreview, appearance.userAvatarDataUrl, clean(appearance.userName) || "我");
-  renderBackgroundPreview(els.sessionBackgroundPreview, appearance.backgroundDataUrl);
-  if (document.activeElement !== els.contextCount) els.contextCount.value = defaults.contextCount;
-  if (document.activeElement !== els.maxTokens) els.maxTokens.value = defaults.maxTokens;
-  els.temperature.value = defaults.temperature;
-  els.temperatureLabel.textContent = Number(defaults.temperature).toFixed(2);
-  els.unlimitedContext.checked = defaults.unlimitedContext;
-  els.stream.checked = defaults.stream;
-  els.layoutInputs.forEach((input) => {
-    const key = input.dataset.layoutKey;
-    if (document.activeElement !== input) input.value = s.layout[key];
-  });
-  els.layoutValues.forEach((value) => {
-    const key = value.dataset.layoutValue;
-    value.textContent = formatLayoutValue(key, s.layout[key]);
-  });
-  renderSettingsModelPicker();
-  renderCreatorsPage();
-  renderSettingsPage();
-}
+// Body of renderSettings now lives in src/ui/renderers/settings-renderer.js.
+const renderSettings = _settingsRenderer.renderSettings;
 
 function renderCustomLayoutPresets() {
   if (!els.customLayoutPresets) return;
