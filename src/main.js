@@ -123,6 +123,12 @@ import { bindKeyboardHelpShortcut, openKeyboardHelp } from "./ui/components/keyb
 import { checkAndAnnounceUpgrade, VERSION as APP_VERSION } from "./ui/components/whats-new.js";
 import { bootMd3 } from "./app/runtime/bootstrap-md3.js";
 import { buildCommandMap } from "./app/runtime/command-registry-config.js";
+import {
+  touchDistance as _touchDistance,
+  lockRootScroll as _lockRootScroll,
+  createPinchZoomGesture,
+  createPaperDoubleTapGesture,
+} from "./app/runtime/gestures.js";
 import { bindCommandDelegation } from "./ui/bindings/event-binding.js";
 import { createPanelManager } from "./ui/panels/panel-manager.js";
 import { renderContextBadge as drawContextBadge, renderContextPanel as drawContextPanel } from "./ui/renderers/context-renderer.js";
@@ -245,14 +251,8 @@ const paperDrag = {
   startY: 0,
   startReveal: 0.68,
 };
-const roundtableGesture = {
-  pinchActive: false,
-  pinchTriggered: false,
-  pinchStartDistance: 0,
-  paperLastTapAt: 0,
-  paperTouchStartX: 0,
-  paperTouchStartY: 0,
-};
+// roundtableGesture state moved into the gesture controllers in
+// src/app/runtime/gestures.js — no longer needed at module scope.
 const bridgeCallbacks = new Map();
 const bridgeStreamCallbacks = new Map();
 // Streaming-DOM batching now lives in src/app/runtime/stream-batcher.js
@@ -6347,69 +6347,28 @@ function resizeInput() {
   syncRoundtablePaper();
 }
 
-function touchDistance(touches) {
-  if (!touches || touches.length < 2) return 0;
-  const dx = touches[0].clientX - touches[1].clientX;
-  const dy = touches[0].clientY - touches[1].clientY;
-  return Math.hypot(dx, dy);
-}
+// Gesture helpers extracted to src/app/runtime/gestures.js. The
+// pinch-zoom + paper double-tap controllers own their own internal
+// state, so the legacy roundtableGesture object is no longer needed.
+const touchDistance = _touchDistance;
+const lockRootScroll = () => _lockRootScroll(window, document);
 
-function handleMessagePinchStart(event) {
-  if (roundtableState().enabled || event.touches.length !== 2 || getOpenDialog() || panelManager.getActivePanel()) return;
-  roundtableGesture.pinchActive = true;
-  roundtableGesture.pinchTriggered = false;
-  roundtableGesture.pinchStartDistance = touchDistance(event.touches);
-}
+const _pinchGesture = createPinchZoomGesture({
+  isRoundtableEnabled: () => roundtableState().enabled,
+  isOverlayBlocking: () => Boolean(getOpenDialog() || panelManager.getActivePanel()),
+  onPinchEnter: (msg) => setRoundtableEnabled(true, msg),
+});
+const handleMessagePinchStart  = (e) => _pinchGesture.onTouchStart(e);
+const handleMessagePinchMove   = (e) => _pinchGesture.onTouchMove(e);
+const resetMessagePinchGesture = () => _pinchGesture.onTouchEnd();
 
-function handleMessagePinchMove(event) {
-  if (!roundtableGesture.pinchActive || roundtableGesture.pinchTriggered || event.touches.length !== 2) return;
-  const currentDistance = touchDistance(event.touches);
-  const startDistance = roundtableGesture.pinchStartDistance || currentDistance;
-  const inwardDelta = startDistance - currentDistance;
-  if (startDistance > 120 && inwardDelta > 44 && currentDistance / startDistance < 0.78) {
-    roundtableGesture.pinchTriggered = true;
-    setRoundtableEnabled(true, "已通过双指手势进入圆桌");
-  }
-}
-
-function resetMessagePinchGesture() {
-  roundtableGesture.pinchActive = false;
-  roundtableGesture.pinchTriggered = false;
-  roundtableGesture.pinchStartDistance = 0;
-}
-
-function lockRootScroll() {
-  if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
-  if (document.documentElement.scrollTop) document.documentElement.scrollTop = 0;
-  if (document.body?.scrollTop) document.body.scrollTop = 0;
-}
-
-function handlePaperDoubleTap(event) {
-  if (!roundtableState().enabled || event.target.closest?.("button, input, textarea, select, summary")) return;
-  const now = Date.now();
-  if (now - roundtableGesture.paperLastTapAt < 320) {
-    roundtableGesture.paperLastTapAt = 0;
-    setRoundtableEnabled(false, "已回到交流模式");
-    event.preventDefault?.();
-    return;
-  }
-  roundtableGesture.paperLastTapAt = now;
-}
-
-function handlePaperTouchStart(event) {
-  if (!roundtableState().enabled || event.touches.length !== 1) return;
-  const touch = event.touches[0];
-  roundtableGesture.paperTouchStartX = touch.clientX;
-  roundtableGesture.paperTouchStartY = touch.clientY;
-}
-
-function handlePaperTouchEnd(event) {
-  if (!roundtableState().enabled || event.changedTouches.length !== 1) return;
-  const touch = event.changedTouches[0];
-  const moved = Math.hypot(touch.clientX - roundtableGesture.paperTouchStartX, touch.clientY - roundtableGesture.paperTouchStartY);
-  if (moved > 10) return;
-  handlePaperDoubleTap(event);
-}
+const _paperDoubleTap = createPaperDoubleTapGesture({
+  isRoundtableEnabled: () => roundtableState().enabled,
+  onLeaveRoundtable: (msg) => setRoundtableEnabled(false, msg),
+});
+const handlePaperDoubleTap  = (e) => _paperDoubleTap.onDoubleTap(e);
+const handlePaperTouchStart = (e) => _paperDoubleTap.onTouchStart(e);
+const handlePaperTouchEnd   = (e) => _paperDoubleTap.onTouchEnd(e);
 
 function handleRoundtablePaperPointerDown(event) {
   if (!roundtableState().enabled || !els.roundtablePaperGrip) return;
