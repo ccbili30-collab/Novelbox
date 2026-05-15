@@ -121,6 +121,7 @@ import { initThemeEngine, setThemeMode, setSeedColor, getThemeMode, getSeedColor
 import { bindScrollAwareBar } from "./ui/components/scroll-aware-bars.js";
 import { bindKeyboardHelpShortcut, openKeyboardHelp } from "./ui/components/keyboard-help.js";
 import { checkAndAnnounceUpgrade, VERSION as APP_VERSION } from "./ui/components/whats-new.js";
+import { bootMd3 } from "./app/runtime/bootstrap-md3.js";
 import { bindCommandDelegation } from "./ui/bindings/event-binding.js";
 import { createPanelManager } from "./ui/panels/panel-manager.js";
 import { renderContextBadge as drawContextBadge, renderContextPanel as drawContextPanel } from "./ui/renderers/context-renderer.js";
@@ -6816,129 +6817,15 @@ window.visualViewport?.addEventListener("resize", resizeInput);
 
 if (syncSealedCreatorTemplatePrompts() || migrateImportedPrimaryCloneCreators()) persistState(state);
 
-// Apply persisted Material You theme + seed color before first paint so
-// users never see the default palette flash.
-try { initThemeEngine(); } catch (_) { /* SSR/test */ }
-
-// Theme picker (settings → 外观). Static markup in index.html provides
-// the segmented mode selector and seed swatches; we only wire the
-// behaviour here.
-function syncThemePickerUi() {
-  const mode = getThemeMode();
-  document.querySelectorAll("[data-theme-mode]").forEach((btn) => {
-    btn.setAttribute("aria-pressed", String(btn.dataset.themeMode === mode));
-  });
-  const seed = getSeedColor() || "";
-  document.querySelectorAll(".md-seed[data-seed]").forEach((btn) => {
-    const s = btn.dataset.seed === "custom" ? null : btn.dataset.seed;
-    if (s == null) {
-      btn.setAttribute("aria-pressed", "false");
-    } else {
-      btn.setAttribute("aria-pressed", String(s.toLowerCase() === seed.toLowerCase()));
-    }
-  });
-}
-document.addEventListener("click", (event) => {
-  const modeBtn = event.target.closest?.("[data-theme-mode]");
-  if (modeBtn) {
-    setThemeMode(modeBtn.dataset.themeMode);
-    syncThemePickerUi();
-    return;
-  }
-  const seedBtn = event.target.closest?.(".md-seed[data-seed]");
-  if (seedBtn) {
-    if (seedBtn.dataset.seed === "custom") {
-      document.getElementById("customSeedColor")?.click();
-    } else {
-      setSeedColor(seedBtn.dataset.seed || "");
-      syncThemePickerUi();
-    }
-  }
-});
-const _customSeed = document.getElementById("customSeedColor");
-_customSeed?.addEventListener("input", () => {
-  setSeedColor(_customSeed.value);
-  syncThemePickerUi();
-});
-syncThemePickerUi();
+// Every M3 cross-cutting concern (theme picker, scroll-aware bar,
+// keyboard help, what's new snackbar, scroll FAB + empty state) now
+// lives in src/app/runtime/bootstrap-md3.js so this file no longer
+// carries any of that wiring.
+bootMd3({ els });
 
 render();
 resizeInput();
 scrollBottom();
-
-// Lift the top app bar to surface-container tonal once the user starts
-// scrolling — M3 spec.
-const _topbar = document.querySelector(".topbar");
-if (_topbar && els.messages) bindScrollAwareBar(_topbar, els.messages);
-if (_topbar && els.roundtableDiscussion) bindScrollAwareBar(_topbar, els.roundtableDiscussion);
-
-// Expose theme controls on window for easy console + future settings UI.
-window.tbirdTheme = { setThemeMode, setSeedColor, getThemeMode, getSeedColor };
-
-// `?` opens the keyboard help dialog. Bound globally except inside inputs.
-bindKeyboardHelpShortcut();
-window.tbirdHelp = { openKeyboardHelp };
-
-// First load after upgrade: surface a "What's new" snackbar, with an
-// action that pops the keyboard help dialog so users discover the
-// new chrome.
-try {
-  checkAndAnnounceUpgrade({ onLearnMore: openKeyboardHelp });
-  window.tbirdVersion = APP_VERSION;
-} catch (_) { /* SSR / test */ }
-
-// Scroll-to-bottom FAB — visible only when the chat scroller is not
-// near the bottom AND the list has content. Empty state — visible only
-// when the chat path is empty AND we're not in roundtable mode.
-const _scrollFab = document.getElementById("scrollToBottom");
-const _emptyState = document.getElementById("messageEmpty");
-function syncScrollFab() {
-  if (!_scrollFab || !els.messages) return;
-  const hasContent = els.messages.children.length > 0;
-  const distanceFromBottom = els.messages.scrollHeight - els.messages.scrollTop - els.messages.clientHeight;
-  const shouldShow = hasContent && distanceFromBottom > 240 && !els.messages.hidden;
-  _scrollFab.hidden = !shouldShow;
-}
-function syncMessageEmpty() {
-  if (!_emptyState) return;
-  const empty = !els.messages?.hidden && (!els.messages?.children?.length);
-  _emptyState.hidden = !empty;
-}
-els.messages?.addEventListener("scroll", () => {
-  if (_fabRaf) return;
-  _fabRaf = requestAnimationFrame(() => { _fabRaf = 0; syncScrollFab(); });
-}, { passive: true });
-let _fabRaf = 0;
-_scrollFab?.addEventListener("click", () => {
-  els.messages.scrollTo({ top: els.messages.scrollHeight, behavior: "smooth" });
-});
-// Re-sync after the message list mutates. MutationObserver keeps us
-// independent from the render() pipeline (no risk of redefining the
-// existing function declaration) and only fires when something
-// actually changed in the chat surface.
-if (typeof MutationObserver === "function" && els.messages) {
-  let _mutPending = false;
-  const observer = new MutationObserver(() => {
-    if (_mutPending) return;
-    _mutPending = true;
-    requestAnimationFrame(() => {
-      _mutPending = false;
-      syncScrollFab();
-      syncMessageEmpty();
-    });
-  });
-  observer.observe(els.messages, { childList: true });
-}
-// Empty-state suggestion chips fill the composer.
-document.addEventListener("click", (event) => {
-  const chip = event.target.closest?.("[data-empty-prompt]");
-  if (!chip) return;
-  els.input.value = chip.dataset.emptyPrompt || "";
-  els.input.focus();
-  els.input.dispatchEvent(new Event("input", { bubbles: true }));
-});
-syncScrollFab();
-syncMessageEmpty();
 
 // pagehide / beforeunload / visibilitychange flush is set up by the
 // persistence pipeline so this file no longer needs to know about
