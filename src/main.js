@@ -115,6 +115,8 @@ import { createAiClient } from "./services/api/ai-client.js";
 import { createBridgeClient, registerBridgeHooks } from "./services/bridge/bridge-client.js";
 import { hydrate, loadState, saveState as persistStateNow } from "./state/persistence.js";
 import { createFrameScheduler, createIdleDebouncer } from "./utils/scheduler.js";
+import { showSnackbar, showError } from "./ui/components/snackbar.js";
+import { showConfirm, showAlert, showPrompt } from "./ui/components/dialog.js";
 import { bindCommandDelegation } from "./ui/bindings/event-binding.js";
 import { createPanelManager } from "./ui/panels/panel-manager.js";
 import { renderContextBadge as drawContextBadge, renderContextPanel as drawContextPanel } from "./ui/renderers/context-renderer.js";
@@ -3772,8 +3774,15 @@ function deleteApiProvider() {
   showToast("已删除模型提供方");
 }
 
-function applyGlobalModelConfigToAllAi() {
-  if (!window.confirm("将统一模型配置覆盖到所有会话、主创和议员？提示词、头像、名字和记忆不会被改动。")) return;
+async function applyGlobalModelConfigToAllAi() {
+  const ok = await showConfirm({
+    headline: "全面覆盖模型配置？",
+    body: "将统一模型配置覆盖到所有会话、主创和议员。提示词、头像、名字和记忆不会被改动。此操作无法撤销。",
+    confirmLabel: "全面覆盖",
+    cancelLabel: "取消",
+    danger: true,
+  });
+  if (!ok) return;
   const config = globalModelConfigFromApi(apiSettings());
   state.sessions.forEach((session) => {
     applyGlobalModelConfigToSession(session, config);
