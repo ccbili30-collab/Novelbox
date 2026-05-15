@@ -1,0 +1,16 @@
+{
+  "name": "tbird-roundtable-box",
+  "private": true,
+  "version": "0.1.0",
+  "description": "TBird Roundtable Box — multi-AI roundtable workspace.",
+  "type": "module",
+  "scripts": {
+    "dev": "node dev-server.mjs",
+    "test": "node --test --test-reporter=spec tests/*.test.mjs",
+    "test:legacy": "node --test --test-reporter=spec tests/legacy-scripts.test.mjs",
+    "test:smoke": "node tests/smoke/run-smoke.mjs"
+  },
+  "engines": {
+    "node": ">=20.10"
+  }
+}
