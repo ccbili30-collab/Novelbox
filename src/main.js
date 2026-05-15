@@ -2774,10 +2774,10 @@ function renderMessage(node) {
   const versionIndex = node.role === "assistant" ? Math.max(0, node.versions.findIndex((item) => item.id === node.activeVersionId)) + 1 : 1;
   const failedClass = node.role === "assistant" && /^请求失败[:：]/.test(clean(content)) ? " failed" : "";
   const versionSwitcher = node.role === "assistant" && node.versions.length > 1
-    ? `<div class="switcher">
-        <button type="button" data-command="prev-version" data-node-id="${node.id}" ${node.versions.length < 2 ? "disabled" : ""}>‹</button>
-        <span>${versionIndex}/${node.versions.length}</span>
-        <button type="button" data-command="next-version" data-node-id="${node.id}" ${node.versions.length < 2 ? "disabled" : ""}>›</button>
+    ? `<div class="switcher" role="group" aria-label="版本切换">
+        <button type="button" class="switcher__btn" data-command="prev-version" data-node-id="${node.id}" ${node.versions.length < 2 ? "disabled" : ""} aria-label="上一版本"><span class="md-icon md-icon--sz-20" aria-hidden="true">chevron_left</span></button>
+        <span class="switcher__index">${versionIndex}/${node.versions.length}</span>
+        <button type="button" class="switcher__btn" data-command="next-version" data-node-id="${node.id}" ${node.versions.length < 2 ? "disabled" : ""} aria-label="下一版本"><span class="md-icon md-icon--sz-20" aria-hidden="true">chevron_right</span></button>
       </div>`
     : "";
   const branchSwitcher = renderBranchSwitcher(node);
@@ -2807,10 +2807,10 @@ function renderBranchSwitcher(node) {
   const parent = getNode(node.parentId);
   if (!parent || parent.children.length < 2) return "";
   const index = parent.children.indexOf(node.id) + 1;
-  return `<div class="switcher">
-    <button type="button" data-command="prev-branch" data-node-id="${node.id}">‹</button>
-    <span>${index}/${parent.children.length}</span>
-    <button type="button" data-command="next-branch" data-node-id="${node.id}">›</button>
+  return `<div class="switcher switcher--branch" role="group" aria-label="分支切换">
+    <button type="button" class="switcher__btn" data-command="prev-branch" data-node-id="${node.id}" aria-label="上一分支"><span class="md-icon md-icon--sz-20" aria-hidden="true">chevron_left</span></button>
+    <span class="switcher__index">${index}/${parent.children.length}</span>
+    <button type="button" class="switcher__btn" data-command="next-branch" data-node-id="${node.id}" aria-label="下一分支"><span class="md-icon md-icon--sz-20" aria-hidden="true">chevron_right</span></button>
   </div>`;
 }
 
