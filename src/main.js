@@ -137,6 +137,13 @@ import {
   wireAssistantConfigInputs,
 } from "./app/runtime/wire-events.js";
 import { createSettingsRenderer } from "./ui/renderers/settings-renderer.js";
+import {
+  roundtableDateKey as _roundtableDateKey,
+  renderRoundtableEmpty as _renderRoundtableEmpty,
+  renderRoundtableDecisionBadge as _renderRoundtableDecisionBadge,
+  renderRoundtableMentionBadge as _renderRoundtableMentionBadge,
+  buildRoundtableDiscussion,
+} from "./ui/renderers/roundtable-renderer.js";
 import { bindCommandDelegation } from "./ui/bindings/event-binding.js";
 import { createPanelManager } from "./ui/panels/panel-manager.js";
 import { renderContextBadge as drawContextBadge, renderContextPanel as drawContextPanel } from "./ui/renderers/context-renderer.js";
@@ -2036,24 +2043,10 @@ function renderRoundtableContextControls(rt) {
     </section>`;
 }
 
-function renderRoundtableEmpty() {
-  return "";
-}
-
-function renderRoundtableDiscussion(messages) {
-  if (!messages.length) return renderRoundtableEmpty();
-  let lastDateKey = "";
-  return messages
-    .map((message, index) => {
-      const dateKey = roundtableDateKey(message.createdAt);
-      const divider = index === 0 || dateKey !== lastDateKey
-        ? `<div class="roundtable-divider"><span>${escapeHtml(formatTime(message.createdAt))}</span></div>`
-        : "";
-      lastDateKey = dateKey;
-      return `${divider}${renderRoundtableMessage(message)}`;
-    })
-    .join("");
-}
+// Empty state + per-divider walker live in src/ui/renderers/roundtable-renderer.js.
+const renderRoundtableEmpty = _renderRoundtableEmpty;
+const renderRoundtableDiscussion = (messages) =>
+  buildRoundtableDiscussion(messages, { renderMessage: renderRoundtableMessage });
 
 function getRoundtableSpeakerProfile(message) {
   const appearance = sessionAppearance();
@@ -2145,19 +2138,9 @@ function renderRoundtableMessage(message) {
   `;
 }
 
-function renderRoundtableDecisionBadge(message) {
-  const status = message.decisionStatus;
-  if (status === "adopted") return `<span class="roundtable-decision adopted">已采纳</span>`;
-  if (status === "ignored") return `<span class="roundtable-decision ignored">已忽略</span>`;
-  if (status === "approved") return `<span class="roundtable-decision approved">通过</span>`;
-  if (status === "revision") return `<span class="roundtable-decision revision">需修改</span>`;
-  return "";
-}
-
-function renderRoundtableMentionBadge(message) {
-  if (!message.mentionMeta?.triggeredByName) return "";
-  return `<span class="roundtable-mention-badge">回应 @${escapeHtml(message.mentionMeta.triggeredByName)}</span>`;
-}
+// Pure badge renderers extracted to src/ui/renderers/roundtable-renderer.js.
+const renderRoundtableDecisionBadge = _renderRoundtableDecisionBadge;
+const renderRoundtableMentionBadge = _renderRoundtableMentionBadge;
 
 function getRoundtablePaperSource() {
   const body = clean(sessionNovel().body);
@@ -2256,10 +2239,8 @@ function buildRoundtableNovelMaterials(options) {
   return buildRoundtableNovelMaterialsFromDomain(options, sessionNovel());
 }
 
-function roundtableDateKey(value) {
-  const date = new Date(value || Date.now());
-  return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
-}
+// roundtableDateKey extracted to src/ui/renderers/roundtable-renderer.js.
+const roundtableDateKey = _roundtableDateKey;
 
 function getViewportHeight() {
   return Math.round(window.visualViewport?.height || window.innerHeight || 760);
