@@ -14,7 +14,13 @@
 const DEFAULT_DURATION = 5000;
 const SHORT_DURATION = 3000;
 
-class SnackbarHost extends HTMLElement {
+// Defer the custom-element class definition until first DOM use so the
+// module loads cleanly in pure-Node test environments where HTMLElement
+// is not defined.
+let SnackbarHost = null;
+function ensureHostClass() {
+  if (SnackbarHost || typeof HTMLElement === "undefined") return SnackbarHost;
+  SnackbarHost = class extends HTMLElement {
   constructor() {
     super();
     this._queue = [];
@@ -113,16 +119,19 @@ class SnackbarHost extends HTMLElement {
     this._el.classList.remove("is-open");
     this._el.hidden = true;
   }
-}
-
-if (typeof customElements !== "undefined" && !customElements.get("mb-snackbar-host")) {
-  customElements.define("mb-snackbar-host", SnackbarHost);
+  };  // end class
+  if (typeof customElements !== "undefined" && !customElements.get("mb-snackbar-host")) {
+    customElements.define("mb-snackbar-host", SnackbarHost);
+  }
+  return SnackbarHost;
 }
 
 let _hostPromise = null;
 function getHost() {
   if (_hostPromise) return _hostPromise;
-  _hostPromise = new Promise((resolve) => {
+  _hostPromise = new Promise((resolve, reject) => {
+    if (typeof document === "undefined") { reject(new Error("no DOM")); return; }
+    ensureHostClass();
     const mount = () => {
       let host = document.querySelector("mb-snackbar-host");
       if (!host) {
