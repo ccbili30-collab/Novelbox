@@ -208,6 +208,45 @@
       </section>
 
       <section class="settings-page" data-settings-view="appearance" hidden>
+        <!-- ===== Material You theme picker ===== -->
+        <div class="settings-section md-theme-section">
+          <div class="section-title">
+            <strong>主题与配色</strong>
+            <span class="muted">Material You · 全局生效</span>
+          </div>
+
+          <div class="md-theme-mode" role="radiogroup" aria-label="主题模式">
+            <button type="button" class="md-segmented__seg" data-theme-mode="light" aria-pressed="false">
+              <span class="md-icon md-icon--sz-20" aria-hidden="true">light_mode</span>
+              <span>浅色</span>
+            </button>
+            <button type="button" class="md-segmented__seg" data-theme-mode="dark"  aria-pressed="false">
+              <span class="md-icon md-icon--sz-20" aria-hidden="true">dark_mode</span>
+              <span>深色</span>
+            </button>
+            <button type="button" class="md-segmented__seg" data-theme-mode="auto"  aria-pressed="true">
+              <span class="md-icon md-icon--sz-20" aria-hidden="true">brightness_auto</span>
+              <span>跟随系统</span>
+            </button>
+          </div>
+
+          <div class="md-theme-seeds" role="radiogroup" aria-label="种子色">
+            <button type="button" class="md-seed" data-seed=""        title="默认（紫）" aria-label="默认紫色"></button>
+            <button type="button" class="md-seed" data-seed="#6750a4" title="紫" aria-label="紫"></button>
+            <button type="button" class="md-seed" data-seed="#006a6a" title="青" aria-label="青"></button>
+            <button type="button" class="md-seed" data-seed="#7d5260" title="玫" aria-label="玫"></button>
+            <button type="button" class="md-seed" data-seed="#3b6939" title="森" aria-label="森"></button>
+            <button type="button" class="md-seed" data-seed="#7c5800" title="琥珀" aria-label="琥珀"></button>
+            <button type="button" class="md-seed" data-seed="#0061a4" title="海" aria-label="海"></button>
+            <button type="button" class="md-seed" data-seed="#9a4521" title="陶" aria-label="陶"></button>
+            <button type="button" class="md-seed" data-seed="custom" title="自定义" aria-label="自定义颜色">
+              <span class="md-icon md-icon--sz-20" aria-hidden="true">colorize</span>
+            </button>
+            <input type="color" id="customSeedColor" class="md-visually-hidden" value="#6750a4" aria-label="自定义种子色" />
+          </div>
+          <p class="md-theme-hint muted">主题与配色保存在本设备，不会同步到其它会话。</p>
+        </div>
+
         <div class="settings-section">
           <div class="section-title">
             <strong>本会话外观</strong>

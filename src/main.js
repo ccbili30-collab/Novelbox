@@ -7130,6 +7130,48 @@ if (syncSealedCreatorTemplatePrompts() || migrateImportedPrimaryCloneCreators())
 // users never see the default palette flash.
 try { initThemeEngine(); } catch (_) { /* SSR/test */ }
 
+// Theme picker (settings → 外观). Static markup in index.html provides
+// the segmented mode selector and seed swatches; we only wire the
+// behaviour here.
+function syncThemePickerUi() {
+  const mode = getThemeMode();
+  document.querySelectorAll("[data-theme-mode]").forEach((btn) => {
+    btn.setAttribute("aria-pressed", String(btn.dataset.themeMode === mode));
+  });
+  const seed = getSeedColor() || "";
+  document.querySelectorAll(".md-seed[data-seed]").forEach((btn) => {
+    const s = btn.dataset.seed === "custom" ? null : btn.dataset.seed;
+    if (s == null) {
+      btn.setAttribute("aria-pressed", "false");
+    } else {
+      btn.setAttribute("aria-pressed", String(s.toLowerCase() === seed.toLowerCase()));
+    }
+  });
+}
+document.addEventListener("click", (event) => {
+  const modeBtn = event.target.closest?.("[data-theme-mode]");
+  if (modeBtn) {
+    setThemeMode(modeBtn.dataset.themeMode);
+    syncThemePickerUi();
+    return;
+  }
+  const seedBtn = event.target.closest?.(".md-seed[data-seed]");
+  if (seedBtn) {
+    if (seedBtn.dataset.seed === "custom") {
+      document.getElementById("customSeedColor")?.click();
+    } else {
+      setSeedColor(seedBtn.dataset.seed || "");
+      syncThemePickerUi();
+    }
+  }
+});
+const _customSeed = document.getElementById("customSeedColor");
+_customSeed?.addEventListener("input", () => {
+  setSeedColor(_customSeed.value);
+  syncThemePickerUi();
+});
+syncThemePickerUi();
+
 render();
 resizeInput();
 scrollBottom();
