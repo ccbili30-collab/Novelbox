@@ -1705,7 +1705,17 @@ function scrollBottom(force = false) {
   });
 }
 
+// 127 call-sites use showToast(). Rather than rip them out, we route
+// through the new MD3 snackbar (FIFO queue, ARIA-live, M3 motion). The
+// legacy #toast element is kept as a graceful fallback if the snackbar
+// host isn't mounted yet (e.g. very early bootstrap or test envs).
 function showToast(message) {
+  if (message == null) return;
+  try {
+    showSnackbar(String(message), { short: true });
+    return;
+  } catch (_) { /* fall through to legacy DOM */ }
+  if (!els.toast) return;
   window.clearTimeout(toastTimer);
   window.clearTimeout(toastMotionTimer);
   els.toast.textContent = message;
