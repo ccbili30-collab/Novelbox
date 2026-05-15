@@ -156,6 +156,7 @@ import {
   createToast,
 } from "./app/runtime/feedback.js";
 import { createPersistencePipeline } from "./app/runtime/persistence-pipeline.js";
+import { createRenderPipeline } from "./app/runtime/render-pipeline.js";
 
 const $ = (selector) => document.querySelector(selector);
 // All DOM selectors live in src/app/runtime/dom-registry.js so the
@@ -1801,12 +1802,13 @@ const _persistence = createPersistencePipeline(persistStateNow, { timeout: 400 }
 const persistState = _persistence.persist;
 const persistStateImmediate = _persistence.persistImmediate;
 
-// render() coalesces multiple synchronous schedule() calls within the same
-// task into a single rAF tick. Callers anywhere may call render() freely;
-// the body in renderNow() runs at most once per frame.
-const renderScheduler = createFrameScheduler(() => renderNow());
-function render() { renderScheduler.schedule(); }
-function renderImmediate() { renderScheduler.flush(); renderNow(); }
+// render() coalesces multiple synchronous schedule() calls within the
+// same task into a single rAF tick. Pipeline lives in
+// src/app/runtime/render-pipeline.js so scheduler ownership is shared
+// with the persistence pipeline above and is unit-tested in isolation.
+const _renderPipe = createRenderPipeline(() => renderNow());
+const render = _renderPipe.render;
+const renderImmediate = _renderPipe.renderImmediate;
 
 // Cheap visibility guards used inside renderNow to skip work for panels
 // that are currently closed. Avoids re-serialising entire sub-trees on
