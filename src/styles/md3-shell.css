@@ -1120,3 +1120,139 @@ body.is-generating .app .composer .send-button {
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
+
+/* ============================================================== */
+/* Composer: context badge + model picker                          */
+/* ============================================================== */
+.composer-context-strip { padding: 0 4px; }
+.composer-context-strip .context-badge,
+.app .composer .context-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 9999px;
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--md-sys-typescale-label-medium);
+  border: 0;
+  position: relative;
+  isolation: isolate;
+  cursor: pointer;
+  transition: background-color var(--md-sys-motion-duration-short3)
+              var(--md-sys-motion-easing-standard),
+              color var(--md-sys-motion-duration-short3)
+              var(--md-sys-motion-easing-standard);
+}
+.composer-context-strip .context-badge:hover,
+.app .composer .context-badge:hover {
+  background: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-on-surface);
+}
+.composer-context-strip .context-badge::before,
+.app .composer .context-badge::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit;
+  background: currentColor; opacity: 0; pointer-events: none;
+  transition: opacity var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard);
+}
+.composer-context-strip .context-badge:active::before { opacity: 0.16; }
+
+/* Custom model picker (when modelSelectButton is used in place of native select) */
+#modelSelectButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 9999px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  background: transparent;
+  color: var(--md-sys-color-on-surface);
+  font: var(--md-sys-typescale-label-large);
+  cursor: pointer;
+  position: relative;
+  isolation: isolate;
+  flex: 1;
+  min-width: 0;
+}
+#modelSelectButton:hover { border-color: var(--md-sys-color-outline); }
+#modelSelectButton::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit;
+  background: currentColor; opacity: 0; pointer-events: none;
+  transition: opacity var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard);
+}
+#modelSelectButton:hover::before  { opacity: 0.06; }
+#modelSelectButton:active::before { opacity: 0.12; }
+
+#modelPickerPanel {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  max-height: 50vh;
+  overflow: auto;
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+  border-radius: var(--md-sys-shape-corner-large);
+  box-shadow: var(--md-sys-elevation-level3);
+  padding: 8px;
+  z-index: 12;
+}
+#modelPickerPanel .model-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 48px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--md-sys-shape-corner-medium);
+  background: transparent;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+  font: var(--md-sys-typescale-body-large);
+  position: relative;
+  isolation: isolate;
+}
+#modelPickerPanel .model-picker-item::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit;
+  background: currentColor; opacity: 0; pointer-events: none;
+  transition: opacity var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard);
+}
+#modelPickerPanel .model-picker-item:hover::before  { opacity: 0.08; }
+#modelPickerPanel .model-picker-item:active::before { opacity: 0.16; }
+#modelPickerPanel .model-picker-item[aria-selected="true"] {
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+}
+
+/* Composer attachments list */
+.chat-attachment-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 4px 4px;
+}
+.chat-attachment-list .chat-attachment {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 4px 4px;
+  background: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-on-surface);
+  border-radius: 9999px;
+  font: var(--md-sys-typescale-label-medium);
+}
+.chat-attachment-list .chat-attachment img {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.chat-attachment-list .chat-attachment button {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--md-sys-color-on-surface-variant);
+}
