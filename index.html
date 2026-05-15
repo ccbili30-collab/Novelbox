@@ -27,15 +27,15 @@
   <body>
     <div class="app">
       <header class="topbar">
-        <button class="icon-button" type="button" data-command="open-history" aria-label="历史会话">☰</button>
+        <button class="icon-button" type="button" data-command="open-history" aria-label="历史会话" title="历史会话"><span class="md-icon" aria-hidden="true">menu</span></button>
         <h1 id="sessionTitle">新会话</h1>
         <div class="top-actions">
-          <button class="icon-button workspace-entry" type="button" data-command="open-workspace" aria-label="工作区">工</button>
-          <button class="icon-button roundtable-entry" type="button" data-command="toggle-roundtable" aria-label="圆桌共创模式">圆</button>
-          <a class="source-link article-link" data-web-only href="./docs/ai-roundtable-vision.html" target="_blank" rel="noreferrer" aria-label="查看理念文章">理念</a>
-          <a class="source-link" data-web-only href="https://github.com/ccbili30-collab/Novelbox" target="_blank" rel="noreferrer" aria-label="查看项目源码">源码</a>
-          <button class="icon-button novel-entry" type="button" data-command="open-novel" aria-label="小说资料">文</button>
-          <button class="icon-button" type="button" data-command="open-settings" aria-label="设置">⋯</button>
+          <button class="icon-button workspace-entry" type="button" data-command="open-workspace" aria-label="工作区" title="工作区"><span class="md-icon" aria-hidden="true">work</span></button>
+          <button class="icon-button roundtable-entry" type="button" data-command="toggle-roundtable" aria-label="圆桌共创模式" title="圆桌共创模式"><span class="md-icon" aria-hidden="true">groups</span></button>
+          <a class="source-link article-link" data-web-only href="./docs/ai-roundtable-vision.html" target="_blank" rel="noreferrer" aria-label="查看理念文章" title="查看理念文章">理念</a>
+          <a class="source-link" data-web-only href="https://github.com/ccbili30-collab/Novelbox" target="_blank" rel="noreferrer" aria-label="查看项目源码" title="项目源码">源码</a>
+          <button class="icon-button novel-entry" type="button" data-command="open-novel" aria-label="小说资料" title="小说资料"><span class="md-icon" aria-hidden="true">menu_book</span></button>
+          <button class="icon-button" type="button" data-command="open-settings" aria-label="设置" title="设置"><span class="md-icon" aria-hidden="true">tune</span></button>
         </div>
       </header>
 
@@ -75,10 +75,10 @@
         <textarea id="chatInput" rows="1" placeholder="在这里输入你的问题..."></textarea>
         <div class="composer-bottom">
           <button id="composerToolButton" class="round-button composer-tool-button" type="button" data-command="composer-tool" aria-label="主创设置">主</button>
-          <button class="round-button composer-add-button" type="button" data-command="choose-chat-image" aria-label="添加附件">+</button>
+          <button class="round-button composer-add-button" type="button" data-command="choose-chat-image" aria-label="添加附件" title="添加附件"><span class="md-icon md-icon--sz-20" aria-hidden="true">add</span></button>
           <select id="modelSelect" aria-label="选择模型"></select>
-          <button id="roundtableCycleButton" class="roundtable-cycle-button" type="button" data-command="roundtable-cycle" aria-label="开始本轮">轮</button>
-          <button id="sendButton" class="send-button" type="submit" aria-label="发送">↑</button>
+          <button id="roundtableCycleButton" class="roundtable-cycle-button" type="button" data-command="roundtable-cycle" aria-label="开始本轮" title="开始本轮">轮</button>
+          <button id="sendButton" class="send-button" type="submit" aria-label="发送" title="发送 (Ctrl/⌘+Enter)"><span class="md-icon md-icon--sz-20" aria-hidden="true">arrow_upward</span></button>
         </div>
         <div id="roundtableContextDock" class="roundtable-context-dock" hidden></div>
       </form>
