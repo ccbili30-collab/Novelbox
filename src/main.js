@@ -155,6 +155,7 @@ import {
   createRipple,
   createToast,
 } from "./app/runtime/feedback.js";
+import { createPersistencePipeline } from "./app/runtime/persistence-pipeline.js";
 
 const $ = (selector) => document.querySelector(selector);
 // All DOM selectors live in src/app/runtime/dom-registry.js so the
@@ -1793,14 +1794,12 @@ function applySessionAppearance() {
 }
 
 // Persist is debounced via requestIdleCallback so dozens of state writes
-// during streaming or rapid composer typing collapse to a single localStorage
-// write per idle frame. See src/utils/scheduler.js.
-const persistDebouncer = createIdleDebouncer(
-  (s) => { try { persistStateNow(s); } catch (_) { /* quota errors silenced */ } },
-  { timeout: 400 }
-);
-function persistState(s) { persistDebouncer.schedule(s); }
-function persistStateImmediate(s) { persistDebouncer.cancel(); persistStateNow(s); }
+// during streaming or rapid composer typing collapse to a single
+// localStorage write per idle frame. See
+// src/app/runtime/persistence-pipeline.js.
+const _persistence = createPersistencePipeline(persistStateNow, { timeout: 400 });
+const persistState = _persistence.persist;
+const persistStateImmediate = _persistence.persistImmediate;
 
 // render() coalesces multiple synchronous schedule() calls within the same
 // task into a single rAF tick. Callers anywhere may call render() freely;
@@ -7082,11 +7081,8 @@ document.addEventListener("click", (event) => {
 syncScrollFab();
 syncMessageEmpty();
 
-// Flush any debounced state writes before the page unloads so we never lose
-// the trailing edit. pagehide is the iOS-friendly equivalent of beforeunload.
-window.addEventListener("pagehide", () => persistStateImmediate(state));
-window.addEventListener("beforeunload", () => persistStateImmediate(state));
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden") persistStateImmediate(state);
-});
+// pagehide / beforeunload / visibilitychange flush is set up by the
+// persistence pipeline so this file no longer needs to know about
+// any of those events.
+_persistence.bindLifecycleFlush(window, () => state);
 
