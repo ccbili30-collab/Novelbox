@@ -41,6 +41,19 @@
       </header>
 
       <main id="messageList" class="messages" aria-live="polite"></main>
+      <button id="scrollToBottom" class="md-fab md-fab--small scroll-to-bottom" type="button" aria-label="滚动到最新消息" title="滚动到最新消息" hidden>
+        <span class="md-icon" aria-hidden="true">arrow_downward</span>
+      </button>
+      <div id="messageEmpty" class="message-empty" hidden>
+        <span class="md-icon md-icon--sz-48" aria-hidden="true">forum</span>
+        <strong>开始一段对话</strong>
+        <span class="muted">把灵感、问题、片段或情绪打进下面的输入框，按 Ctrl/⌘+Enter 发送。</span>
+        <div class="message-empty-suggestions">
+          <button class="md-chip" type="button" data-empty-prompt="帮我把下面这段散乱的想法整理成大纲：\n\n">帮我整理大纲</button>
+          <button class="md-chip" type="button" data-empty-prompt="我正在写一段对话，主角是 ___，对手是 ___，冲突点是 ___，请给三种走向。\n\n">设计三种走向</button>
+          <button class="md-chip" type="button" data-empty-prompt="">空白起步</button>
+        </div>
+      </div>
 
       <section id="roundtableWorkspace" class="roundtable-workspace" hidden aria-label="圆桌共创模式">
         <div id="roundtableMembersPanel" class="roundtable-member-panel" hidden></div>

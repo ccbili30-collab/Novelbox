@@ -7201,6 +7201,59 @@ window.tbirdTheme = { setThemeMode, setSeedColor, getThemeMode, getSeedColor };
 bindKeyboardHelpShortcut();
 window.tbirdHelp = { openKeyboardHelp };
 
+// Scroll-to-bottom FAB — visible only when the chat scroller is not
+// near the bottom AND the list has content. Empty state — visible only
+// when the chat path is empty AND we're not in roundtable mode.
+const _scrollFab = document.getElementById("scrollToBottom");
+const _emptyState = document.getElementById("messageEmpty");
+function syncScrollFab() {
+  if (!_scrollFab || !els.messages) return;
+  const hasContent = els.messages.children.length > 0;
+  const distanceFromBottom = els.messages.scrollHeight - els.messages.scrollTop - els.messages.clientHeight;
+  const shouldShow = hasContent && distanceFromBottom > 240 && !els.messages.hidden;
+  _scrollFab.hidden = !shouldShow;
+}
+function syncMessageEmpty() {
+  if (!_emptyState) return;
+  const empty = !els.messages?.hidden && (!els.messages?.children?.length);
+  _emptyState.hidden = !empty;
+}
+els.messages?.addEventListener("scroll", () => {
+  if (_fabRaf) return;
+  _fabRaf = requestAnimationFrame(() => { _fabRaf = 0; syncScrollFab(); });
+}, { passive: true });
+let _fabRaf = 0;
+_scrollFab?.addEventListener("click", () => {
+  els.messages.scrollTo({ top: els.messages.scrollHeight, behavior: "smooth" });
+});
+// Re-sync after the message list mutates. MutationObserver keeps us
+// independent from the render() pipeline (no risk of redefining the
+// existing function declaration) and only fires when something
+// actually changed in the chat surface.
+if (typeof MutationObserver === "function" && els.messages) {
+  let _mutPending = false;
+  const observer = new MutationObserver(() => {
+    if (_mutPending) return;
+    _mutPending = true;
+    requestAnimationFrame(() => {
+      _mutPending = false;
+      syncScrollFab();
+      syncMessageEmpty();
+    });
+  });
+  observer.observe(els.messages, { childList: true });
+}
+// Empty-state suggestion chips fill the composer.
+document.addEventListener("click", (event) => {
+  const chip = event.target.closest?.("[data-empty-prompt]");
+  if (!chip) return;
+  els.input.value = chip.dataset.emptyPrompt || "";
+  els.input.focus();
+  els.input.dispatchEvent(new Event("input", { bubbles: true }));
+});
+syncScrollFab();
+syncMessageEmpty();
+
 // Flush any debounced state writes before the page unloads so we never lose
 // the trailing edit. pagehide is the iOS-friendly equivalent of beforeunload.
 window.addEventListener("pagehide", () => persistStateImmediate(state));

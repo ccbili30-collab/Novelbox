@@ -881,3 +881,72 @@ body.is-generating .app .composer .send-button {
   height: 48px;
 }
 #historyPanel #historySearch:focus { outline: none; border-color: var(--md-sys-color-primary); border-width: 2px; padding: 11px 15px; }
+
+/* ============================================================== */
+/* Chat scroll-to-bottom FAB                                       */
+/* ============================================================== */
+.scroll-to-bottom {
+  position: absolute;
+  right: 16px;
+  bottom: calc(var(--composer-height) + 24px + var(--safe-area-bottom));
+  z-index: 6;
+  background: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-primary);
+  box-shadow: var(--md-sys-elevation-level2);
+  transition:
+    opacity   var(--md-sys-motion-duration-medium2) var(--md-sys-motion-easing-standard),
+    transform var(--md-sys-motion-duration-medium2) var(--md-sys-motion-easing-emphasized),
+    visibility 0s linear var(--md-sys-motion-duration-medium2);
+  opacity: 0;
+  transform: translateY(8px) scale(0.92);
+  visibility: hidden;
+  pointer-events: none;
+}
+.scroll-to-bottom:not([hidden]) {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  visibility: visible;
+  pointer-events: auto;
+  transition-delay: 0s, 0s, 0s;
+}
+
+/* Chat empty state */
+.message-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 32px 20px;
+  text-align: center;
+  pointer-events: none;
+}
+.message-empty:not([hidden]) > * { pointer-events: auto; }
+.message-empty .md-icon {
+  color: var(--md-sys-color-on-surface-variant);
+  opacity: 0.55;
+  margin-bottom: 4px;
+}
+.message-empty strong {
+  font: var(--md-sys-typescale-headline-small);
+  color: var(--md-sys-color-on-surface);
+}
+.message-empty .muted {
+  font: var(--md-sys-typescale-body-medium);
+  color: var(--md-sys-color-on-surface-variant);
+  max-width: 360px;
+}
+.message-empty-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 12px;
+}
+.message-empty-suggestions .md-chip {
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+  border-color: transparent;
+}
