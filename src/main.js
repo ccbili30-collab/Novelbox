@@ -126,22 +126,27 @@ import { createPanelManager } from "./ui/panels/panel-manager.js";
 import { renderContextBadge as drawContextBadge, renderContextPanel as drawContextPanel } from "./ui/renderers/context-renderer.js";
 import { renderSessions as drawSessions } from "./ui/renderers/session-renderer.js";
 
-const CONTINUE_PROMPT = "继续完成上一条请求，直接给出用户要的内容，不要重复确认。";
-const BRIDGE_TIMEOUT = 160000;
-const AUTO_CONTEXT_TOKEN_THRESHOLD = 18000;
-const COMPRESSED_CONTEXT_TAIL_COUNT = 6;
-const PAPER_DEEP_COLLAPSE_THRESHOLD = 0.035;
-const MOTION_PULSE_MS = 260;
-const MOTION_RIPPLE_MS = 520;
-const LOCAL_IMAGE_MAX_BYTES = 2.5 * 1024 * 1024;
-const LOCAL_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/x-icon", "image/vnd.microsoft.icon"]);
-const CHAT_IMAGE_MAX_BYTES = Math.min(LOCAL_IMAGE_MAX_BYTES, 1.5 * 1024 * 1024);
-const CHAT_IMAGE_LIMIT = 4;
-const CHAT_ATTACHMENT_LIMIT = 6;
-const CHAT_TEXT_FILE_MAX_BYTES = 1024 * 1024;
-const CHAT_TEXT_EXCERPT_LIMIT = 12000;
-const CHAT_TEXT_EXTENSIONS = new Set(["txt", "md", "markdown", "json", "csv", "log", "yaml", "yml"]);
-const GENERATIVE_AGENT_SOURCE_NOTE = "人格记忆层参考 joonspk-research/generative_agents 的 memory stream / reflection 思路：观察被保存为短记忆，之后再进入角色提示。";
+// All app-wide constants now live in src/app/runtime/constants.js so
+// they can be imported by other modules during the staged main.js
+// teardown. Names are unchanged; behaviour is identical.
+import {
+  CONTINUE_PROMPT,
+  BRIDGE_TIMEOUT,
+  AUTO_CONTEXT_TOKEN_THRESHOLD,
+  COMPRESSED_CONTEXT_TAIL_COUNT,
+  PAPER_DEEP_COLLAPSE_THRESHOLD,
+  MOTION_PULSE_MS,
+  MOTION_RIPPLE_MS,
+  LOCAL_IMAGE_MAX_BYTES,
+  LOCAL_IMAGE_TYPES,
+  CHAT_IMAGE_MAX_BYTES,
+  CHAT_IMAGE_LIMIT,
+  CHAT_ATTACHMENT_LIMIT,
+  CHAT_TEXT_FILE_MAX_BYTES,
+  CHAT_TEXT_EXCERPT_LIMIT,
+  CHAT_TEXT_EXTENSIONS,
+  GENERATIVE_AGENT_SOURCE_NOTE,
+} from "./app/runtime/constants.js";
 
 const $ = (selector) => document.querySelector(selector);
 const els = {
