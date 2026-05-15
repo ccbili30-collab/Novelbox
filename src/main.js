@@ -119,6 +119,7 @@ import { showSnackbar, showError } from "./ui/components/snackbar.js";
 import { showConfirm, showAlert, showPrompt } from "./ui/components/dialog.js";
 import { initThemeEngine, setThemeMode, setSeedColor, getThemeMode, getSeedColor } from "./ui/components/theme-engine.js";
 import { bindScrollAwareBar } from "./ui/components/scroll-aware-bars.js";
+import { bindKeyboardHelpShortcut, openKeyboardHelp } from "./ui/components/keyboard-help.js";
 import { bindCommandDelegation } from "./ui/bindings/event-binding.js";
 import { createPanelManager } from "./ui/panels/panel-manager.js";
 import { renderContextBadge as drawContextBadge, renderContextPanel as drawContextPanel } from "./ui/renderers/context-renderer.js";
@@ -7194,6 +7195,10 @@ if (_topbar && els.roundtableDiscussion) bindScrollAwareBar(_topbar, els.roundta
 
 // Expose theme controls on window for easy console + future settings UI.
 window.tbirdTheme = { setThemeMode, setSeedColor, getThemeMode, getSeedColor };
+
+// `?` opens the keyboard help dialog. Bound globally except inside inputs.
+bindKeyboardHelpShortcut();
+window.tbirdHelp = { openKeyboardHelp };
 
 // Flush any debounced state writes before the page unloads so we never lose
 // the trailing edit. pagehide is the iOS-friendly equivalent of beforeunload.

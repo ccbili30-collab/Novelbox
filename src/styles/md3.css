@@ -689,3 +689,45 @@
 
 /* Active nav-bar icon: filled symbol per M3 spec. */
 .md-nav-bar__item[aria-current="page"] .md-icon { font-variation-settings: "FILL" 1, "wght" 500, "GRAD" 0, "opsz" 24; }
+
+/* ===== Keyboard help dialog ===== */
+.md-dialog--keyboard-help { max-width: min(560px, calc(100vw - 32px)); }
+.md-kbd-group-title {
+  margin: 16px 0 4px;
+  font: var(--md-sys-typescale-title-small);
+  color: var(--md-sys-color-on-surface);
+}
+.md-kbd-list {
+  display: grid;
+  grid-template-columns: minmax(140px, max-content) 1fr;
+  column-gap: 16px;
+  row-gap: 6px;
+  margin: 0 0 8px;
+}
+.md-kbd-list dt {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.md-kbd-list dd {
+  margin: 0;
+  font: var(--md-sys-typescale-body-medium);
+  color: var(--md-sys-color-on-surface-variant);
+  align-self: center;
+}
+.md-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 8px;
+  background: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-on-surface);
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-bottom-width: 2px;
+  border-radius: var(--md-sys-shape-corner-extra-small);
+  font: var(--md-sys-typescale-label-medium);
+  font-family: var(--md-ref-typeface-mono);
+}
+.md-kbd-plus { color: var(--md-sys-color-on-surface-variant); padding: 0 2px; }
