@@ -163,6 +163,7 @@ import {
   getMessageContent       as _getMessageContent,
   normalizeChatAttachments as _normalizeChatAttachments,
   getMessageRenderSignature as _getMessageRenderSignature,
+  chatAttachmentLabel      as _chatAttachmentLabel,
 } from "./app/runtime/message-signature.js";
 import { createStreamBatcher } from "./app/runtime/stream-batcher.js";
 import {
@@ -1060,16 +1061,10 @@ function normalizeChatAttachments(attachments = []) {
   });
 }
 
-function chatAttachmentLabel(attachments = []) {
-  const items = normalizeChatAttachments(attachments);
-  if (!items.length) return "";
-  const imageCount = items.filter((item) => item.kind === "image").length;
-  const fileCount = items.length - imageCount;
-  return [
-    imageCount ? `${imageCount} 张图片` : "",
-    fileCount ? `${fileCount} 个文件` : "",
-  ].filter(Boolean).join("，").replace(/^(.+)$/, "[$1]");
-}
+// chatAttachmentLabel delegates to the pure helper with the runtime
+// limits captured.
+const chatAttachmentLabel = (attachments = []) =>
+  _chatAttachmentLabel(attachments, { limit: CHAT_ATTACHMENT_LIMIT, textLimit: CHAT_TEXT_EXCERPT_LIMIT });
 
 function renderMessagePlainContent(node) {
   return [getMessageContent(node), chatAttachmentLabel(node?.attachments)].filter(Boolean).join("\n");

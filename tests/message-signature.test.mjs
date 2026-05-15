@@ -69,3 +69,36 @@ test("getMessageRenderSignature returns empty for null node or missing deps", ()
   assert.equal(getMessageRenderSignature(null, {}), "");
   assert.equal(getMessageRenderSignature({}, null), "");
 });
+
+import { chatAttachmentLabel } from "../src/app/runtime/message-signature.js";
+
+test("chatAttachmentLabel returns '' for empty list", () => {
+  assert.equal(chatAttachmentLabel([]), "");
+  assert.equal(chatAttachmentLabel(null), "");
+});
+
+test("chatAttachmentLabel reports image + file counts in CN format", () => {
+  const items = [
+    { name: "a.png", dataUrl: "data:..." },
+    { name: "b.png", dataUrl: "data:..." },
+    { name: "c.md", textExcerpt: "hello" },
+  ];
+  assert.equal(chatAttachmentLabel(items), "[2 张图片，1 个文件]");
+});
+
+test("chatAttachmentLabel suppresses zeros", () => {
+  const justImages = [{ name: "x.png", dataUrl: "data:.." }];
+  assert.equal(chatAttachmentLabel(justImages), "[1 张图片]");
+  const justFiles = [{ name: "n.md", textExcerpt: "hi" }];
+  assert.equal(chatAttachmentLabel(justFiles), "[1 个文件]");
+});
+
+test("chatAttachmentLabel respects the limit option", () => {
+  const items = [
+    { name: "a.png", dataUrl: "x" },
+    { name: "b.png", dataUrl: "x" },
+    { name: "c.png", dataUrl: "x" },
+    { name: "d.png", dataUrl: "x" },
+  ];
+  assert.equal(chatAttachmentLabel(items, { limit: 2 }), "[2 张图片]");
+});

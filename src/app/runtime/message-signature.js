@@ -40,6 +40,25 @@ export function normalizeChatAttachments(attachments = [], { limit = 6, textLimi
 }
 
 /**
+ * Build a "[N 张图片，M 个文件]" label for a list of attachments.
+ * Returns the empty string when the list is empty.
+ *
+ * Pure: needs the same `normalizeChatAttachments` options the
+ * renderer uses so an attachment past the limit doesn't show up in
+ * the label either.
+ */
+export function chatAttachmentLabel(attachments = [], opts = {}) {
+  const items = normalizeChatAttachments(attachments, opts);
+  if (!items.length) return "";
+  const imageCount = items.filter((i) => i.kind === "image").length;
+  const fileCount = items.length - imageCount;
+  return [
+    imageCount ? `${imageCount} 张图片` : "",
+    fileCount ? `${fileCount} 个文件` : "",
+  ].filter(Boolean).join("，").replace(/^(.+)$/, "[$1]");
+}
+
+/**
  * Build a stable signature for a chat node so renderers can decide
  * whether to reuse the existing DOM row or rebuild it. Returned as a
  * single :: separated string so the caller can compare with === .
