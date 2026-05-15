@@ -117,6 +117,8 @@ import { hydrate, loadState, saveState as persistStateNow } from "./state/persis
 import { createFrameScheduler, createIdleDebouncer } from "./utils/scheduler.js";
 import { showSnackbar, showError } from "./ui/components/snackbar.js";
 import { showConfirm, showAlert, showPrompt } from "./ui/components/dialog.js";
+import { initThemeEngine, setThemeMode, setSeedColor, getThemeMode, getSeedColor } from "./ui/components/theme-engine.js";
+import { bindScrollAwareBar } from "./ui/components/scroll-aware-bars.js";
 import { bindCommandDelegation } from "./ui/bindings/event-binding.js";
 import { createPanelManager } from "./ui/panels/panel-manager.js";
 import { renderContextBadge as drawContextBadge, renderContextPanel as drawContextPanel } from "./ui/renderers/context-renderer.js";
@@ -7123,9 +7125,23 @@ window.addEventListener("resize", resizeInput);
 window.visualViewport?.addEventListener("resize", resizeInput);
 
 if (syncSealedCreatorTemplatePrompts() || migrateImportedPrimaryCloneCreators()) persistState(state);
+
+// Apply persisted Material You theme + seed color before first paint so
+// users never see the default palette flash.
+try { initThemeEngine(); } catch (_) { /* SSR/test */ }
+
 render();
 resizeInput();
 scrollBottom();
+
+// Lift the top app bar to surface-container tonal once the user starts
+// scrolling — M3 spec.
+const _topbar = document.querySelector(".topbar");
+if (_topbar && els.messages) bindScrollAwareBar(_topbar, els.messages);
+if (_topbar && els.roundtableDiscussion) bindScrollAwareBar(_topbar, els.roundtableDiscussion);
+
+// Expose theme controls on window for easy console + future settings UI.
+window.tbirdTheme = { setThemeMode, setSeedColor, getThemeMode, getSeedColor };
 
 // Flush any debounced state writes before the page unloads so we never lose
 // the trailing edit. pagehide is the iOS-friendly equivalent of beforeunload.
