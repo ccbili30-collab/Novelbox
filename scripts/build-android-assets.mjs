@@ -1,4 +1,5 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import { dirname, join, normalize, resolve } from "node:path";
 
 const root = resolve(process.argv[2] || ".");
@@ -16,6 +17,10 @@ const ordered = [];
 const importsByFile = new Map();
 const exportsByFile = new Map();
 const moduleNames = new Map();
+const sealedPromptFiles = {
+  T: process.env.TBIRD_SEALED_T_PROMPT_FILE || "",
+  B: process.env.TBIRD_SEALED_B_PROMPT_FILE || "",
+};
 
 function toPosix(path) {
   return path.replace(/\\/g, "/");
@@ -59,6 +64,58 @@ function parseExports(source) {
   return exports;
 }
 
+function sealedKeyByte(index, seed, salt) {
+  let value = (seed ^ ((index + 1) * 0x9e3779b1) ^ (salt[index % salt.length] << ((index % 4) * 8))) >>> 0;
+  value ^= value << 13;
+  value >>>= 0;
+  value ^= value >>> 17;
+  value >>>= 0;
+  value ^= value << 5;
+  return value & 255;
+}
+
+function encodeSealedPrompt(text) {
+  const bytes = new TextEncoder().encode(text);
+  const salt = Array.from(randomBytes(16));
+  const seed = randomBytes(4).readUInt32LE(0) || 0x6d2b79f5;
+  const data = Array.from(bytes, (byte, index) => byte ^ sealedKeyByte(index, seed, salt));
+  return `{ seed: ${seed}, salt: [${salt.join(",")}], data: [${data.join(",")}] }`;
+}
+
+function readSealedPrompt(path) {
+  return path ? readFileSync(resolve(path), "utf8") : "";
+}
+
+function buildSealedPromptModuleSource() {
+  if (!sealedPromptFiles.T && !sealedPromptFiles.B) return "";
+  const tPrompt = readSealedPrompt(sealedPromptFiles.T);
+  const bPrompt = readSealedPrompt(sealedPromptFiles.B);
+  return [
+    "// Generated only inside the Android asset bundle.",
+    "// Public source keeps sealed prompts empty; this block is casual unpacking resistance, not real secrecy.",
+    "const __sealedTextDecoder = new TextDecoder();",
+    "function __sealedKeyByte(index, seed, salt) {",
+    "  let value = (seed ^ ((index + 1) * 0x9e3779b1) ^ (salt[index % salt.length] << ((index % 4) * 8))) >>> 0;",
+    "  value ^= value << 13; value >>>= 0;",
+    "  value ^= value >>> 17; value >>>= 0;",
+    "  value ^= value << 5;",
+    "  return value & 255;",
+    "}",
+    "function __sealedDecode(block) {",
+    "  if (!block || !Array.isArray(block.data) || !block.data.length) return \"\";",
+    "  const bytes = new Uint8Array(block.data.length);",
+    "  for (let index = 0; index < block.data.length; index += 1) {",
+    "    bytes[index] = block.data[index] ^ __sealedKeyByte(index, block.seed, block.salt);",
+    "  }",
+    "  return __sealedTextDecoder.decode(bytes);",
+    "}",
+    `const __SEALED_T_BLOCK = ${encodeSealedPrompt(tPrompt)};`,
+    `const __SEALED_B_BLOCK = ${encodeSealedPrompt(bPrompt)};`,
+    "const SEALED_T_PROMPT = __sealedDecode(__SEALED_T_BLOCK);",
+    "const SEALED_B_PROMPT = __sealedDecode(__SEALED_B_BLOCK);",
+  ].join("\n");
+}
+
 function visit(file) {
   if (seen.has(file)) return;
   seen.add(file);
@@ -86,6 +143,11 @@ function importBindings(file) {
 }
 
 function stripModuleSyntax(file) {
+  const relative = toPosix(file.slice(root.length + 1));
+  if (relative === "src/domain/roundtable/sealed-prompts.js") {
+    const sealedSource = buildSealedPromptModuleSource();
+    if (sealedSource) return sealedSource;
+  }
   let source = readFileSync(file, "utf8");
   source = source.replace(/import\s*\{[\s\S]*?\}\s*from\s*["'].+?["'];?\s*/g, "");
   source = source.replace(/\bexport\s+(async\s+function|function|const|let|var|class)\b/g, "$1");
