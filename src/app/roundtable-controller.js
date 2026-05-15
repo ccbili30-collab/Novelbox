@@ -418,16 +418,18 @@ export function createRoundtableController({
   }
 
   function buildMessages(assistant, instruction) {
+    const instructionPayload = normalizeInstructionPayload(instruction);
     const state = getState();
     const rt = roundtableState();
     const options = normalizeRoundtableContextOptions({
       ...rt.contextOptions,
       ...(assistant.contextOptions || {}),
     });
-    const memorySnippets = getCreatorMemorySnippets(assistant.id, instruction, {
+    const memorySnippets = getCreatorMemorySnippets(assistant.id, instructionPayload.text, {
       includeRecent: true,
       limit: 8,
       sessionId: activeSession()?.id,
+      roundtableId: activeSession()?.id,
     });
     const creatorRecords = memorySnippets.map((item) => ({
       topic: item.type,
@@ -439,7 +441,7 @@ export function createRoundtableController({
     const participationRecords = creatorRecords.length ? creatorRecords : legacyRecords;
     const result = buildRoundtablePromptMessages({
       assistant,
-      instruction,
+      instruction: instructionPayload.text,
       options,
       mentionableAssistants: getRoundtableMentionableAssistants(),
       roundtableMessages: rt.messages,
@@ -452,14 +454,36 @@ export function createRoundtableController({
     if (result.compressed) {
       showToast("圆桌上下文过长，已自动压缩本轮材料");
     }
+    if (instructionPayload.images.length && result.messages.length) {
+      const last = result.messages[result.messages.length - 1];
+      last.content = [
+        { type: "text", text: last.content || instructionPayload.text },
+        ...instructionPayload.images.map((image) => ({ type: "image_url", image_url: { url: image.dataUrl } })),
+      ];
+    }
     return result.messages;
   }
 
+  function normalizeInstructionPayload(instruction) {
+    if (instruction && typeof instruction === "object" && !Array.isArray(instruction)) {
+      const attachments = Array.isArray(instruction.attachments) ? instruction.attachments : [];
+      return {
+        text: clean(instruction.text),
+        images: attachments
+          .filter((item) => item?.kind === "image" && clean(item.dataUrl))
+          .slice(0, 4)
+          .map((item) => ({ name: clean(item.name), dataUrl: clean(item.dataUrl) })),
+      };
+    }
+    return { text: clean(instruction), images: [] };
+  }
+
   async function callAssistant(assistant, instruction, onChunk = null) {
+    const instructionPayload = normalizeInstructionPayload(instruction);
     setRoundtableActiveSpeaker(assistant.id);
     try {
       try {
-        await ensureAutoCompressNovelMemory(instruction);
+        await ensureAutoCompressNovelMemory(instructionPayload.text);
       } catch (error) {
         if (error.name === "AbortError") throw error;
         showToast(humanizeError(error, "圆桌自动压缩失败，已改用现有资料继续"));
@@ -548,12 +572,16 @@ export function createRoundtableController({
   async function generateMentionedAssistants(assistants, userText, shouldStop) {
     const targets = assistants.filter((assistant) => assistant.id !== "writer");
     if (!targets.length) return false;
+    const userPayload = normalizeInstructionPayload(userText);
     try {
       for (const assistant of targets) {
         if (shouldStop()) break;
         showToast(`${assistant.name}正在回应`);
         try {
-          await streamAssistantRoundtableReply(assistant, `用户刚刚点名你发言：${userText}`);
+          await streamAssistantRoundtableReply(assistant, {
+            text: `用户刚刚点名你发言：${userPayload.text}`,
+            attachments: userPayload.images.map((image) => ({ ...image, kind: "image" })),
+          });
           if (shouldStop()) break;
         } catch (error) {
           if (error.name === "AbortError" || shouldStop()) break;

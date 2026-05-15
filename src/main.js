@@ -1,5 +1,6 @@
 import { uid } from "./utils/id.js";
 import { clean, escapeHtml } from "./utils/text.js";
+import { renderMarkdown } from "./utils/markdown.js";
 import { formatTime } from "./utils/time.js";
 import { estimateTokens, formatK } from "./utils/tokens.js";
 import { humanizeError } from "./utils/errors.js";
@@ -18,7 +19,13 @@ import {
 } from "./domain/novel/novel-context-builder.js";
 import { buildNovelStats } from "./domain/novel/novel-stats.js";
 import { hydrateSessionSettings } from "./domain/settings/settings-model.js";
-import { createApiProvider, hydrateApiSettings } from "./domain/settings/api-settings.js";
+import { createApiProvider, hydrateApiSettings, hydrateModelDefaults } from "./domain/settings/api-settings.js";
+import {
+  applyGlobalModelConfigToAssistantConfig,
+  applyGlobalModelConfigToCreator,
+  applyGlobalModelConfigToSession,
+  globalModelConfigFromApi,
+} from "./domain/settings/global-model-config.js";
 import {
   createCreatorIdentity,
   creatorToAssistant,
@@ -59,6 +66,7 @@ import {
 import {
   appendCreatorParticipationRecord,
   appendCouncilParticipationRecord,
+  createMemoryFromParticipationRecord,
   getCreatorParticipationRecords,
   getCouncilParticipationRecords,
 } from "./domain/roundtable/council-participation-memory.js";
@@ -80,6 +88,7 @@ import {
   removeWriterSyncedSegment,
   replaceWriterSyncedSegment,
 } from "./domain/roundtable/roundtable-writer-sync.js";
+import { retrieveCreatorMemories } from "./domain/creator/creator-memory-retrieval.js";
 import { createSession } from "./domain/session/session-model.js";
 import {
   getNode as getSessionNode,
@@ -93,6 +102,15 @@ import {
   titleForSession,
   touchSession,
 } from "./domain/session/session-tree.js";
+import {
+  branchPathHashForNode,
+  isMemoryOnActiveBranch,
+  pruneAbandonedBranchMemories,
+} from "./domain/session/branch-signature.js";
+import {
+  appendCreatorMemoryEntry,
+} from "./domain/creator/creator-memory-model.js";
+import { createMemoryEntriesFromMessage } from "./domain/creator/creator-memory-writer.js";
 import { createAiClient } from "./services/api/ai-client.js";
 import { createBridgeClient, registerBridgeHooks } from "./services/bridge/bridge-client.js";
 import { hydrate, loadState, saveState as persistState } from "./state/persistence.js";
@@ -112,6 +130,10 @@ const LOCAL_IMAGE_MAX_BYTES = 2.5 * 1024 * 1024;
 const LOCAL_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/x-icon", "image/vnd.microsoft.icon"]);
 const CHAT_IMAGE_MAX_BYTES = Math.min(LOCAL_IMAGE_MAX_BYTES, 1.5 * 1024 * 1024);
 const CHAT_IMAGE_LIMIT = 4;
+const CHAT_ATTACHMENT_LIMIT = 6;
+const CHAT_TEXT_FILE_MAX_BYTES = 1024 * 1024;
+const CHAT_TEXT_EXCERPT_LIMIT = 12000;
+const CHAT_TEXT_EXTENSIONS = new Set(["txt", "md", "markdown", "json", "csv", "log", "yaml", "yml"]);
 const GENERATIVE_AGENT_SOURCE_NOTE = "人格记忆层参考 joonspk-research/generative_agents 的 memory stream / reflection 思路：观察被保存为短记忆，之后再进入角色提示。";
 
 const $ = (selector) => document.querySelector(selector);
@@ -572,6 +594,15 @@ function apiSettings() {
   return state.api;
 }
 
+function globalModelDefaults() {
+  const api = apiSettings();
+  api.modelDefaults = hydrateModelDefaults(api.modelDefaults, {
+    model: api.models?.[0],
+    contextTokenBudget: api.contextTokenBudget,
+  });
+  return api.modelDefaults;
+}
+
 function activeApiProvider(api = apiSettings()) {
   return api.providers.find((provider) => provider.id === api.currentProviderId) || api.providers[0];
 }
@@ -651,6 +682,42 @@ function saveCreatorIdentity(creator) {
   if (!creator?.id) return null;
   creatorsState()[creator.id] = hydrateCreatorIdentity(creator);
   return creatorsState()[creator.id];
+}
+
+function saveCreatorMemoryEntries(creatorId, entries = []) {
+  const creator = getCreatorIdentity(creatorId);
+  if (!creator || !creator.memory?.autoEnabled || !entries.length) return creator;
+  let memory = creator.memory;
+  entries.forEach((entry) => {
+    memory = appendCreatorMemoryEntry(memory, entry, { creatorId });
+  });
+  return saveCreatorIdentity({ ...creator, memory, updatedAt: Date.now() });
+}
+
+function rememberCreatorMessageNode(node, options = {}) {
+  const session = options.session || activeSession();
+  const creatorId = clean(options.creatorId) || getPrimaryCreatorId(session);
+  if (!node || !creatorId) return null;
+  const entries = createMemoryEntriesFromMessage({
+    creatorId,
+    role: node.role,
+    content: getMessageContent(node),
+    sourceSessionId: session.id,
+    sourceNodeId: node.id,
+    branchPathHash: branchPathHashForNode(session, node.id),
+    scope: options.scope || "session",
+    durable: Boolean(options.durable),
+    createdAt: node.createdAt,
+  });
+  return saveCreatorMemoryEntries(creatorId, entries);
+}
+
+function pruneCreatorMemoriesForActiveBranch(session = activeSession()) {
+  const creatorId = getPrimaryCreatorId(session);
+  const creator = getCreatorIdentity(creatorId);
+  if (!creator?.memory?.entries?.length) return;
+  const memory = pruneAbandonedBranchMemories(creator.memory, session);
+  if (memory !== creator.memory) saveCreatorIdentity({ ...creator, memory, updatedAt: Date.now() });
 }
 
 function getCreatorMemoryRootId(creatorId, session = activeSession()) {
@@ -1007,6 +1074,10 @@ function rememberCouncilParticipation(assistant, message, instruction = "") {
     roleState: getRoundtableRoleState(roundtableState().selectedIds, assistant.id) || "participant",
   });
   state.creatorParticipationRecords = creatorResult.records;
+  const distilled = createMemoryFromParticipationRecord(creatorResult.record, {
+    sourceRoundtableId: activeSession()?.id,
+  });
+  if (distilled) saveCreatorMemoryEntries(memoryCreatorId, [distilled]);
 }
 
 function rememberCreatorRoundtableJoin(creatorId, details = {}) {
@@ -1088,33 +1159,47 @@ function moveRoundtableMentionsAfter(progress, currentIndex, text) {
 }
 
 function renderRoundtableRichText(text) {
-  const source = clean(text);
-  if (!source) return "";
   const mentionMap = new Map();
   getRoundtableMentionableAssistants().forEach((assistant) => {
     assistantAliases(assistant).forEach((alias) => {
       if (!mentionMap.has(alias)) mentionMap.set(alias, assistant);
     });
   });
-  const pattern = /@([A-Za-z0-9_\-\u4e00-\u9fff]+)/g;
-  let html = "";
-  let lastIndex = 0;
-  let match;
-  while ((match = pattern.exec(source))) {
-    html += escapeHtml(source.slice(lastIndex, match.index));
-    const raw = match[0];
-    const alias = normalizeMentionName(match[1]);
-    const target = mentionMap.get(alias);
-    if (!target) {
-      html += `<span class="roundtable-mention unknown">${escapeHtml(raw)}</span>`;
-    } else {
-      const profile = getRoundtableSpeakerProfile({ speakerId: target.id, speakerName: target.name });
-      html += `<span class="roundtable-mention ${profile.tone}" data-mention-id="${escapeHtml(target.id)}">${escapeHtml(raw)}</span>`;
-    }
-    lastIndex = match.index + raw.length;
+  return renderMarkdown(text, {
+    renderPlainText(source, { escapeHtml: escape }) {
+      const pattern = /@([A-Za-z0-9_\-\u4e00-\u9fff]+)/g;
+      let html = "";
+      let lastIndex = 0;
+      let match;
+      while ((match = pattern.exec(source))) {
+        html += escape(source.slice(lastIndex, match.index));
+        const raw = match[0];
+        const alias = normalizeMentionName(match[1]);
+        const target = mentionMap.get(alias);
+        if (!target) {
+          html += `<span class="roundtable-mention unknown">${escape(raw)}</span>`;
+        } else {
+          const profile = getRoundtableSpeakerProfile({ speakerId: target.id, speakerName: target.name });
+          html += `<span class="roundtable-mention ${profile.tone}" data-mention-id="${escape(target.id)}">${escape(raw)}</span>`;
+        }
+        lastIndex = match.index + raw.length;
+      }
+      html += escape(source.slice(lastIndex));
+      return html;
+    },
+  });
+}
+
+function renderAssistantMarkdown(text) {
+  return renderMarkdown(text);
+}
+
+function renderChatContent(node, content, isStreamingThisNode) {
+  if (!content && !isStreamingThisNode) return "";
+  if (node.role === "assistant") {
+    return `<div class="message-content message-markdown">${renderAssistantMarkdown(content)}</div>`;
   }
-  html += escapeHtml(source.slice(lastIndex));
-  return html;
+  return `<span class="message-content">${escapeHtml(content)}</span>`;
 }
 
 function cssEscape(value) {
@@ -1149,7 +1234,9 @@ function activePath(session = activeSession()) {
 }
 
 function activateBranchToNode(nodeId, session = activeSession()) {
-  return activateSessionPathToNode(session, nodeId);
+  const changed = activateSessionPathToNode(session, nodeId);
+  if (changed) pruneCreatorMemoriesForActiveBranch(session);
+  return changed;
 }
 
 function getMessageContent(node) {
@@ -1160,20 +1247,29 @@ function getMessageContent(node) {
 
 function normalizeChatAttachments(attachments = []) {
   return (Array.isArray(attachments) ? attachments : [])
-    .filter((item) => item?.dataUrl && LOCAL_IMAGE_TYPES.has(item.type))
-    .slice(0, CHAT_IMAGE_LIMIT)
+    .filter((item) => item?.dataUrl || clean(item?.textExcerpt) || clean(item?.name))
+    .slice(0, CHAT_ATTACHMENT_LIMIT)
     .map((item) => ({
-      id: item.id || uid("img"),
-      name: clean(item.name) || "image",
-      type: item.type,
+      id: item.id || uid("att"),
+      kind: clean(item.kind) || (item.dataUrl ? "image" : clean(item.textExcerpt) ? "text" : "file"),
+      name: clean(item.name) || (item.dataUrl ? "image" : "file"),
+      type: clean(item.type),
       size: Number(item.size) || 0,
-      dataUrl: item.dataUrl,
+      dataUrl: clean(item.dataUrl),
+      textExcerpt: clean(item.textExcerpt).slice(0, CHAT_TEXT_EXCERPT_LIMIT),
+      readable: Boolean(item.readable || clean(item.textExcerpt)),
     }));
 }
 
 function chatAttachmentLabel(attachments = []) {
-  const count = normalizeChatAttachments(attachments).length;
-  return count ? `[${count} 张图片]` : "";
+  const items = normalizeChatAttachments(attachments);
+  if (!items.length) return "";
+  const imageCount = items.filter((item) => item.kind === "image").length;
+  const fileCount = items.length - imageCount;
+  return [
+    imageCount ? `${imageCount} 张图片` : "",
+    fileCount ? `${fileCount} 个文件` : "",
+  ].filter(Boolean).join("，").replace(/^(.+)$/, "[$1]");
 }
 
 function renderMessagePlainContent(node) {
@@ -1181,13 +1277,51 @@ function renderMessagePlainContent(node) {
 }
 
 function buildUserRequestContent(text, attachments = []) {
-  const images = normalizeChatAttachments(attachments);
-  if (!images.length) return text;
-  const content = [{ type: "text", text: clean(text) || "请结合图片继续。" }];
+  const items = normalizeChatAttachments(attachments);
+  const fileText = buildChatAttachmentPrompt(items);
+  const requestText = [clean(text), fileText].filter(Boolean).join("\n\n");
+  const images = items.filter((item) => item.kind === "image" && item.dataUrl);
+  if (!images.length) return requestText || text;
+  const content = [{ type: "text", text: requestText || "请结合附件继续。" }];
   images.forEach((image) => {
     content.push({ type: "image_url", image_url: { url: image.dataUrl } });
   });
   return content;
+}
+
+function buildChatAttachmentPrompt(attachments = []) {
+  const files = normalizeChatAttachments(attachments).filter((item) => item.kind !== "image");
+  if (!files.length) return "";
+  return [
+    "【用户本轮附件】",
+    ...files.map((file, index) => {
+      const title = `${index + 1}. ${file.name}${file.size ? `（${formatBytes(file.size)}）` : ""}`;
+      if (file.textExcerpt) return `${title}\n${file.textExcerpt}`;
+      return `${title}\n（此文件已附加为索引，但当前版本暂未读取全文；请使用 TXT/MD/JSON/CSV/YAML/LOG 这类基础文本文件。）`;
+    }),
+  ].join("\n\n");
+}
+
+function buildChatImagePrompt(attachments = []) {
+  const images = normalizeChatAttachments(attachments).filter((item) => item.kind === "image");
+  if (!images.length) return "";
+  return `【用户本轮图片】\n${images.map((image, index) => `${index + 1}. ${image.name}${image.size ? `（${formatBytes(image.size)}）` : ""}`).join("\n")}`;
+}
+
+function buildUserTextWithAttachments(text, attachments = []) {
+  return [
+    clean(text),
+    buildChatAttachmentPrompt(attachments),
+    buildChatImagePrompt(attachments),
+  ].filter(Boolean).join("\n\n");
+}
+
+function buildRoundtableInstructionPayload(text, attachments = []) {
+  const items = normalizeChatAttachments(attachments);
+  return {
+    text: buildUserTextWithAttachments(text, items),
+    attachments: items.filter((item) => item.kind === "image" && item.dataUrl),
+  };
 }
 
 function messageContentText(content) {
@@ -1297,11 +1431,21 @@ function getCreatorMemorySnippets(creatorId, query = "", options = {}) {
   if (!shouldQuery) return [];
   const tokens = memoryQueryTokens(query);
   const currentSessionId = clean(options.sessionId || activeSession()?.id);
-  const snapshots = normalizeAssistantMemories(creator.memory?.compressedSnapshots).map((item) => ({
-    type: "压缩记忆",
-    text: clean(item.text),
-    createdAt: Number(item.createdAt) || 0,
-    sourceSessionId: clean(item.sourceSessionId),
+  const entryItems = retrieveCreatorMemories(creator.memory, query, {
+    includeRecent,
+    limit: Math.max(limit, 24),
+    sessionId: currentSessionId,
+    roundtableId: clean(options.roundtableId),
+    isActiveMemory: (entry) => !entry.sourceSessionId
+      || !entry.sourceNodeId
+      || isMemoryOnActiveBranch(state.sessions.find((session) => session.id === entry.sourceSessionId), entry),
+  }).map((entry) => ({
+    id: entry.id,
+    type: entry.type || "记忆",
+    text: clean(entry.text),
+    createdAt: Number(entry.createdAt) || 0,
+    sourceSessionId: clean(entry.sourceSessionId),
+    score: Number(entry.score) || 0,
   }));
   const records = getCreatorParticipationRecords(state.creatorParticipationRecords, memoryCreatorId, {
     limit: 200,
@@ -1322,12 +1466,12 @@ function getCreatorMemorySnippets(creatorId, query = "", options = {}) {
     };
   });
   const linkedSourceItems = getLinkedSourceMemoryItems(creator);
-  return [...snapshots, ...records, ...linkedSourceItems]
+  return [...entryItems, ...records, ...linkedSourceItems]
     .filter((item) => clean(item.text))
     .map((item) => {
       const recency = item.createdAt ? Math.min(4, Math.max(0, (Date.now() - item.createdAt) / 86400000 < 7 ? 4 : 1)) : 0;
       const sameSession = currentSessionId && item.sourceSessionId === currentSessionId ? 2 : 0;
-      const score = scoreMemoryText(item.text, tokens, currentSessionId) + recency + sameSession;
+      const score = (Number(item.score) || 0) + scoreMemoryText(item.text, tokens, currentSessionId) + recency + sameSession;
       return { ...item, score };
     })
     .filter((item) => includeRecent || item.score > 0)
@@ -2214,7 +2358,7 @@ function renderRoundtableMessage(message) {
           ${decision}
           ${mentionBadge}
           <div class="roundtable-writer-tip">${escapeHtml(writerTip)}</div>
-          <div class="roundtable-writer-snippet">${renderRoundtableRichText(message.content || "")}${message.streaming ? '<span class="stream-caret"></span>' : ""}</div>
+          <div class="roundtable-writer-snippet roundtable-markdown">${renderRoundtableRichText(message.content || "")}${message.streaming ? '<span class="stream-caret"></span>' : ""}</div>
         </div>
       </article>
     `;
@@ -2230,7 +2374,7 @@ function renderRoundtableMessage(message) {
           ${mentionBadge}
           <time>${escapeHtml(time)}</time>
         </div>
-        <div class="roundtable-speech" data-command="toggle-roundtable-menu" data-round-id="${message.id}">${renderRoundtableRichText(message.content || "")}${message.streaming ? '<span class="stream-caret"></span>' : ""}</div>
+        <div class="roundtable-speech roundtable-markdown" data-command="toggle-roundtable-menu" data-round-id="${message.id}">${renderRoundtableRichText(message.content || "")}${message.streaming ? '<span class="stream-caret"></span>' : ""}</div>
       </div>
     </article>
   `;
@@ -2561,10 +2705,12 @@ function renderChatAttachments(attachments = [], options = {}) {
   if (!items.length) return "";
   const removable = Boolean(options.removable);
   return `<div class="chat-attachments${removable ? " is-pending" : ""}">${items.map((item) => `
-    <figure class="chat-attachment">
-      <img src="${escapeHtml(item.dataUrl)}" alt="${escapeHtml(item.name)}" />
+    <figure class="chat-attachment ${item.kind === "image" ? "is-image" : "is-file"}">
+      ${item.kind === "image"
+        ? `<img src="${escapeHtml(item.dataUrl)}" alt="${escapeHtml(item.name)}" />`
+        : `<span class="chat-attachment-file-icon">${item.textExcerpt ? "文" : "档"}</span>`}
       <figcaption>${escapeHtml(item.name)}</figcaption>
-      ${removable ? `<button type="button" data-command="remove-chat-image" data-attachment-id="${escapeHtml(item.id)}" aria-label="移除图片">×</button>` : ""}
+      ${removable ? `<button type="button" data-command="remove-chat-image" data-attachment-id="${escapeHtml(item.id)}" aria-label="移除附件">×</button>` : ""}
     </figure>
   `).join("")}</div>`;
 }
@@ -2593,7 +2739,7 @@ function renderMessage(node) {
     attachments.length ? renderChatAttachments(attachments) : "",
     loadingContent
       ? `<span class="message-content message-loading-dots" aria-label="正在生成"><i></i><i></i><i></i></span>`
-      : (content || isStreamingThisNode) ? `<span class="message-content">${escapeHtml(content)}</span>` : "",
+      : renderChatContent(node, content, isStreamingThisNode),
     isStreamingThisNode ? '<span class="stream-caret"></span>' : "",
   ].join("");
   return `
@@ -2742,11 +2888,12 @@ function stepLayoutValue(key, delta) {
 }
 
 function renderSettings() {
-  const s = sessionSettings();
   const api = apiSettings();
+  const defaults = globalModelDefaults();
+  const s = sessionSettings();
   const provider = activeApiProvider(api);
   const appearance = sessionAppearance();
-  if (document.activeElement !== els.systemPrompt) els.systemPrompt.value = s.systemPrompt;
+  if (els.systemPrompt && document.activeElement !== els.systemPrompt) els.systemPrompt.value = "";
   if (els.providerSelect) {
     els.providerSelect.innerHTML = api.providers
       .map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`)
@@ -2757,19 +2904,19 @@ function renderSettings() {
   if (els.providerName && document.activeElement !== els.providerName) els.providerName.value = provider?.name || "";
   if (document.activeElement !== els.baseUrl) els.baseUrl.value = api.baseUrl;
   if (document.activeElement !== els.apiKey) els.apiKey.value = api.apiKey;
-  if (document.activeElement !== els.modelInput) els.modelInput.value = s.model;
+  if (document.activeElement !== els.modelInput) els.modelInput.value = defaults.model;
   if (els.contextTokenBudget && document.activeElement !== els.contextTokenBudget) {
     els.contextTokenBudget.value = Number(api.contextTokenBudget) || 200000;
   }
   if (els.userNameInput && document.activeElement !== els.userNameInput) els.userNameInput.value = clean(appearance.userName) || "我";
   renderAvatarPreview(els.userAvatarPreview, appearance.userAvatarDataUrl, clean(appearance.userName) || "我");
   renderBackgroundPreview(els.sessionBackgroundPreview, appearance.backgroundDataUrl);
-  if (document.activeElement !== els.contextCount) els.contextCount.value = s.contextCount;
-  if (document.activeElement !== els.maxTokens) els.maxTokens.value = s.maxTokens;
-  els.temperature.value = s.temperature;
-  els.temperatureLabel.textContent = Number(s.temperature).toFixed(2);
-  els.unlimitedContext.checked = s.unlimitedContext;
-  els.stream.checked = s.stream;
+  if (document.activeElement !== els.contextCount) els.contextCount.value = defaults.contextCount;
+  if (document.activeElement !== els.maxTokens) els.maxTokens.value = defaults.maxTokens;
+  els.temperature.value = defaults.temperature;
+  els.temperatureLabel.textContent = Number(defaults.temperature).toFixed(2);
+  els.unlimitedContext.checked = defaults.unlimitedContext;
+  els.stream.checked = defaults.stream;
   els.layoutInputs.forEach((input) => {
     const key = input.dataset.layoutKey;
     if (document.activeElement !== input) input.value = s.layout[key];
@@ -3386,7 +3533,7 @@ function captureComposerModelPickerClick(event) {
 
 function renderSettingsModelPicker(models = null) {
   if (!els.settingsModelPicker || !els.settingsModelPickerButton) return;
-  const settings = sessionSettings();
+  const settings = globalModelDefaults();
   const list = models || Array.from(new Set([settings.model, ...apiSettings().models].filter(Boolean)));
   els.settingsModelPickerButton.classList.toggle("active", settingsModelPickerOpen);
   els.settingsModelPickerButton.setAttribute("aria-expanded", String(settingsModelPickerOpen));
@@ -3466,7 +3613,7 @@ function selectModelFromPicker(model) {
 }
 
 function selectSettingsModelFromPicker(model) {
-  setActiveModel(model);
+  setGlobalDefaultModel(model);
   settingsModelPickerOpen = false;
   render();
   persistState(state);
@@ -3504,6 +3651,14 @@ function rememberProviderModel(providerId, model) {
   const provider = api.providers.find((item) => item.id === providerApi.currentProviderId) || activeApiProvider(api);
   provider.models = Array.from(new Set([value, ...(provider.models || [])].filter(Boolean)));
   syncApiFromProvider(api);
+}
+
+function setGlobalDefaultModel(model) {
+  const value = clean(model);
+  if (!value) return;
+  const defaults = globalModelDefaults();
+  defaults.model = value;
+  rememberProviderModel("", value);
 }
 
 function setActiveModel(model) {
@@ -3599,6 +3754,24 @@ function deleteApiProvider() {
   showToast("已删除模型提供方");
 }
 
+function applyGlobalModelConfigToAllAi() {
+  if (!window.confirm("将统一模型配置覆盖到所有会话、主创和议员？提示词、头像、名字和记忆不会被改动。")) return;
+  const config = globalModelConfigFromApi(apiSettings());
+  state.sessions.forEach((session) => {
+    applyGlobalModelConfigToSession(session, config);
+    Object.values(session.roundtable?.assistantConfigs || {}).forEach((assistantConfig) => {
+      applyGlobalModelConfigToAssistantConfig(assistantConfig, config);
+    });
+    touchSession(session);
+  });
+  Object.values(creatorsState()).forEach((creator) => {
+    applyGlobalModelConfigToCreator(creator, config);
+  });
+  render();
+  persistState(state);
+  showToast("已全面覆盖模型配置，提示词和记忆未改动");
+}
+
 function openEditor(nodeId) {
   const node = getNode(nodeId);
   if (!node) return;
@@ -3661,6 +3834,7 @@ async function appendUserMessage(text, attachments = []) {
   const normalizedAttachments = normalizeChatAttachments(attachments);
   if (normalizedAttachments.length) user.attachments = normalizedAttachments;
   appendChild(session, parent, user);
+  rememberCreatorMessageNode(user, { session });
   const assistant = createNode("assistant", user.id, "");
   assistant.activeVersionId = assistant.versions[0].id;
   appendChild(session, user, assistant);
@@ -3680,6 +3854,7 @@ async function editUserBranch(nodeId, text) {
   activateBranchToNode(parent.id, session);
   const user = createNode("user", parent.id, text);
   appendChild(session, parent, user);
+  rememberCreatorMessageNode(user, { session });
   const assistant = createNode("assistant", user.id, "");
   assistant.activeVersionId = assistant.versions[0].id;
   appendChild(session, user, assistant);
@@ -3696,6 +3871,7 @@ async function resendUser(nodeId) {
   const user = getNode(nodeId, session);
   if (!user || user.role !== "user") return;
   activateBranchToNode(user.id, session);
+  rememberCreatorMessageNode(user, { session });
   const assistant = createNode("assistant", user.id, "");
   assistant.activeVersionId = assistant.versions[0].id;
   appendChild(session, user, assistant);
@@ -3820,15 +3996,21 @@ function renderStreamingNode(nodeId, versionId, options = {}) {
     const follow = shouldFollowBottom();
     let contentElement = card.querySelector(".message-content");
     if (!contentElement) {
-      contentElement = document.createElement("span");
+      contentElement = document.createElement(node.role === "assistant" ? "div" : "span");
       contentElement.className = "message-content";
       card.prepend(contentElement);
     }
     const nextContent = version.content || "";
     if (nextContent) {
       contentElement.classList.remove("message-loading-dots");
-      contentElement.textContent = nextContent;
+      contentElement.classList.toggle("message-markdown", node.role === "assistant");
+      if (node.role === "assistant") {
+        contentElement.innerHTML = renderAssistantMarkdown(nextContent);
+      } else {
+        contentElement.textContent = nextContent;
+      }
     } else if (!contentElement.classList.contains("message-loading-dots")) {
+      contentElement.classList.remove("message-markdown");
       contentElement.classList.add("message-loading-dots");
       contentElement.innerHTML = "<i></i><i></i><i></i>";
     }
@@ -3943,18 +4125,18 @@ async function callOpenAIStream(onChunk, assistantNodeId, continueMode = false) 
 
 async function fetchModels() {
   try {
-    validateApi();
+    if (!clean(apiSettings().apiKey)) throw new Error("请先在设置里填写 API Key");
     els.modelStatus.textContent = "正在拉取...";
     const api = apiSettings();
-    const settings = sessionSettings();
+    const defaults = globalModelDefaults();
     const data = await aiClient.fetchModels({ api });
     if (data.__bridgeStatus >= 400) throw new Error(data.error?.message || "模型拉取失败");
     const models = (data.data || []).map((item) => item.id).filter(Boolean).sort();
     if (!models.length) throw new Error("没有读取到模型");
     const provider = activeApiProvider(api);
-    provider.models = Array.from(new Set([settings.model, ...models].filter(Boolean)));
+    provider.models = Array.from(new Set([defaults.model, ...models].filter(Boolean)));
     syncApiFromProvider(api);
-    if (!settings.model) settings.model = models[0];
+    if (!defaults.model) defaults.model = models[0];
     els.modelStatus.textContent = `已拉取 ${models.length} 个`;
     settingsModelPickerOpen = true;
     render();
@@ -4060,6 +4242,7 @@ async function copyText(text) {
 
 function newSession() {
   const session = createSession();
+  applyGlobalModelConfigToSession(session, globalModelConfigFromApi(apiSettings()));
   ensureSessionCreator(session);
   state.sessions.unshift(session);
   state.activeSessionId = session.id;
@@ -4378,6 +4561,16 @@ function removeChatImage(id) {
   renderPendingChatAttachments();
 }
 
+function fileExtension(name = "") {
+  const value = clean(name).toLowerCase();
+  return value.includes(".") ? value.split(".").pop() : "";
+}
+
+function isChatTextFile(file) {
+  const ext = fileExtension(file?.name);
+  return CHAT_TEXT_EXTENSIONS.has(ext) || clean(file?.type).startsWith("text/");
+}
+
 function fileToDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -4385,6 +4578,14 @@ function fileToDataUrl(file) {
     reader.addEventListener("error", () => reject(reader.error || new Error("图片读取失败")));
     reader.readAsDataURL(file);
   });
+}
+
+async function fileToTextExcerpt(file) {
+  if (!isChatTextFile(file)) return "";
+  if (Number(file.size) > CHAT_TEXT_FILE_MAX_BYTES) {
+    return `文件超过 ${Math.round(CHAT_TEXT_FILE_MAX_BYTES / 1024 / 1024)}MB，当前仅附加文件索引，未读取全文。`;
+  }
+  return clean(await file.text()).slice(0, CHAT_TEXT_EXCERPT_LIMIT);
 }
 
 function consumePendingChatAttachments() {
@@ -4412,30 +4613,50 @@ async function handleChatImageSelected() {
   if (!selected.length) return;
   try {
     for (const file of selected) {
-      if (pendingChatAttachments.length >= CHAT_IMAGE_LIMIT) {
-        showToast(`最多添加 ${CHAT_IMAGE_LIMIT} 张图片`);
+      if (pendingChatAttachments.length >= CHAT_ATTACHMENT_LIMIT) {
+        showToast(`最多添加 ${CHAT_ATTACHMENT_LIMIT} 个附件`);
         break;
       }
-      if (!LOCAL_IMAGE_TYPES.has(file.type)) {
-        showToast("只支持 PNG、JPG、WEBP 图片");
+      if (LOCAL_IMAGE_TYPES.has(file.type)) {
+        const imageCount = pendingChatAttachments.filter((item) => item.kind === "image" || item.dataUrl).length;
+        if (imageCount >= CHAT_IMAGE_LIMIT) {
+          showToast(`最多添加 ${CHAT_IMAGE_LIMIT} 张图片`);
+          continue;
+        }
+        if (file.size > CHAT_IMAGE_MAX_BYTES) {
+          showToast(`图片过大，请选 ${Math.round(CHAT_IMAGE_MAX_BYTES / 1024 / 1024)}MB 以内`);
+          continue;
+        }
+        pendingChatAttachments.push({
+          id: uid("img"),
+          kind: "image",
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          dataUrl: await fileToDataUrl(file),
+          readable: true,
+        });
         continue;
       }
-      if (file.size > CHAT_IMAGE_MAX_BYTES) {
-        showToast(`图片过大，请选 ${Math.round(CHAT_IMAGE_MAX_BYTES / 1024 / 1024)}MB 以内`);
+      if (!isChatTextFile(file)) {
+        showToast("只支持基础文本文件和 PNG、JPG、WEBP 图片");
         continue;
       }
+      const textExcerpt = await fileToTextExcerpt(file);
       pendingChatAttachments.push({
-        id: uid("img"),
+        id: uid("file"),
+        kind: "text",
         name: file.name,
-        type: file.type,
+        type: file.type || fileExtension(file.name),
         size: file.size,
-        dataUrl: await fileToDataUrl(file),
+        textExcerpt,
+        readable: Boolean(textExcerpt),
       });
     }
     renderPendingChatAttachments();
     els.body.classList.toggle("is-ready", Boolean(clean(els.input.value)) || pendingChatAttachments.length > 0);
   } catch (error) {
-    showToast(humanizeError(error, "图片读取失败"));
+    showToast(humanizeError(error, "附件读取失败"));
   } finally {
     if (els.chatImageFile) els.chatImageFile.value = "";
   }
@@ -6031,7 +6252,15 @@ function insertRoundtableMention(id) {
 }
 
 async function handleRoundtableUser(text) {
-  addRoundtableMessage("user", clean(sessionAppearance().userName) || "我", text);
+  return handleRoundtableUserWithAttachments(text, []);
+}
+
+async function handleRoundtableUserWithAttachments(text, attachments = []) {
+  const normalizedAttachments = normalizeChatAttachments(attachments);
+  const visibleText = buildUserTextWithAttachments(text, normalizedAttachments);
+  addRoundtableMessage("user", clean(sessionAppearance().userName) || "我", visibleText, {
+    attachments: normalizedAttachments,
+  });
   const mentions = parseRoundtableMentions(text);
   if (!mentions.length && clean(text).includes("@")) {
     showToast("只能 @ 已安排顺序的议员，或 @写手");
@@ -6040,9 +6269,10 @@ async function handleRoundtableUser(text) {
     persistState(state);
     return;
   }
+  const payload = buildRoundtableInstructionPayload(text, normalizedAttachments);
   const writer = mentions.find((assistant) => assistant.id === "writer");
-  if (writer) return generateRoundtableWriter(text);
-  return generateMentionedRoundtableAssistants(mentions, text);
+  if (writer) return generateRoundtableWriter(payload);
+  return generateMentionedRoundtableAssistants(mentions, payload);
 }
 
 async function generateMentionedRoundtableAssistants(assistants, userText) {
@@ -6201,6 +6431,7 @@ const handleCommand = createCommandRegistry({
   "add-provider": () => addApiProvider(),
   "rename-provider": () => renameApiProvider(),
   "delete-provider": () => deleteApiProvider(),
+  "apply-global-model-config": () => applyGlobalModelConfigToAllAi(),
   "choose-workspace-files": () => chooseWorkspaceFiles(),
   "clear-workspace-files": () => clearWorkspaceFiles(),
   "choose-chat-image": () => chooseChatImage(),
@@ -6351,11 +6582,11 @@ els.composer.addEventListener("submit", async (event) => {
   const attachments = normalizeChatAttachments(pendingChatAttachments);
   if (!text && !attachments.length) return;
   if (roundtableState().enabled) {
-    if (attachments.length) return showToast("圆桌讨论暂不发送图片，请切回交流模式使用");
+    const sendingAttachments = consumePendingChatAttachments();
     els.input.value = "";
     resizeInput();
     renderContextBadge();
-    await handleRoundtableUser(text);
+    await handleRoundtableUserWithAttachments(text, sendingAttachments);
     return;
   }
   try {
@@ -6532,13 +6763,11 @@ document.addEventListener("change", handleRoundtableContextOptionInput);
 els.historySearch.addEventListener("input", renderSessions);
 
 [
-  ["input", els.systemPrompt, "systemPrompt"],
   ["input", els.contextCount, "contextCount"],
   ["input", els.maxTokens, "maxTokens"],
 ].forEach(([, element, key]) => {
   element.addEventListener("input", () => {
-    sessionSettings()[key] = key === "contextCount" || key === "maxTokens" ? Number(element.value) || 0 : element.value;
-    renderContextBadge();
+    globalModelDefaults()[key] = key === "contextCount" || key === "maxTokens" ? Number(element.value) || 0 : element.value;
     persistState(state);
   });
 });
@@ -6553,7 +6782,9 @@ els.historySearch.addEventListener("input", renderSessions);
 });
 
 els.contextTokenBudget?.addEventListener("input", () => {
-  apiSettings().contextTokenBudget = Math.max(1000, Number(els.contextTokenBudget.value) || 200000);
+  const api = apiSettings();
+  api.contextTokenBudget = Math.max(1000, Number(els.contextTokenBudget.value) || 200000);
+  globalModelDefaults().contextTokenBudget = api.contextTokenBudget;
   persistState(state);
 });
 
@@ -6561,9 +6792,8 @@ els.providerSelect?.addEventListener("change", () => switchApiProvider(els.provi
 els.providerName?.addEventListener("input", updateActiveProviderName);
 
 els.modelInput.addEventListener("input", () => {
-  setActiveModel(els.modelInput.value);
-  renderModelPicker();
-  renderContextBadge();
+  setGlobalDefaultModel(els.modelInput.value);
+  renderSettingsModelPicker();
   persistState(state);
 });
 
@@ -6714,20 +6944,19 @@ window.addEventListener("popstate", () => {
 });
 
 els.temperature.addEventListener("input", () => {
-  sessionSettings().temperature = Number(els.temperature.value);
-  els.temperatureLabel.textContent = sessionSettings().temperature.toFixed(2);
+  const defaults = globalModelDefaults();
+  defaults.temperature = Number(els.temperature.value);
+  els.temperatureLabel.textContent = defaults.temperature.toFixed(2);
   persistState(state);
 });
 
 els.unlimitedContext.addEventListener("change", () => {
-  sessionSettings().unlimitedContext = els.unlimitedContext.checked;
-  render();
+  globalModelDefaults().unlimitedContext = els.unlimitedContext.checked;
+  persistState(state);
 });
 
 els.stream.addEventListener("change", () => {
-  const settings = sessionSettings();
-  settings.stream = els.stream.checked;
-  settings.streamTouched = true;
+  globalModelDefaults().stream = els.stream.checked;
   persistState(state);
 });
 

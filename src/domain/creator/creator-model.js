@@ -1,5 +1,9 @@
 import { uid } from "../../utils/id.js";
 import { clean } from "../../utils/text.js";
+import {
+  getActiveCreatorMemoryEntries,
+  normalizeCreatorMemory,
+} from "./creator-memory-model.js";
 
 export const CREATOR_STATE_SCHEMA_VERSION = 2;
 export const DEFAULT_CONTEXT_TOKEN_BUDGET = 200000;
@@ -34,13 +38,10 @@ export function createCreatorIdentity(overrides = {}, defaults = {}) {
     prompt: clean(overrides.prompt) || clean(defaults.prompt),
     activationProfile: clean(overrides.activationProfile),
     modelConfig: createCreatorModelConfig(overrides.modelConfig || {}, defaults.modelConfig || {}),
-    memory: {
-      displayName: clean(overrides.memory?.displayName) || clean(overrides.name) || clean(defaults.name) || "主创记忆",
-      notes: clean(overrides.memory?.notes),
-      compressedSnapshots: Array.isArray(overrides.memory?.compressedSnapshots)
-        ? overrides.memory.compressedSnapshots.filter((item) => item && typeof item === "object")
-        : [],
-    },
+    memory: normalizeCreatorMemory(overrides.memory || {}, {
+      creatorId: id,
+      displayName: clean(overrides.name) || clean(defaults.name) || "主创记忆",
+    }),
     privateSessionId: clean(overrides.privateSessionId),
     createdAt: Number(overrides.createdAt) || now,
     updatedAt: Number(overrides.updatedAt) || now,
@@ -117,7 +118,7 @@ export function creatorToAssistant(creator, api = {}, fallbackSettings = {}, con
     contextTokenBudget: Number(modelConfig.contextTokenBudget) || DEFAULT_CONTEXT_TOKEN_BUDGET,
     contextOptions,
     activationProfile: clean(creator.activationProfile),
-    memories: Array.isArray(creator.memory?.compressedSnapshots) ? creator.memory.compressedSnapshots : [],
+    memories: getActiveCreatorMemoryEntries(creator.memory),
     avatarDataUrl: clean(creator.avatarDataUrl),
     sourceTemplateId: clean(creator.sourceTemplateId),
     sealedTemplateCode: clean(creator.sealedTemplateCode),

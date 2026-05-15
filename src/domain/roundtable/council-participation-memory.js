@@ -1,5 +1,6 @@
 import { uid } from "../../utils/id.js";
 import { clean } from "../../utils/text.js";
+import { createCreatorMemoryEntry } from "../creator/creator-memory-model.js";
 
 export function createCouncilParticipationRecord(input = {}) {
   return {
@@ -93,4 +94,25 @@ export function getCreatorParticipationRecords(records, creatorId, options = {})
     .filter((record) => creatorIds.has(record.creatorId))
     .filter((record) => !sessionId || record.sessionId === sessionId)
     .slice(-limit);
+}
+
+export function createMemoryFromParticipationRecord(record = {}, input = {}) {
+  const normalized = createCreatorParticipationRecord(record);
+  const text = clean(input.text || normalized.summary || normalized.content);
+  if (!normalized.creatorId || !normalized.sessionId || !text) return null;
+  const topic = clean(normalized.topic);
+  return createCreatorMemoryEntry({
+    id: clean(input.id) || `memory_${normalized.id}`,
+    creatorId: normalized.creatorId,
+    scope: "roundtable",
+    sourceSessionId: normalized.sessionId,
+    sourceRoundtableId: clean(input.sourceRoundtableId || normalized.sessionId),
+    sourceRecordId: normalized.id,
+    type: clean(input.type) || (/决定|确认|采用|通过|采纳/.test(text) ? "decision" : "summary"),
+    text: topic ? `话题：${topic}；${text}` : text,
+    keywords: input.keywords,
+    importance: Number(input.importance) || 3,
+    createdAt: normalized.createdAt,
+    updatedAt: normalized.updatedAt,
+  });
 }

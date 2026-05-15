@@ -13,6 +13,25 @@ export function createApiProvider(overrides = {}) {
   };
 }
 
+export function createModelDefaults(overrides = {}) {
+  return {
+    model: overrides.model || "gpt-4o-mini",
+    temperature: Number.isFinite(Number(overrides.temperature)) ? Number(overrides.temperature) : 0.8,
+    contextCount: Number.isFinite(Number(overrides.contextCount)) ? Number(overrides.contextCount) : 12,
+    unlimitedContext: Boolean(overrides.unlimitedContext),
+    maxTokens: Number(overrides.maxTokens) || 2048,
+    stream: overrides.stream === undefined ? true : Boolean(overrides.stream),
+    contextTokenBudget: Number(overrides.contextTokenBudget) || 200000,
+  };
+}
+
+export function hydrateModelDefaults(defaults = {}, fallback = {}) {
+  return createModelDefaults({
+    ...fallback,
+    ...(defaults || {}),
+  });
+}
+
 export function createApiSettings() {
   const provider = createApiProvider({ id: "provider_default", name: "默认提供方" });
   return {
@@ -22,10 +41,12 @@ export function createApiSettings() {
     apiKey: provider.apiKey,
     models: provider.models,
     contextTokenBudget: 200000,
+    modelDefaults: createModelDefaults({ model: provider.models[0] }),
   };
 }
 
 export function hydrateApiSettings(api) {
+  const rawModelDefaults = api?.modelDefaults;
   const next = { ...createApiSettings(), ...(api || {}) };
   const legacyProvider = createApiProvider({
     id: next.currentProviderId || "provider_default",
@@ -53,5 +74,9 @@ export function hydrateApiSettings(api) {
     : ["gpt-4o-mini"];
   next.contextTokenBudget = Number(next.contextTokenBudget) || 200000;
   current.models = next.models;
+  next.modelDefaults = hydrateModelDefaults(rawModelDefaults, {
+    model: next.models[0],
+    contextTokenBudget: next.contextTokenBudget,
+  });
   return next;
 }

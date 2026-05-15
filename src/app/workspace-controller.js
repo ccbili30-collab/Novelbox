@@ -119,7 +119,7 @@ export function createWorkspaceController({
           <input id="workspacePathInput" type="text" placeholder="例如 D:\\Novel\\圆桌小说盒子" />
         </label>
         <p class="workspace-hint">记录路径与资料文件，TXT / MD / JSON / CSV 会读取文本节选并进入 AI 上下文；其他文件先作为索引保留。</p>
-        <input id="workspaceFileInput" type="file" multiple hidden />
+        <input id="workspaceFileInput" type="file" multiple hidden accept=".txt,.md,.markdown,.json,.csv,.log,.yaml,.yml,.pdf,.doc,.docx,.epub,image/*,text/*,application/json,text/csv" />
         <div class="workspace-actions">
           <button type="button" data-command="open-novel">正文库</button>
           <button type="button" data-command="choose-workspace-files">加入文件</button>
@@ -208,11 +208,13 @@ export function createWorkspaceController({
     if (!selected.length) return;
     const workspace = sessionWorkspace();
     const existing = new Map(workspace.files.map((file) => [`${file.name}:${file.size}:${file.lastModified || ""}`, file]));
+    let readableCount = 0;
     try {
       for (const file of selected) {
         const key = `${file.name}:${file.size}:${file.lastModified || ""}`;
         const ext = file.name.includes(".") ? file.name.split(".").pop().toLowerCase() : "";
         const textExcerpt = await readWorkspaceTextExcerpt(file, clean);
+        if (textExcerpt) readableCount += 1;
         existing.set(key, {
           id: existing.get(key)?.id || uid("wfile"),
           name: file.name,
@@ -229,7 +231,8 @@ export function createWorkspaceController({
       touchSession(activeSession());
       renderWorkspacePanel();
       persistState();
-      showToast(`已加入 ${selected.length} 个工作区文件`);
+      const metadataOnly = selected.length - readableCount;
+      showToast(`已加入 ${selected.length} 个工作区文件；${readableCount} 个可读文本${metadataOnly ? `，${metadataOnly} 个先作为索引` : ""}`);
     } catch (error) {
       showToast(humanizeError(error, "工作区文件读取失败"));
     } finally {

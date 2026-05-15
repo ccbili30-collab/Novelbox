@@ -77,6 +77,163 @@
   display: block;
 }
 
+.message-markdown,
+.roundtable-markdown {
+  display: block;
+}
+
+.message-markdown > :first-child,
+.roundtable-markdown > :first-child {
+  margin-top: 0;
+}
+
+.message-markdown > :last-child,
+.roundtable-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.message-markdown p,
+.roundtable-markdown p,
+.message-markdown ul,
+.roundtable-markdown ul,
+.message-markdown ol,
+.roundtable-markdown ol,
+.message-markdown blockquote,
+.roundtable-markdown blockquote,
+.message-markdown pre,
+.roundtable-markdown pre,
+.message-markdown table,
+.roundtable-markdown table,
+.message-markdown h1,
+.roundtable-markdown h1,
+.message-markdown h2,
+.roundtable-markdown h2,
+.message-markdown h3,
+.roundtable-markdown h3,
+.message-markdown h4,
+.roundtable-markdown h4,
+.message-markdown h5,
+.roundtable-markdown h5,
+.message-markdown h6,
+.roundtable-markdown h6 {
+  margin: 0.5em 0;
+}
+
+.message-markdown h1,
+.roundtable-markdown h1,
+.message-markdown h2,
+.roundtable-markdown h2,
+.message-markdown h3,
+.roundtable-markdown h3,
+.message-markdown h4,
+.roundtable-markdown h4,
+.message-markdown h5,
+.roundtable-markdown h5,
+.message-markdown h6,
+.roundtable-markdown h6 {
+  color: #2b241c;
+  font-size: 1em;
+  line-height: 1.45;
+}
+
+.message-markdown ul,
+.roundtable-markdown ul,
+.message-markdown ol,
+.roundtable-markdown ol {
+  padding-left: 1.35em;
+}
+
+.message-markdown li + li,
+.roundtable-markdown li + li {
+  margin-top: 0.24em;
+}
+
+.message-markdown blockquote,
+.roundtable-markdown blockquote {
+  padding: 0.2em 0 0.2em 0.9em;
+  border-left: 2px solid rgba(122, 110, 92, 0.28);
+  color: #5e5448;
+}
+
+.message-markdown code,
+.roundtable-markdown code {
+  padding: 0.08em 0.34em;
+  border-radius: 0.45em;
+  background: rgba(109, 94, 72, 0.08);
+  font-size: 0.92em;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+.message-markdown pre,
+.roundtable-markdown pre {
+  overflow-x: auto;
+  padding: 0.75em 0.9em;
+  border: 1px solid rgba(204, 196, 181, 0.8);
+  border-radius: 0.85em;
+  background: rgba(250, 247, 241, 0.95);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+.message-markdown pre code,
+.roundtable-markdown pre code {
+  display: block;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 0.9em;
+  line-height: 1.58;
+}
+
+.message-markdown a,
+.roundtable-markdown a {
+  color: #2f6fa8;
+  text-decoration: underline;
+  text-decoration-color: rgba(47, 111, 168, 0.28);
+  text-underline-offset: 0.18em;
+}
+
+.message-markdown hr,
+.roundtable-markdown hr {
+  margin: 0.7em 0;
+  border: 0;
+  border-top: 1px solid rgba(191, 183, 170, 0.72);
+}
+
+.message-markdown .md-table-wrap,
+.roundtable-markdown .md-table-wrap {
+  overflow-x: auto;
+  margin: 0.55em 0;
+  border: 1px solid rgba(213, 207, 198, 0.86);
+  border-radius: 0.85em;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.message-markdown table,
+.roundtable-markdown table {
+  width: 100%;
+  min-width: 240px;
+  border-collapse: collapse;
+  font-size: 0.94em;
+}
+
+.message-markdown th,
+.roundtable-markdown th,
+.message-markdown td,
+.roundtable-markdown td {
+  padding: 0.45em 0.62em;
+  border-top: 1px solid rgba(225, 219, 209, 0.85);
+  text-align: left;
+  vertical-align: top;
+}
+
+.message-markdown thead th,
+.roundtable-markdown thead th {
+  border-top: 0;
+  color: #51463b;
+  background: rgba(244, 239, 230, 0.92);
+  font-weight: 700;
+}
+
 .user .message-content {
   display: block;
   max-width: 100%;
@@ -273,6 +430,19 @@
   border: 1px solid rgba(222, 218, 211, 0.9);
   border-radius: 12px;
   background: rgba(248, 247, 244, 0.9);
+}
+
+.chat-attachment-file-icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 52px;
+  border: 1px solid rgba(222, 218, 211, 0.9);
+  border-radius: 12px;
+  color: var(--text);
+  background: rgba(248, 247, 244, 0.92);
+  font-size: 18px;
+  font-weight: 700;
 }
 
 .chat-attachment figcaption {
@@ -1553,7 +1723,7 @@ body.paper-dragging .paper-grip {
   box-shadow: 0 8px 18px rgba(54, 66, 81, 0.06);
   font-size: 15px;
   line-height: 1.62;
-  white-space: pre-wrap;
+  white-space: normal;
   word-break: break-word;
   transition:
     border-color var(--motion-fast),
@@ -1681,7 +1851,7 @@ body.paper-dragging .paper-grip {
   color: #2d261e;
   font-size: 15px;
   line-height: 1.78;
-  white-space: pre-wrap;
+  white-space: normal;
   word-break: break-word;
 }
 
@@ -3026,6 +3196,11 @@ body.roundtable-mode.paper-dragging .paper-scroll-viewport {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+.chat-row .message-content.message-markdown {
+  display: block;
+  white-space: normal;
 }
 
 .chat-row .chat-message-meta {
