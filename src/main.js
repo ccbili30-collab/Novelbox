@@ -165,6 +165,12 @@ import {
   getMessageRenderSignature as _getMessageRenderSignature,
 } from "./app/runtime/message-signature.js";
 import { createStreamBatcher } from "./app/runtime/stream-batcher.js";
+import {
+  cssEscape as _cssEscape,
+  renderChatContent as _renderChatContent,
+  renderBranchSwitcher as _renderBranchSwitcher,
+  renderVersionSwitcher as _renderVersionSwitcher,
+} from "./app/runtime/render-helpers.js";
 
 const $ = (selector) => document.querySelector(selector);
 // All DOM selectors live in src/app/runtime/dom-registry.js so the
@@ -1011,17 +1017,11 @@ function renderAssistantMarkdown(text) {
   return renderMarkdown(text);
 }
 
-function renderChatContent(node, content, isStreamingThisNode) {
-  if (!content && !isStreamingThisNode) return "";
-  if (node.role === "assistant") {
-    return `<div class="message-content message-markdown">${renderAssistantMarkdown(content)}</div>`;
-  }
-  return `<span class="message-content">${escapeHtml(content)}</span>`;
-}
-
-function cssEscape(value) {
-  return window.CSS?.escape ? CSS.escape(String(value)) : String(value).replace(/["\\]/g, "\\$&");
-}
+// Pure helpers moved to src/app/runtime/render-helpers.js. Thin
+// closures preserve every existing call site.
+const renderChatContent = (node, content, isStreamingThisNode) =>
+  _renderChatContent(node, content, isStreamingThisNode, { renderAssistantMarkdown, escapeHtml });
+const cssEscape = _cssEscape;
 
 // Thin shims over the stream batcher above; preserve existing call
 // sites without changing their semantics.
@@ -2488,15 +2488,8 @@ function renderMessage(node) {
   const usage = version?.usage?.total_tokens ? ` · ${formatK(version.usage.total_tokens)} tok` : "";
   const meta = `${content.length}字 · ${formatTime(version?.createdAt || node.createdAt)}${usage}`;
   const isUser = node.role === "user";
-  const versionIndex = node.role === "assistant" ? Math.max(0, node.versions.findIndex((item) => item.id === node.activeVersionId)) + 1 : 1;
   const failedClass = node.role === "assistant" && /^请求失败[:：]/.test(clean(content)) ? " failed" : "";
-  const versionSwitcher = node.role === "assistant" && node.versions.length > 1
-    ? `<div class="switcher" role="group" aria-label="版本切换">
-        <button type="button" class="switcher__btn" data-command="prev-version" data-node-id="${node.id}" ${node.versions.length < 2 ? "disabled" : ""} aria-label="上一版本"><span class="md-icon md-icon--sz-20" aria-hidden="true">chevron_left</span></button>
-        <span class="switcher__index">${versionIndex}/${node.versions.length}</span>
-        <button type="button" class="switcher__btn" data-command="next-version" data-node-id="${node.id}" ${node.versions.length < 2 ? "disabled" : ""} aria-label="下一版本"><span class="md-icon md-icon--sz-20" aria-hidden="true">chevron_right</span></button>
-      </div>`
-    : "";
+  const versionSwitcher = _renderVersionSwitcher(node);
   const branchSwitcher = renderBranchSwitcher(node);
   const switcher = [versionSwitcher, branchSwitcher].filter(Boolean).join("");
   const isStreamingThisNode = isGenerating && generatingNodeId === node.id;
@@ -2520,16 +2513,9 @@ function renderMessage(node) {
   `;
 }
 
-function renderBranchSwitcher(node) {
-  const parent = getNode(node.parentId);
-  if (!parent || parent.children.length < 2) return "";
-  const index = parent.children.indexOf(node.id) + 1;
-  return `<div class="switcher switcher--branch" role="group" aria-label="分支切换">
-    <button type="button" class="switcher__btn" data-command="prev-branch" data-node-id="${node.id}" aria-label="上一分支"><span class="md-icon md-icon--sz-20" aria-hidden="true">chevron_left</span></button>
-    <span class="switcher__index">${index}/${parent.children.length}</span>
-    <button type="button" class="switcher__btn" data-command="next-branch" data-node-id="${node.id}" aria-label="下一分支"><span class="md-icon md-icon--sz-20" aria-hidden="true">chevron_right</span></button>
-  </div>`;
-}
+// renderBranchSwitcher delegates to render-helpers.js with the live
+// session-tree getNode injected.
+const renderBranchSwitcher = (node) => _renderBranchSwitcher(node, { getNode });
 
 function renderMenu() {
   if (activeRoundtableMessageId) {
