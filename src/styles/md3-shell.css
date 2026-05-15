@@ -1256,3 +1256,109 @@ body.is-generating .app .composer .send-button {
   background: transparent;
   color: var(--md-sys-color-on-surface-variant);
 }
+
+/* ============================================================== */
+/* Roundtable members panel — promote to M3 bottom sheet            */
+/* ============================================================== */
+.roundtable-member-panel {
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface);
+  border-top-left-radius: var(--md-sys-shape-corner-extra-large);
+  border-top-right-radius: var(--md-sys-shape-corner-extra-large);
+  box-shadow: var(--md-sys-elevation-level3);
+  padding: 0 16px 16px;
+  position: relative;
+}
+.roundtable-member-panel::before {
+  content: "";
+  display: block;
+  width: 32px;
+  height: 4px;
+  margin: 12px auto 8px;
+  background: var(--md-sys-color-on-surface-variant);
+  opacity: 0.4;
+  border-radius: var(--md-sys-shape-corner-full);
+}
+.roundtable-member-panel .roundtable-member,
+.roundtable-member-panel .member-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--md-sys-shape-corner-medium);
+  background: var(--md-sys-color-surface-container-low);
+  margin-bottom: 6px;
+}
+.roundtable-member-panel .roundtable-member.is-selected {
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+}
+.roundtable-member-panel button.icon-button {
+  background: transparent;
+  border-radius: 9999px;
+  width: 36px;
+  height: 36px;
+}
+
+/* ============================================================== */
+/* Manuscript paper — drag handle pill (M3 sheet handle)            */
+/* ============================================================== */
+.manuscript-paper .paper-grip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 0 8px;
+  background: transparent;
+  color: var(--md-sys-color-on-surface-variant);
+  border-radius: var(--md-sys-shape-corner-medium);
+  cursor: grab;
+  position: relative;
+  isolation: isolate;
+}
+.manuscript-paper .paper-grip::before {
+  content: "";
+  display: block;
+  width: 32px;
+  height: 4px;
+  background: var(--md-sys-color-on-surface-variant);
+  opacity: 0.5;
+  border-radius: 9999px;
+}
+.manuscript-paper .paper-grip-ribs { display: none; }   /* superseded by ::before */
+.manuscript-paper .paper-grip-copy {
+  font: var(--md-sys-typescale-label-small);
+  color: var(--md-sys-color-on-surface-variant);
+  letter-spacing: 0.05em;
+}
+.manuscript-paper .paper-grip-meter {
+  font: var(--md-sys-typescale-label-small);
+  color: var(--md-sys-color-on-surface-variant);
+  font-variant-numeric: tabular-nums;
+  background: var(--md-sys-color-surface-container-highest);
+  padding: 1px 6px;
+  border-radius: 9999px;
+}
+.manuscript-paper .paper-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 4px;
+  font: var(--md-sys-typescale-label-large);
+  color: var(--md-sys-color-on-surface-variant);
+}
+.manuscript-paper .paper-meta button {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 9999px;
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+  font: var(--md-sys-typescale-label-medium);
+  border: 0;
+}
+.manuscript-paper .paper-scroll-viewport {
+  padding: 4px 16px 16px;
+  font: var(--md-sys-typescale-body-large);
+  line-height: 1.7;
+  color: var(--md-sys-color-on-surface);
+}
