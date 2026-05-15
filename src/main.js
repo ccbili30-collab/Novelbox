@@ -120,6 +120,7 @@ import { showConfirm, showAlert, showPrompt } from "./ui/components/dialog.js";
 import { initThemeEngine, setThemeMode, setSeedColor, getThemeMode, getSeedColor } from "./ui/components/theme-engine.js";
 import { bindScrollAwareBar } from "./ui/components/scroll-aware-bars.js";
 import { bindKeyboardHelpShortcut, openKeyboardHelp } from "./ui/components/keyboard-help.js";
+import { checkAndAnnounceUpgrade, VERSION as APP_VERSION } from "./ui/components/whats-new.js";
 import { bindCommandDelegation } from "./ui/bindings/event-binding.js";
 import { createPanelManager } from "./ui/panels/panel-manager.js";
 import { renderContextBadge as drawContextBadge, renderContextPanel as drawContextPanel } from "./ui/renderers/context-renderer.js";
@@ -7200,6 +7201,14 @@ window.tbirdTheme = { setThemeMode, setSeedColor, getThemeMode, getSeedColor };
 // `?` opens the keyboard help dialog. Bound globally except inside inputs.
 bindKeyboardHelpShortcut();
 window.tbirdHelp = { openKeyboardHelp };
+
+// First load after upgrade: surface a "What's new" snackbar, with an
+// action that pops the keyboard help dialog so users discover the
+// new chrome.
+try {
+  checkAndAnnounceUpgrade({ onLearnMore: openKeyboardHelp });
+  window.tbirdVersion = APP_VERSION;
+} catch (_) { /* SSR / test */ }
 
 // Scroll-to-bottom FAB — visible only when the chat scroller is not
 // near the bottom AND the list has content. Empty state — visible only

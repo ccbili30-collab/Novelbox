@@ -69,3 +69,10 @@ test("session-renderer module exports renderSessions and is callable", async () 
   const { renderSessions } = await import("../src/ui/renderers/session-renderer.js");
   assert.equal(typeof renderSessions, "function");
 });
+
+test("whats-new module exports VERSION + checkAndAnnounceUpgrade", async () => {
+  const { VERSION, checkAndAnnounceUpgrade } = await import("../src/ui/components/whats-new.js");
+  assert.equal(typeof VERSION, "string");
+  assert.match(VERSION, /\d+\.\d+/);
+  assert.equal(typeof checkAndAnnounceUpgrade, "function");
+});
