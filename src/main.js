@@ -137,6 +137,7 @@ import {
   wireAssistantConfigInputs,
 } from "./app/runtime/wire-events.js";
 import { createSettingsRenderer } from "./ui/renderers/settings-renderer.js";
+import { createGenerationControl, runStopHooks } from "./app/runtime/generation-control.js";
 import {
   roundtableDateKey as _roundtableDateKey,
   renderRoundtableEmpty as _renderRoundtableEmpty,
@@ -3718,11 +3719,21 @@ function renderStreamingNode(nodeId, versionId, options = {}) {
 
 function stopGeneration() {
   if (!isGenerating) return;
-  abortController?.abort();
-  bridgeClient.cancelBridgeRequest(bridgeRequestId);
-  if (streamRequestId && bridgeStreamCallbacks.has(streamRequestId)) {
-    bridgeClient.cancelBridgeRequest(streamRequestId);
-  }
+  // Cancel orchestration moved to runStopHooks() in
+  // src/app/runtime/generation-control.js. Each hook is null-safely
+  // invoked per token (abort / bridge req / stream req).
+  runStopHooks({
+    abortController,
+    bridgeRequestId,
+    streamRequestId,
+    hooks: {
+      onAbort:        (ac) => ac.abort(),
+      onCancelBridge: (id) => bridgeClient.cancelBridgeRequest(id),
+      onCancelStream: (id) => {
+        if (bridgeStreamCallbacks.has(id)) bridgeClient.cancelBridgeRequest(id);
+      },
+    },
+  });
   isGenerating = false;
   abortController = null;
   bridgeRequestId = null;
