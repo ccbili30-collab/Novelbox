@@ -1362,3 +1362,152 @@ body.is-generating .app .composer .send-button {
   line-height: 1.7;
   color: var(--md-sys-color-on-surface);
 }
+
+/* ============================================================== */
+/* Side-panel forms — fields, labels, switches, range, checkbox     */
+/* Standardise look across history / settings / workspace / novel.  */
+/* ============================================================== */
+.side-panel .field,
+.side-panel label.field,
+.side-panel .form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 16px;
+}
+.side-panel .field > span:first-child,
+.side-panel .form-field > label {
+  font: var(--md-sys-typescale-label-large);
+  color: var(--md-sys-color-on-surface);
+}
+.side-panel .field .muted,
+.side-panel .form-field .muted,
+.side-panel .field-hint {
+  font: var(--md-sys-typescale-body-small);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+/* Section title rows */
+.side-panel .section-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 16px 4px;
+}
+.side-panel .section-title strong {
+  font: var(--md-sys-typescale-title-medium);
+  color: var(--md-sys-color-on-surface);
+  font-weight: 500;
+}
+.side-panel .section-title .muted {
+  font: var(--md-sys-typescale-label-small);
+  color: var(--md-sys-color-on-surface-variant);
+  letter-spacing: 0.04em;
+}
+
+/* Section card grouping */
+.side-panel .settings-section {
+  background: var(--md-sys-color-surface-container-low);
+  border-radius: var(--md-sys-shape-corner-large);
+  margin: 4px 12px 12px;
+  padding-bottom: 8px;
+}
+
+/* Action buttons inside settings */
+.side-panel .settings-section button:not(.icon-button):not(.md-icon-button):not(.md-segmented__seg):not(.md-seed):not(.md-button) {
+  height: 40px;
+  padding: 0 18px;
+  border-radius: 9999px;
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+  font: var(--md-sys-typescale-label-large);
+  border: 0;
+  margin: 4px 16px 4px 0;
+  position: relative;
+  isolation: isolate;
+}
+.side-panel .settings-section button.danger-button,
+.side-panel .danger-button {
+  background: var(--md-sys-color-error-container) !important;
+  color: var(--md-sys-color-on-error-container) !important;
+}
+.side-panel .settings-section button.primary-button,
+.side-panel .primary-button {
+  background: var(--md-sys-color-primary) !important;
+  color: var(--md-sys-color-on-primary) !important;
+}
+.side-panel .settings-section button:not(.icon-button):not(.md-icon-button)::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit;
+  background: currentColor; opacity: 0; pointer-events: none;
+  transition: opacity var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard);
+}
+.side-panel .settings-section button:not(.icon-button):not(.md-icon-button):hover::before  { opacity: 0.10; }
+.side-panel .settings-section button:not(.icon-button):not(.md-icon-button):active::before { opacity: 0.18; }
+
+/* Range slider — M3 continuous slider look */
+.side-panel input[type="range"] {
+  appearance: none;
+  width: 100%;
+  height: 24px;
+  background: transparent;
+  cursor: pointer;
+}
+.side-panel input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  background: var(--md-sys-color-surface-container-highest);
+  border-radius: 9999px;
+}
+.side-panel input[type="range"]::-moz-range-track {
+  height: 4px;
+  background: var(--md-sys-color-surface-container-highest);
+  border-radius: 9999px;
+}
+.side-panel input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: var(--md-sys-color-primary);
+  margin-top: -8px;
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--md-sys-color-primary) 24%, transparent);
+  transition: box-shadow var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard);
+}
+.side-panel input[type="range"]:focus::-webkit-slider-thumb,
+.side-panel input[type="range"]:hover::-webkit-slider-thumb {
+  box-shadow: 0 0 0 8px color-mix(in srgb, var(--md-sys-color-primary) 24%, transparent);
+}
+.side-panel input[type="range"]::-moz-range-thumb {
+  width: 20px; height: 20px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--md-sys-color-primary);
+}
+
+/* Checkbox — M3 filled */
+.side-panel input[type="checkbox"] {
+  appearance: none;
+  width: 18px; height: 18px;
+  border: 2px solid var(--md-sys-color-on-surface-variant);
+  border-radius: 2px;
+  background: transparent;
+  vertical-align: middle;
+  position: relative;
+  cursor: pointer;
+  transition: background-color var(--md-sys-motion-duration-short3)
+              var(--md-sys-motion-easing-standard),
+              border-color var(--md-sys-motion-duration-short3)
+              var(--md-sys-motion-easing-standard);
+}
+.side-panel input[type="checkbox"]:checked {
+  background: var(--md-sys-color-primary);
+  border-color: var(--md-sys-color-primary);
+}
+.side-panel input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  left: 4px; top: 0;
+  width: 6px; height: 11px;
+  border: solid var(--md-sys-color-on-primary);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
