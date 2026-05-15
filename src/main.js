@@ -158,6 +158,7 @@ import {
 import { createPersistencePipeline } from "./app/runtime/persistence-pipeline.js";
 import { createRenderPipeline } from "./app/runtime/render-pipeline.js";
 import { createStateContext } from "./app/runtime/state-context.js";
+import { createScrollFollower, createLayoutApplier } from "./app/runtime/scroll-and-layout.js";
 
 const $ = (selector) => document.querySelector(selector);
 // All DOM selectors live in src/app/runtime/dom-registry.js so the
@@ -1497,16 +1498,11 @@ function contextInfo(extraUserText = "") {
   return { messages, text, nonSystem, limit, tokens: estimateTokens(text) };
 }
 
-function shouldFollowBottom() {
-  return els.messages.scrollHeight - els.messages.scrollTop - els.messages.clientHeight < 90;
-}
-
-function scrollBottom(force = false) {
-  requestAnimationFrame(() => {
-    if (!force && !shouldFollowBottom()) return;
-    els.messages.scrollTop = els.messages.scrollHeight;
-  });
-}
+// Scroll follower factored into src/app/runtime/scroll-and-layout.js
+// so the scroller, threshold and rAF use are unit-testable.
+const _scroll = createScrollFollower(els.messages, 90);
+const shouldFollowBottom = _scroll.shouldFollowBottom;
+const scrollBottom       = _scroll.scrollBottom;
 
 // 127 call-sites use showToast(). Rather than rip them out, we route
 // through the new MD3 snackbar (FIFO queue, ARIA-live, M3 motion). The
@@ -1701,32 +1697,18 @@ function ensureAssistantModelPickerUi() {
   }
 }
 
-function applyLayout() {
-  const layout = sessionSettings().layout;
-  const root = document.documentElement.style;
-  root.setProperty("--composer-min-height", `${layout.composerMinHeight}px`);
-  root.setProperty("--composer-font-size", `${layout.composerFontSize}px`);
-  root.setProperty("--send-button-size", `${layout.sendButtonSize}px`);
-  root.setProperty("--tool-button-size", `${layout.toolButtonSize}px`);
-  root.setProperty("--font-size", `${layout.messageFontSize}px`);
-  root.setProperty("--line-height", `${layout.messageLineHeight / 100}`);
-  root.setProperty("--assistant-left", `${layout.assistantLeft}px`);
-  root.setProperty("--message-side-padding", `${layout.messageSidePadding}px`);
-  root.setProperty("--message-gap", `${layout.messageGap}px`);
-  root.setProperty("--user-bubble-padding-y", `${layout.userBubblePadding}px`);
-  root.setProperty("--user-bubble-padding-x", `${Math.round(layout.userBubblePadding * 1.3)}px`);
-  root.setProperty("--meta-font-size", `${layout.metaFontSize}px`);
-  root.setProperty("--footer-gap", `${layout.footerGap}px`);
-  root.setProperty("--more-button-size", `${layout.moreButtonSize}px`);
-  root.setProperty("--composer-max-textarea", `${Math.max(44, layout.composerMinHeight + 8)}px`);
-}
-
-function applySessionAppearance() {
-  const appearance = sessionAppearance();
-  const background = clean(appearance.backgroundDataUrl);
-  document.documentElement.style.setProperty("--session-bg-image", background ? `url("${background}")` : "none");
-  els.body.classList.toggle("has-session-background", Boolean(background));
-}
+// Layout/appearance writers factored into scroll-and-layout.js. The
+// applier closes over the live state-context getters so it always
+// reads the freshest layout/appearance for the *current* session.
+const _layout = createLayoutApplier({
+  root: document.documentElement,
+  body: els.body,
+  getLayout:     () => sessionSettings().layout,
+  getAppearance: () => sessionAppearance(),
+  clean,
+});
+const applyLayout            = _layout.applyLayout;
+const applySessionAppearance = _layout.applySessionAppearance;
 
 // Persist is debounced via requestIdleCallback so dozens of state writes
 // during streaming or rapid composer typing collapse to a single
