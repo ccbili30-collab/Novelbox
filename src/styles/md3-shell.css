@@ -541,3 +541,85 @@ body.is-generating .app .composer .send-button {
   font: var(--md-sys-typescale-body-small);
   color: var(--md-sys-color-on-surface-variant);
 }
+
+/* ============================================================== */
+/* M3 standard navigation drawer motion
+ * Replace the legacy keyframe-only enter (no exit motion) with
+ * symmetrical slide+fade on `hidden` toggle. Trick: keep `hidden`
+ * as the source of truth, but stop the global `[hidden] { display:
+ * none !important }` rule from short-circuiting the exit by using a
+ * higher-specificity rule that swaps display:none for visibility +
+ * transform. Pointer events follow visibility so closed panels
+ * never intercept clicks.
+ */
+.app .side-panel,
+.app .side-panel.left-panel,
+.app .side-panel.right-panel {
+  animation: none;                                /* override legacy keyframe */
+  transition:
+    transform var(--md-sys-motion-duration-medium4)
+              var(--md-sys-motion-easing-emphasized-decelerate),
+    opacity   var(--md-sys-motion-duration-medium2)
+              var(--md-sys-motion-easing-standard),
+    visibility 0s linear var(--md-sys-motion-duration-medium4);
+  will-change: transform, opacity;
+}
+/* Open state */
+.app .side-panel:not([hidden]) {
+  visibility: visible;
+  opacity: 1;
+  transform: translateX(0);
+  transition-delay: 0s, 0s, 0s;
+}
+.app .side-panel.left-panel:not([hidden])  { transform: translateX(0); }
+.app .side-panel.right-panel:not([hidden]) { transform: translateX(0); }
+/* Closed state — beat the global [hidden]{display:none!important} rule
+ * by raising specificity (.app + tag + class + attribute selector). */
+.app aside.side-panel[hidden] {
+  display: block !important;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+.app aside.side-panel.left-panel[hidden]  { transform: translateX(-104%); }
+.app aside.side-panel.right-panel[hidden] { transform: translateX(104%); }
+
+.app .backdrop {
+  animation: none;
+  transition:
+    opacity var(--md-sys-motion-duration-medium2) var(--md-sys-motion-easing-standard),
+    visibility 0s linear var(--md-sys-motion-duration-medium2);
+}
+.app .backdrop:not([hidden]) {
+  visibility: visible;
+  opacity: 1;
+  transition-delay: 0s, 0s;
+}
+.app .backdrop[hidden] {
+  display: block !important;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Bottom panel (context dock etc.) — slide up/down. */
+.app .bottom-panel {
+  animation: none;
+  transition:
+    transform var(--md-sys-motion-duration-medium4)
+              var(--md-sys-motion-easing-emphasized-decelerate),
+    opacity   var(--md-sys-motion-duration-medium2)
+              var(--md-sys-motion-easing-standard),
+    visibility 0s linear var(--md-sys-motion-duration-medium4);
+}
+.app .bottom-panel:not([hidden]) {
+  visibility: visible; opacity: 1; transform: translateY(0);
+  transition-delay: 0s, 0s, 0s;
+}
+.app .bottom-panel[hidden] {
+  display: block !important;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(20px) scale(0.985);
+}
