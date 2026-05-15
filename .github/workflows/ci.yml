@@ -1,0 +1,129 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, "claude/**" ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: node:test (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["20", "22"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Print versions
+        run: |
+          node --version
+          npm --version
+
+      - name: Install (no production deps; install runs scripts off)
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Unit tests (node:test)
+        run: npm test
+
+  smoke:
+    name: dev-server smoke check
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+
+      - name: Boot dev-server in the background
+        run: |
+          PORT=5177 node dev-server.mjs &
+          echo $! > .server.pid
+          # Wait for the port to accept connections (max ~10s).
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            if curl -sSf http://127.0.0.1:5177/index.html >/dev/null 2>&1; then
+              echo "dev-server is up"; exit 0
+            fi
+            sleep 1
+          done
+          echo "dev-server did not come up"; exit 1
+
+      - name: Smoke fetch index + main bundle + tokens
+        run: |
+          set -eux
+          curl -sSf http://127.0.0.1:5177/index.html | grep -q "TBird Roundtable Box"
+          curl -sSf http://127.0.0.1:5177/src/main.js >/dev/null
+          curl -sSf http://127.0.0.1:5177/src/styles/tokens.css | grep -q "md-sys-color-primary"
+          curl -sSf http://127.0.0.1:5177/src/styles/md3.css   | grep -q "md-button"
+
+      - name: Stop dev-server
+        if: always()
+        run: |
+          if [ -f .server.pid ]; then
+            kill "$(cat .server.pid)" || true
+            rm -f .server.pid
+          fi
+
+  lint:
+    name: lint (node --check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+
+      - name: Syntax-check every .mjs / .js source file
+        run: |
+          set -eu
+          fail=0
+          while IFS= read -r f; do
+            if ! node --check "$f"; then
+              echo "::error file=$f::syntax error"
+              fail=1
+            fi
+          done < <(find src scripts tests dev-server.mjs -type f \( -name '*.js' -o -name '*.mjs' \))
+          exit $fail
+
+  android:
+    name: build android debug apk
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Cache gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('android-app/**/*.gradle*', 'android-app/**/gradle-wrapper.properties') }}
+      - name: Assemble debug APK
+        working-directory: android-app
+        run: ./gradlew assembleDebug --no-daemon
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug.apk
+          path: android-app/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: warn
