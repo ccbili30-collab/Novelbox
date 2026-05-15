@@ -623,3 +623,106 @@ body.is-generating .app .composer .send-button {
   pointer-events: none;
   transform: translateY(20px) scale(0.985);
 }
+
+/* ============================================================== */
+/* Settings home M3 list                                           */
+/* ============================================================== */
+.settings-home {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 24px;
+}
+.settings-backup-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.settings-backup-row button {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  border-radius: 9999px;
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+  font: var(--md-sys-typescale-label-large);
+  border: 0;
+  position: relative;
+  isolation: isolate;
+}
+.settings-backup-row button::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit;
+  background: currentColor; opacity: 0; pointer-events: none;
+  transition: opacity var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard);
+}
+.settings-backup-row button:hover::before  { opacity: 0.08; }
+.settings-backup-row button:active::before { opacity: 0.16; }
+
+.settings-slot {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  min-height: 72px;
+  padding: 12px 16px;
+  background: var(--md-sys-color-surface-container-low);
+  color: var(--md-sys-color-on-surface);
+  border: 0;
+  border-radius: var(--md-sys-shape-corner-large);
+  text-align: start;
+  position: relative;
+  isolation: isolate;
+  transition: background-color var(--md-sys-motion-duration-short3)
+              var(--md-sys-motion-easing-standard),
+              transform var(--md-sys-motion-duration-medium2)
+              var(--md-sys-motion-easing-emphasized);
+}
+.settings-slot::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit;
+  background: currentColor; opacity: 0; pointer-events: none;
+  transition: opacity var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard);
+}
+.settings-slot:hover::before  { opacity: 0.06; }
+.settings-slot:active::before { opacity: 0.12; }
+.settings-slot:active        { transform: scale(0.99); }
+.settings-slot__icon {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-primary);
+  flex-shrink: 0;
+  font-size: 24px;
+}
+.settings-slot__copy {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.settings-slot__copy b {
+  font: var(--md-sys-typescale-body-large);
+  font-weight: 500;
+  color: var(--md-sys-color-on-surface);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.settings-slot__copy span {
+  font: var(--md-sys-typescale-body-medium);
+  color: var(--md-sys-color-on-surface-variant);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.settings-slot__chevron {
+  color: var(--md-sys-color-on-surface-variant);
+  flex-shrink: 0;
+}

@@ -111,24 +111,48 @@
 
       <section class="settings-home" data-settings-view="home">
         <div class="settings-backup-row">
-          <button type="button" data-command="export-global-backup">导出全局备份</button>
-          <button type="button" data-command="import-global-backup">导入全局备份</button>
+          <button type="button" data-command="export-global-backup"><span class="md-icon md-icon--sz-20" aria-hidden="true">file_download</span>导出全局备份</button>
+          <button type="button" data-command="import-global-backup"><span class="md-icon md-icon--sz-20" aria-hidden="true">file_upload</span>导入全局备份</button>
         </div>
         <button class="settings-slot" type="button" data-command="open-settings-page" data-settings-page="model">
-          <b>模型配置</b>
-          <span>默认 API、主线模型和生成参数</span>
+          <span class="settings-slot__icon md-icon" aria-hidden="true">smart_toy</span>
+          <span class="settings-slot__copy">
+            <b>模型配置</b>
+            <span>默认 API、主线模型和生成参数</span>
+          </span>
+          <span class="settings-slot__chevron md-icon" aria-hidden="true">chevron_right</span>
         </button>
         <button class="settings-slot" type="button" data-command="open-settings-page" data-settings-page="appearance">
-          <b>本会话外观</b>
-          <span>你的名字、头像和背景</span>
+          <span class="settings-slot__icon md-icon" aria-hidden="true">palette</span>
+          <span class="settings-slot__copy">
+            <b>外观与主题</b>
+            <span>Material You 主题、用户名、头像和背景</span>
+          </span>
+          <span class="settings-slot__chevron md-icon" aria-hidden="true">chevron_right</span>
         </button>
         <button class="settings-slot" type="button" data-command="open-settings-page" data-settings-page="layout">
-          <b>排版调试</b>
-          <span>输入区、气泡和字号数值</span>
+          <span class="settings-slot__icon md-icon" aria-hidden="true">design_services</span>
+          <span class="settings-slot__copy">
+            <b>排版调试</b>
+            <span>输入区、气泡和字号数值</span>
+          </span>
+          <span class="settings-slot__chevron md-icon" aria-hidden="true">chevron_right</span>
         </button>
         <button class="settings-slot" type="button" data-command="open-settings-page" data-settings-page="creators">
-          <b>创作者们</b>
-          <span>主创、议员、记忆库和所在圆桌</span>
+          <span class="settings-slot__icon md-icon" aria-hidden="true">groups</span>
+          <span class="settings-slot__copy">
+            <b>创作者们</b>
+            <span>主创、议员、记忆库和所在圆桌</span>
+          </span>
+          <span class="settings-slot__chevron md-icon" aria-hidden="true">chevron_right</span>
+        </button>
+        <button class="settings-slot" type="button" data-command="open-keyboard-help">
+          <span class="settings-slot__icon md-icon" aria-hidden="true">keyboard</span>
+          <span class="settings-slot__copy">
+            <b>键盘快捷键</b>
+            <span>所有支持的快捷键 · 可随时按 ?</span>
+          </span>
+          <span class="settings-slot__chevron md-icon" aria-hidden="true">chevron_right</span>
         </button>
       </section>
 
