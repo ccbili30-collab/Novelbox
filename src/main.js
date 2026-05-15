@@ -167,6 +167,12 @@ import {
 } from "./app/runtime/message-signature.js";
 import { createStreamBatcher } from "./app/runtime/stream-batcher.js";
 import {
+  formatBytes as _formatBytes,
+  buildChatAttachmentPrompt as _buildChatAttachmentPrompt,
+  buildChatImagePrompt as _buildChatImagePrompt,
+  buildUserTextWithAttachments as _buildUserTextWithAttachments,
+} from "./app/runtime/attachment-prompts.js";
+import {
   cssEscape as _cssEscape,
   renderChatContent as _renderChatContent,
   renderBranchSwitcher as _renderBranchSwitcher,
@@ -1083,32 +1089,19 @@ function buildUserRequestContent(text, attachments = []) {
   return content;
 }
 
-function buildChatAttachmentPrompt(attachments = []) {
-  const files = normalizeChatAttachments(attachments).filter((item) => item.kind !== "image");
-  if (!files.length) return "";
-  return [
-    "【用户本轮附件】",
-    ...files.map((file, index) => {
-      const title = `${index + 1}. ${file.name}${file.size ? `（${formatBytes(file.size)}）` : ""}`;
-      if (file.textExcerpt) return `${title}\n${file.textExcerpt}`;
-      return `${title}\n（此文件已附加为索引，但当前版本暂未读取全文；请使用 TXT/MD/JSON/CSV/YAML/LOG 这类基础文本文件。）`;
-    }),
-  ].join("\n\n");
-}
-
-function buildChatImagePrompt(attachments = []) {
-  const images = normalizeChatAttachments(attachments).filter((item) => item.kind === "image");
-  if (!images.length) return "";
-  return `【用户本轮图片】\n${images.map((image, index) => `${index + 1}. ${image.name}${image.size ? `（${formatBytes(image.size)}）` : ""}`).join("\n")}`;
-}
-
-function buildUserTextWithAttachments(text, attachments = []) {
-  return [
-    clean(text),
-    buildChatAttachmentPrompt(attachments),
-    buildChatImagePrompt(attachments),
-  ].filter(Boolean).join("\n\n");
-}
+// Pure prompt builders moved to src/app/runtime/attachment-prompts.js.
+// Thin closures inject the live normalizer + clean helper.
+const _attachOpts = { limit: CHAT_ATTACHMENT_LIMIT, textLimit: CHAT_TEXT_EXCERPT_LIMIT };
+const buildChatAttachmentPrompt = (attachments = []) =>
+  _buildChatAttachmentPrompt(attachments, { normalizeChatAttachments: _normalizeChatAttachments, opts: _attachOpts });
+const buildChatImagePrompt = (attachments = []) =>
+  _buildChatImagePrompt(attachments, { normalizeChatAttachments: _normalizeChatAttachments, opts: _attachOpts });
+const buildUserTextWithAttachments = (text, attachments = []) =>
+  _buildUserTextWithAttachments(text, attachments, {
+    clean,
+    normalizeChatAttachments: _normalizeChatAttachments,
+    opts: _attachOpts,
+  });
 
 function buildRoundtableInstructionPayload(text, attachments = []) {
   const items = normalizeChatAttachments(attachments);
@@ -3091,12 +3084,8 @@ function renderNovelPanel() {
   renderNovelSegments();
 }
 
-function formatBytes(bytes) {
-  const size = Number(bytes) || 0;
-  if (size >= 1024 * 1024) return `${Math.round(size / 1024 / 102.4) / 10} MB`;
-  if (size >= 1024) return `${Math.round(size / 102.4) / 10} KB`;
-  return `${size} B`;
-}
+// formatBytes lives in src/app/runtime/attachment-prompts.js.
+const formatBytes = _formatBytes;
 
 function renderWorkspacePanel() {
   workspaceController.renderWorkspacePanel();
