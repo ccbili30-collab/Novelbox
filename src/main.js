@@ -6419,6 +6419,7 @@ function buildRoundtableMessages(assistant, instruction) {
 
 const handleCommand = createCommandRegistry({
   "open-history": () => showPanel("history"),
+  "open-keyboard-help": () => openKeyboardHelp(),
   "open-settings": () => openSettingsPanel(),
   "settings-home": () => openSettingsPage("home"),
   "open-settings-page": (target) => openSettingsPage(target.dataset.settingsPage),
