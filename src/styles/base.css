@@ -1,6 +1,17 @@
 * {
   box-sizing: border-box;
+  /* Kill the iOS/Android grey-flash on every tap — M3 uses our own
+   * state layers, never the system tap highlight.
+   */
+  -webkit-tap-highlight-color: transparent;
+  /* Stop double-tap zoom and the 300ms tap delay on iOS Safari. */
+  touch-action: manipulation;
 }
+::before,
+::after { -webkit-tap-highlight-color: transparent; }
+
+html { text-size-adjust: 100%; -webkit-text-size-adjust: 100%; }
+img, svg, picture { user-select: none; -webkit-user-drag: none; }
 
 html,
 body {
@@ -9,9 +20,13 @@ body {
   margin: 0;
   overflow: hidden;
   overscroll-behavior: none;
-  background: var(--bg);
-  color: var(--text);
-  font-family: "Microsoft YaHei", "微软雅黑", system-ui, sans-serif;
+  background: var(--md-sys-color-surface);
+  color: var(--md-sys-color-on-surface);
+  font-family: var(--md-ref-typeface-plain);
+  font-feature-settings: "ss01", "cv11"; /* Roboto Flex stylistic alts */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 body {
@@ -57,13 +72,41 @@ textarea {
     transform var(--motion-fast);
 }
 
+/* M3 focus indicator: 3px outline in primary, 2px offset.
+ * Only shows on keyboard navigation thanks to :focus-visible.
+ */
 button:focus-visible,
 summary:focus-visible,
 select:focus-visible,
 input:focus-visible,
-textarea:focus-visible {
-  outline: 2px solid rgba(34, 34, 34, 0.18);
+textarea:focus-visible,
+a:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid var(--md-sys-color-primary);
   outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Selection — primary container per M3 spec. */
+::selection {
+  background: color-mix(in srgb, var(--md-sys-color-primary) 32%, transparent);
+  color: var(--md-sys-color-on-surface);
+}
+
+/* M3 scrollbars. WebKit/Blink only; Firefox uses scrollbar-color below. */
+* { scrollbar-width: thin; scrollbar-color: var(--md-sys-color-outline-variant) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--md-sys-color-on-surface) 24%, transparent);
+  border-radius: var(--md-sys-shape-corner-full);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--md-sys-color-on-surface) 40%, transparent);
+  background-clip: padding-box;
+  border: 2px solid transparent;
 }
 
 .motion-ripple {

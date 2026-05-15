@@ -1,0 +1,475 @@
+/*
+ * MD3 shell — re-skin the legacy app shell (topbar, composer, side
+ * panels, message menu, manuscript paper) to follow M3 patterns
+ * without touching the imperative DOM in main.js.
+ *
+ * Loaded *after* components.css and panels.css so it overrides
+ * legacy declarations. Selectors mirror the existing markup so the
+ * 7000-line controller keeps working unchanged.
+ */
+
+/* ============================================================== */
+/* Top app bar (.topbar in legacy markup)                          */
+/* ============================================================== */
+.app .topbar {
+  background: var(--md-sys-color-surface);
+  color: var(--md-sys-color-on-surface);
+  border-bottom: 0;
+  padding-top: var(--safe-area-top);
+  padding-inline: 4px;
+  height: calc(64px + var(--safe-area-top));
+  min-height: calc(64px + var(--safe-area-top));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background-color var(--md-sys-motion-duration-medium2)
+              var(--md-sys-motion-easing-standard),
+              box-shadow var(--md-sys-motion-duration-medium2)
+              var(--md-sys-motion-easing-standard);
+  z-index: 5;
+}
+.app .topbar.is-scrolled {
+  background: var(--md-sys-color-surface-container);
+}
+
+.app .topbar h1#sessionTitle {
+  flex: 1;
+  margin: 0;
+  font: var(--md-sys-typescale-title-large);
+  color: var(--md-sys-color-on-surface);
+  letter-spacing: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-inline: 8px;
+}
+
+.app .topbar .top-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Promote legacy .icon-button to a 40x40 MD3 icon button with state layer. */
+.app .icon-button {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  border-radius: 9999px;
+  background: transparent;
+  color: var(--md-sys-color-on-surface-variant);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: var(--md-sys-typescale-label-large);
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  transition: background-color var(--md-sys-motion-duration-short3)
+              var(--md-sys-motion-easing-standard),
+              color var(--md-sys-motion-duration-short3)
+              var(--md-sys-motion-easing-standard);
+}
+.app .icon-button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: currentColor;
+  border-radius: inherit;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard);
+}
+.app .icon-button:hover::before { opacity: 0.08; }
+.app .icon-button:focus-visible::before { opacity: 0.12; }
+.app .icon-button:active::before { opacity: 0.16; }
+
+/* Source/article anchor buttons in the top bar. */
+.app .topbar .source-link {
+  display: inline-flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 9999px;
+  font: var(--md-sys-typescale-label-large);
+  color: var(--md-sys-color-primary);
+  text-decoration: none;
+  position: relative;
+  isolation: isolate;
+}
+.app .topbar .source-link::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit;
+  background: currentColor; opacity: 0; pointer-events: none;
+  transition: opacity var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard);
+}
+.app .topbar .source-link:hover::before { opacity: 0.08; }
+.app .topbar .source-link:focus-visible::before { opacity: 0.12; }
+
+/* ============================================================== */
+/* Composer (.composer)                                            */
+/* ============================================================== */
+.app .composer {
+  background: var(--md-sys-color-surface-container);
+  border-top: 0;
+  padding: 8px 12px calc(8px + var(--safe-area-bottom));
+  border-top-left-radius: var(--md-sys-shape-corner-extra-large);
+  border-top-right-radius: var(--md-sys-shape-corner-extra-large);
+  box-shadow: var(--md-sys-elevation-level1);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+  z-index: 4;
+}
+
+.app .composer textarea#chatInput {
+  background: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-on-surface);
+  border: 0;
+  border-radius: var(--md-sys-shape-corner-extra-large);
+  padding: 14px 18px;
+  min-height: 48px;
+  max-height: 188px;
+  font: var(--md-sys-typescale-body-large);
+  resize: none;
+  outline: none;
+  transition: background-color var(--md-sys-motion-duration-short3)
+              var(--md-sys-motion-easing-standard),
+              box-shadow var(--md-sys-motion-duration-short3)
+              var(--md-sys-motion-easing-standard);
+}
+.app .composer textarea#chatInput::placeholder {
+  color: var(--md-sys-color-on-surface-variant);
+}
+.app .composer textarea#chatInput:focus {
+  background: var(--md-sys-color-surface-container-high);
+  box-shadow: inset 0 0 0 2px var(--md-sys-color-primary);
+}
+
+.app .composer-bottom {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.app .composer .round-button,
+.app .composer .composer-tool-button,
+.app .composer .composer-add-button,
+.app .composer .roundtable-cycle-button {
+  width: 40px;
+  height: 40px;
+  border-radius: 9999px;
+  background: transparent;
+  color: var(--md-sys-color-on-surface-variant);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: var(--md-sys-typescale-label-large);
+  position: relative;
+  isolation: isolate;
+}
+.app .composer .round-button::before,
+.app .composer .composer-tool-button::before,
+.app .composer .composer-add-button::before,
+.app .composer .roundtable-cycle-button::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit;
+  background: currentColor; opacity: 0; pointer-events: none;
+  transition: opacity var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard);
+}
+.app .composer .round-button:hover::before,
+.app .composer .composer-tool-button:hover::before,
+.app .composer .composer-add-button:hover::before,
+.app .composer .roundtable-cycle-button:hover::before { opacity: 0.08; }
+.app .composer .round-button:active::before,
+.app .composer .composer-tool-button:active::before,
+.app .composer .composer-add-button:active::before,
+.app .composer .roundtable-cycle-button:active::before { opacity: 0.16; }
+
+.app .composer #modelSelect {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 9999px;
+  background: transparent;
+  color: var(--md-sys-color-on-surface);
+  padding: 0 14px;
+  font: var(--md-sys-typescale-label-large);
+  appearance: none;
+  cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, var(--md-sys-color-on-surface-variant) 50%),
+                    linear-gradient(135deg, var(--md-sys-color-on-surface-variant) 50%, transparent 50%);
+  background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 32px;
+}
+.app .composer #modelSelect:hover { border-color: var(--md-sys-color-outline); }
+.app .composer #modelSelect:focus { border-color: var(--md-sys-color-primary); border-width: 2px; }
+
+.app .composer .send-button {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--md-sys-shape-corner-large);
+  background: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+  font-size: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--md-sys-elevation-level1);
+  transition:
+    background-color var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard),
+    box-shadow var(--md-sys-motion-duration-short3) var(--md-sys-motion-easing-standard),
+    transform var(--md-sys-motion-duration-medium2) var(--md-sys-motion-easing-emphasized);
+}
+.app .composer .send-button:hover  { box-shadow: var(--md-sys-elevation-level2); }
+.app .composer .send-button:active { transform: scale(0.94); }
+.app .composer .send-button:disabled,
+.app .composer .send-button[aria-disabled="true"],
+body:not(.is-ready) .app .composer .send-button {
+  background: color-mix(in srgb, var(--md-sys-color-on-surface) 12%, transparent);
+  color: color-mix(in srgb, var(--md-sys-color-on-surface) 38%, transparent);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+/* When generating, the send button morphs into a stop button (M3 expressive). */
+body.is-generating .app .composer .send-button {
+  background: var(--md-sys-color-error-container);
+  color: var(--md-sys-color-on-error-container);
+}
+
+/* Context badge in composer */
+.app .composer .context-badge {
+  align-self: flex-start;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 9999px;
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--md-sys-typescale-label-medium);
+  border: 0;
+}
+.app .composer .context-badge:hover { background: var(--md-sys-color-surface-container-highest); }
+
+/* ============================================================== */
+/* Side panels (history / settings / workspace / novel / context)  */
+/* ============================================================== */
+.side-panel {
+  background: var(--md-sys-color-surface-container-low);
+  color: var(--md-sys-color-on-surface);
+  border: 0;
+  border-radius: 0 var(--md-sys-shape-corner-extra-large) var(--md-sys-shape-corner-extra-large) 0;
+  box-shadow: var(--md-sys-elevation-level1);
+  padding-top: var(--safe-area-top);
+  padding-bottom: var(--safe-area-bottom);
+}
+.side-panel.right-panel {
+  border-radius: var(--md-sys-shape-corner-extra-large) 0 0 var(--md-sys-shape-corner-extra-large);
+}
+.side-panel .panel-head {
+  background: transparent;
+  padding: 16px 16px 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: var(--md-sys-typescale-title-large);
+}
+.side-panel .panel-head strong { font-weight: 400; }
+.side-panel .panel-row { padding: 8px 16px; gap: 8px; }
+
+.backdrop {
+  background: color-mix(in srgb, var(--md-sys-color-scrim) 32%, transparent);
+  backdrop-filter: blur(2px);
+  transition: opacity var(--md-sys-motion-duration-medium2) var(--md-sys-motion-easing-standard);
+}
+
+/* ============================================================== */
+/* Message menu                                                    */
+/* ============================================================== */
+.message-menu {
+  background: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+  border: 0;
+  border-radius: var(--md-sys-shape-corner-medium);
+  box-shadow: var(--md-sys-elevation-level3);
+  padding: 8px 0;
+  min-width: 200px;
+}
+.message-menu button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 16px;
+  background: transparent;
+  color: var(--md-sys-color-on-surface);
+  font: var(--md-sys-typescale-body-large);
+  text-align: start;
+}
+.message-menu button:hover { background: color-mix(in srgb, var(--md-sys-color-on-surface) 8%, transparent); }
+.message-menu button.danger { color: var(--md-sys-color-error); }
+
+/* ============================================================== */
+/* Chat rows                                                       */
+/* ============================================================== */
+.messages {
+  background: var(--md-sys-color-surface);
+  scroll-behavior: smooth;
+  padding-block: 12px;
+}
+.messages .chat-row .bubble,
+.messages .chat-row .user-bubble {
+  border-radius: var(--md-sys-shape-corner-large);
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface);
+  padding: 12px 16px;
+  font: var(--md-sys-typescale-body-large);
+  box-shadow: none;
+}
+.messages .chat-row.user .bubble,
+.messages .chat-row.user .user-bubble {
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+  border-bottom-right-radius: var(--md-sys-shape-corner-extra-small);
+}
+.messages .chat-row.assistant .bubble {
+  background: var(--md-sys-color-surface-container-low);
+  color: var(--md-sys-color-on-surface);
+  border-bottom-left-radius: var(--md-sys-shape-corner-extra-small);
+}
+
+/* ============================================================== */
+/* Manuscript paper (roundtable)                                   */
+/* ============================================================== */
+.manuscript-paper {
+  background: var(--md-sys-color-surface-container-low);
+  color: var(--md-sys-color-on-surface);
+  border: 0;
+  border-radius: var(--md-sys-shape-corner-extra-large)
+                 var(--md-sys-shape-corner-extra-large)
+                 var(--md-sys-shape-corner-large)
+                 var(--md-sys-shape-corner-large);
+  box-shadow: var(--md-sys-elevation-level2);
+}
+.paper-grip {
+  background: transparent;
+  color: var(--md-sys-color-on-surface-variant);
+}
+.paper-grip-ribs i {
+  background: var(--md-sys-color-on-surface-variant);
+  opacity: 0.55;
+}
+.paper-new-anchor {
+  background: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+  border-radius: var(--md-sys-shape-corner-full);
+  font: var(--md-sys-typescale-label-large);
+  height: 36px;
+  padding: 0 16px;
+  box-shadow: var(--md-sys-elevation-level1);
+}
+
+/* ============================================================== */
+/* Roundtable members panel + cycle button                          */
+/* ============================================================== */
+.roundtable-cycle-button {
+  background: var(--md-sys-color-secondary-container) !important;
+  color: var(--md-sys-color-on-secondary-container) !important;
+  border-radius: var(--md-sys-shape-corner-large) !important;
+  height: 40px;
+  min-width: 64px !important;
+  padding: 0 16px !important;
+  font: var(--md-sys-typescale-label-large) !important;
+}
+.app .composer .roundtable-cycle-button.is-ending {
+  background: var(--md-sys-color-error-container) !important;
+  color: var(--md-sys-color-on-error-container) !important;
+}
+
+/* ============================================================== */
+/* Existing toast (legacy) — bring closer to MD3 inverse-surface    */
+/* ============================================================== */
+.toast,
+#toast {
+  background: var(--md-sys-color-inverse-surface) !important;
+  color: var(--md-sys-color-inverse-on-surface) !important;
+  border-radius: var(--md-sys-shape-corner-extra-small) !important;
+  padding: 14px 16px !important;
+  box-shadow: var(--md-sys-elevation-level3) !important;
+  font: var(--md-sys-typescale-body-medium) !important;
+}
+
+/* ============================================================== */
+/* Provider switcher chips (settings)                              */
+/* ============================================================== */
+.provider-switcher .provider-chip,
+.provider-switcher button {
+  border-radius: 9999px !important;
+  font: var(--md-sys-typescale-label-large) !important;
+  padding: 8px 16px !important;
+  background: transparent !important;
+  border: 1px solid var(--md-sys-color-outline) !important;
+  color: var(--md-sys-color-on-surface) !important;
+}
+.provider-switcher .provider-chip[aria-selected="true"],
+.provider-switcher button[aria-pressed="true"],
+.provider-switcher button.active {
+  background: var(--md-sys-color-secondary-container) !important;
+  color: var(--md-sys-color-on-secondary-container) !important;
+  border-color: transparent !important;
+}
+
+/* ============================================================== */
+/* Forms inside settings panels                                    */
+/* ============================================================== */
+.side-panel input[type="text"],
+.side-panel input[type="password"],
+.side-panel input[type="search"],
+.side-panel input[type="url"],
+.side-panel input[type="number"],
+.side-panel textarea,
+.side-panel select {
+  background: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-on-surface);
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: var(--md-sys-shape-corner-extra-small);
+  padding: 12px 14px;
+  font: var(--md-sys-typescale-body-large);
+  min-height: 48px;
+}
+.side-panel input:focus,
+.side-panel textarea:focus,
+.side-panel select:focus {
+  border-color: var(--md-sys-color-primary);
+  border-width: 2px;
+  outline: none;
+  padding: 11px 13px;
+}
+
+/* ============================================================== */
+/* Anti-flash: silence the legacy press/ripple animation that
+ * fired on every pointerdown — M3 state layers (::before on each
+ * button selector above) handle press feedback now. We keep the
+ * JS that adds the classes (out of scope to remove) but hide the
+ * visual to stop the per-tap flicker the user reported.
+ */
+.motion-press { animation: none !important; }
+.motion-ripple { display: none !important; }
+
+/* Stop ::selection tinting elements while the user is just tapping. */
+.app .icon-button,
+.app .topbar,
+.app .composer,
+.message-menu,
+.side-panel .panel-head,
+.md-fab,
+.md-button,
+.md-icon-button,
+.md-chip,
+.md-list-item,
+.md-snackbar { user-select: none; }
+
+/* Prevent pull-to-refresh from triggering inside scroll regions. */
+.messages, .roundtable-discussion, .side-panel, .panel-body { overscroll-behavior: contain; }

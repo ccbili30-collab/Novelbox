@@ -1976,6 +1976,12 @@ const renderScheduler = createFrameScheduler(() => renderNow());
 function render() { renderScheduler.schedule(); }
 function renderImmediate() { renderScheduler.flush(); renderNow(); }
 
+// Cheap visibility guards used inside renderNow to skip work for panels
+// that are currently closed. Avoids re-serialising entire sub-trees on
+// every keystroke when the user can't even see them, which the user
+// experienced as "every tap flashes" + lag.
+function isPanelOpen(el) { return Boolean(el) && !el.hidden && !el.hasAttribute("inert"); }
+
 function renderNow() {
   const session = activeSession();
   ensureSessionCreator(session);
@@ -1984,22 +1990,32 @@ function renderNow() {
   ensureModelPickerUi();
   applyLayout();
   applySessionAppearance();
-  els.title.textContent = rt.enabled ? `圆桌 · ${titleForSession(session)}` : titleForSession(session);
+  const nextTitle = rt.enabled ? `圆桌 · ${titleForSession(session)}` : titleForSession(session);
+  if (els.title.textContent !== nextTitle) els.title.textContent = nextTitle;
   renderRoundtable();
   renderMessages();
-  renderSessions();
-  renderSettings();
-  renderCustomLayoutPresets();
-  renderNovelPanel();
-  renderWorkspacePanel();
+  if (isPanelOpen(els.historyPanel))   renderSessions();
+  if (isPanelOpen(els.settingsPanel))  renderSettings();
+  if (isPanelOpen(els.settingsPanel))  renderCustomLayoutPresets();
+  if (isPanelOpen(els.novelPanel))     renderNovelPanel();
+  if (isPanelOpen(els.workspacePanel)) renderWorkspacePanel();
   renderModelPicker();
   renderContextBadge();
   renderMenu();
-  els.body.classList.toggle("is-generating", isGenerating);
-  els.body.classList.toggle("roundtable-mode", rt.enabled);
-  els.body.classList.toggle("roundtable-busy", roundtableGenerating);
-  els.body.classList.toggle("is-ready", Boolean(clean(els.input.value)) || pendingChatAttachments.length > 0);
+  // Toggle classList only when the value actually changes — calling
+  // toggle(name, value) when value already matches still triggers a
+  // style invalidation + ::before transition restart.
+  setBodyClass("is-generating", isGenerating);
+  setBodyClass("roundtable-mode", rt.enabled);
+  setBodyClass("roundtable-busy", roundtableGenerating);
+  setBodyClass("is-ready", Boolean(clean(els.input.value)) || pendingChatAttachments.length > 0);
   persistState(state);
+}
+
+function setBodyClass(name, on) {
+  const has = els.body.classList.contains(name);
+  if (Boolean(on) === has) return;
+  els.body.classList.toggle(name, Boolean(on));
 }
 
 function renderRoundtable() {
