@@ -57,7 +57,7 @@
 | 37 | `window.tbirdTheme.setSeedColor("#xxx")` 控制台 API | ✅ | main.js |
 | 38 | 主题切换时同步刷新 `<meta name=theme-color>` | ✅ | theme-engine.js |
 | 39 | 跟随系统 light/dark 切换实时更新 chrome 色 | ✅ | theme-engine.js |
-| 40 | 设置面板内的可视化主题选择器（光/暗/auto + 颜色板） | ⏳ | — |
+| 40 | 设置面板内的可视化主题选择器（光/暗/auto + 颜色板） | ✅ | `feat(settings): in-app Material You theme picker (mode + seed)` |
 
 ## 4. 性能 (Performance)
 
@@ -155,13 +155,13 @@
 
 | # | 改进 | 状态 | 备注 |
 |---|------|------|------|
-| 98 | 设置面板内置主题切换 UI（light/dark/auto + 颜色板）| ⏳ | window.tbirdTheme 已可用，UI 待加 |
-| 99 | 全部 legacy showToast 调用迁移到 MD3 snackbar 并保留 retry action | ⏳ | 风险较高，分批迁移 |
+| 98 | 设置面板内置主题切换 UI（light/dark/auto + 颜色板）| ✅ | 已合入 #40 |
+| 99 | 全部 legacy showToast 调用迁移到 MD3 snackbar 并保留 retry action | ⏳ | 风险较高，分批迁移；新代码默认走 MD3 snackbar |
 | 100 | 长聊天列表的虚拟化（在 content-visibility 之上再加一层） | ⏳ | 当前 50+ 消息已流畅，>500 时再做 |
 
 ## 状态汇总
 
-- ✅ 已完成：91
+- ✅ 已完成：92
 - 🟡 部分完成：1
-- ⏳ 待开发：8
+- ⏳ 待开发：7
 - 总计：100
