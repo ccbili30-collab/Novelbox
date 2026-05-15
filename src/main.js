@@ -130,6 +130,12 @@ import {
   createPaperDoubleTapGesture,
 } from "./app/runtime/gestures.js";
 import { createLayoutPresetController } from "./app/runtime/layout-presets.js";
+import {
+  wireAppearanceAndImports,
+  wireGlobalModelInputs,
+  wireSessionFieldInputs,
+  wireAssistantConfigInputs,
+} from "./app/runtime/wire-events.js";
 import { bindCommandDelegation } from "./ui/bindings/event-binding.js";
 import { createPanelManager } from "./ui/panels/panel-manager.js";
 import { renderContextBadge as drawContextBadge, renderContextPanel as drawContextPanel } from "./ui/renderers/context-renderer.js";
@@ -6426,7 +6432,7 @@ els.input.addEventListener("click", updateRoundtableMentionPicker);
 document.addEventListener("input", handleRoundtableContextOptionInput);
 document.addEventListener("change", handleRoundtableContextOptionInput);
 
-els.historySearch.addEventListener("input", renderSessions);
+// historySearch input now wired via wireSessionFieldInputs(...) below.
 
 [
   ["input", els.contextCount, "contextCount"],
@@ -6609,34 +6615,46 @@ window.addEventListener("popstate", () => {
   closePanels({ fromHistory: true });
 });
 
-els.temperature.addEventListener("input", () => {
-  const defaults = globalModelDefaults();
-  defaults.temperature = Number(els.temperature.value);
-  els.temperatureLabel.textContent = defaults.temperature.toFixed(2);
-  persistState(state);
-});
+// Temperature / unlimited-context / stream toggles now wired via the
+// wireGlobalModelInputs(...) factory.
+wireGlobalModelInputs({ els, h: {
+  onTemperatureInput(input) {
+    const defaults = globalModelDefaults();
+    defaults.temperature = Number(input.value);
+    els.temperatureLabel.textContent = defaults.temperature.toFixed(2);
+    persistState(state);
+  },
+  onUnlimitedContextChange(input) {
+    globalModelDefaults().unlimitedContext = input.checked;
+    persistState(state);
+  },
+  onStreamChange(input) {
+    globalModelDefaults().stream = input.checked;
+    persistState(state);
+  },
+}});
 
-els.unlimitedContext.addEventListener("change", () => {
-  globalModelDefaults().unlimitedContext = els.unlimitedContext.checked;
-  persistState(state);
-});
+// Appearance + 4 file-input bindings + 4 file-import bindings moved
+// into src/app/runtime/wire-events.js. The factory takes a flat
+// handlers bag and applies the bindings declaratively.
+wireAppearanceAndImports({ els, h: {
+  updateSessionUserName,
+  handleChatImageSelected,
+  clearUserAvatar,
+  handleUserAvatarSelected,
+  clearSessionBackground,
+  handleSessionBackgroundSelected,
+  handleBodyFileSelected,
+  handleSessionImportSelected,
+  handleCreatorImportSelected,
+  handleGlobalBackupImportSelected,
+}});
 
-els.stream.addEventListener("change", () => {
-  globalModelDefaults().stream = els.stream.checked;
-  persistState(state);
-});
-
-els.userNameInput?.addEventListener("input", updateSessionUserName);
-els.chatImageFile?.addEventListener("change", handleChatImageSelected);
-els.chooseUserAvatar?.addEventListener("click", () => els.userAvatarFile?.click());
-els.clearUserAvatar?.addEventListener("click", clearUserAvatar);
-els.userAvatarFile?.addEventListener("change", handleUserAvatarSelected);
-els.chooseSessionBackground?.addEventListener("click", () => els.sessionBackgroundFile?.click());
-els.clearSessionBackground?.addEventListener("click", clearSessionBackground);
-els.sessionBackgroundFile?.addEventListener("change", handleSessionBackgroundSelected);
-
-els.layoutInputs.forEach((input) => {
-  input.addEventListener("input", () => {
+// Layout numeric inputs + novel rich-text fields. Both call into the
+// imperative renderers + persist after every keystroke; the wiring
+// helper keeps that semantics intact.
+wireSessionFieldInputs({ els, h: {
+  onLayoutInput(input) {
     const key = input.dataset.layoutKey;
     const layout = sessionSettings().layout;
     layout[key] = readLayoutInputValue(input, layout[key]);
@@ -6644,22 +6662,15 @@ els.layoutInputs.forEach((input) => {
     renderSettings();
     resizeInput();
     persistState(state);
-  });
-});
-
-els.novelFields.forEach((field) => {
-  field.addEventListener("input", () => {
+  },
+  onNovelFieldInput(field) {
     sessionNovel()[field.dataset.novelKey] = field.value;
     renderContextBadge();
     renderNovelPanel();
     persistState(state);
-  });
-});
-
-els.bodyImportFile?.addEventListener("change", handleBodyFileSelected);
-els.sessionImportFile?.addEventListener("change", handleSessionImportSelected);
-els.creatorImportFile?.addEventListener("change", handleCreatorImportSelected);
-els.globalBackupImportFile?.addEventListener("change", handleGlobalBackupImportSelected);
+  },
+  onHistorySearch: renderSessions,
+}});
 
 els.saveEdit.addEventListener("click", () => saveEditor(false));
 els.saveSendEdit.addEventListener("click", () => saveEditor(true));
@@ -6683,23 +6694,30 @@ els.assistantConfigDialog?.addEventListener("close", () => {
   assistantModelPickerOpen = false;
   handleDialogClosed();
 });
-els.assistantTemperatureInput?.addEventListener("input", () => {
-  els.assistantTemperatureLabel.textContent = Number(els.assistantTemperatureInput.value).toFixed(2);
-});
-els.assistantModelInput?.addEventListener("focus", () => {
-  if (els.assistantModelInput) els.assistantModelInput.removeAttribute("list");
-});
-els.assistantModelInput?.addEventListener("input", () => {
-  if (els.assistantModelStatus) els.assistantModelStatus.textContent = clean(els.assistantModelInput.value) ? "手动输入" : "未选择";
-  renderAssistantModelPicker();
-});
-els.assistantProviderSelect?.addEventListener("change", () => {
-  if (els.assistantModelStatus) els.assistantModelStatus.textContent = els.assistantProviderSelect.value ? "已切换提供方" : "跟随默认提供方";
-  renderAssistantModelPicker();
-});
-els.assistantApiOverrideEnabledInput?.addEventListener("change", () => {
-  syncAssistantApiOverrideUi(Boolean(els.assistantApiOverrideEnabledInput?.checked));
-});
+// Assistant-config dialog inputs now wired via wireAssistantConfigInputs.
+wireAssistantConfigInputs({ els, h: {
+  onAssistantTemperature(input) {
+    els.assistantTemperatureLabel.textContent = Number(input.value).toFixed(2);
+  },
+  onAssistantModelFocus() {
+    if (els.assistantModelInput) els.assistantModelInput.removeAttribute("list");
+  },
+  onAssistantModelInput() {
+    if (els.assistantModelStatus) {
+      els.assistantModelStatus.textContent = clean(els.assistantModelInput.value) ? "手动输入" : "未选择";
+    }
+    renderAssistantModelPicker();
+  },
+  onAssistantProviderChange() {
+    if (els.assistantModelStatus) {
+      els.assistantModelStatus.textContent = els.assistantProviderSelect.value ? "已切换提供方" : "跟随默认提供方";
+    }
+    renderAssistantModelPicker();
+  },
+  onAssistantApiOverrideChange() {
+    syncAssistantApiOverrideUi(Boolean(els.assistantApiOverrideEnabledInput?.checked));
+  },
+}});
 els.assistantNameInput?.addEventListener("input", () => {
   if (!clean(els.assistantAvatarPreview?.dataset.avatarDataUrl)) {
     renderAvatarPreview(els.assistantAvatarPreview, "", clean(els.assistantNameInput.value) || "议");
