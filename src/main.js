@@ -157,6 +157,7 @@ import {
 } from "./app/runtime/feedback.js";
 import { createPersistencePipeline } from "./app/runtime/persistence-pipeline.js";
 import { createRenderPipeline } from "./app/runtime/render-pipeline.js";
+import { createStateContext } from "./app/runtime/state-context.js";
 
 const $ = (selector) => document.querySelector(selector);
 // All DOM selectors live in src/app/runtime/dom-registry.js so the
@@ -459,62 +460,17 @@ const layoutPresets = {
   },
 };
 
-function activeSession() {
-  return state.sessions.find((session) => session.id === state.activeSessionId) || state.sessions[0];
-}
-
-function apiSettings() {
-  state.api = hydrateApiSettings(state.api);
-  return state.api;
-}
-
-function globalModelDefaults() {
-  const api = apiSettings();
-  api.modelDefaults = hydrateModelDefaults(api.modelDefaults, {
-    model: api.models?.[0],
-    contextTokenBudget: api.contextTokenBudget,
-  });
-  return api.modelDefaults;
-}
-
-function activeApiProvider(api = apiSettings()) {
-  return api.providers.find((provider) => provider.id === api.currentProviderId) || api.providers[0];
-}
-
-function syncApiFromProvider(api = apiSettings()) {
-  const provider = activeApiProvider(api);
-  if (!provider) return api;
-  api.baseUrl = provider.baseUrl;
-  api.apiKey = provider.apiKey;
-  api.models = Array.from(new Set((provider.models || []).filter(Boolean)));
-  return api;
-}
-
-function apiForProvider(providerId) {
-  const api = apiSettings();
-  const provider = api.providers.find((item) => item.id === providerId) || activeApiProvider(api);
-  return {
-    ...api,
-    currentProviderId: provider?.id || api.currentProviderId,
-    baseUrl: provider?.baseUrl || api.baseUrl,
-    apiKey: provider?.apiKey || api.apiKey,
-    models: provider?.models || api.models,
-  };
-}
-
-function apiForAssistantConfig(config = {}) {
-  const providerApi = apiForProvider(config.providerId);
-  return {
-    ...providerApi,
-    baseUrl: providerApi.baseUrl,
-    apiKey: providerApi.apiKey,
-  };
-}
-
-function creatorsState() {
-  state.creators = state.creators && typeof state.creators === "object" ? state.creators : {};
-  return state.creators;
-}
+// Read-only state accessors moved to src/app/runtime/state-context.js.
+// The legacy 7 names re-bound here keep the rest of main.js identical.
+const _ctx = createStateContext(() => state);
+const activeSession         = _ctx.activeSession;
+const apiSettings           = _ctx.apiSettings;
+const globalModelDefaults   = _ctx.globalModelDefaults;
+const activeApiProvider     = _ctx.activeApiProvider;
+const syncApiFromProvider   = _ctx.syncApiFromProvider;
+const apiForProvider        = _ctx.apiForProvider;
+const apiForAssistantConfig = _ctx.apiForAssistantConfig;
+const creatorsState         = _ctx.creatorsState;
 
 function getCreatorIdentity(id) {
   const creators = creatorsState();
@@ -726,37 +682,15 @@ function syncSealedCreatorTemplatePrompts() {
   return changed;
 }
 
-function sessionSettings(session = activeSession()) {
-  session.settings = hydrateSessionSettings(session.settings);
-  return session.settings;
-}
-
-function sessionAppearance(session = activeSession()) {
-  const settings = sessionSettings(session);
-  settings.appearance = {
-    userName: "我",
-    userAvatarDataUrl: "",
-    backgroundDataUrl: "",
-    ...(settings.appearance || {}),
-  };
-  return settings.appearance;
-}
-
-function sessionNovel(session = activeSession()) {
-  session.novel = { ...createDefaultNovel(), ...(session.novel || {}) };
-  session.novel.versions = Array.isArray(session.novel.versions)
-    ? session.novel.versions.filter((version) => version && typeof version === "object" && clean(version.body))
-    : [];
-  return session.novel;
-}
-
+// Session-level accessors delegated to state-context.js. sessionWorkspace
+// stays inline because it needs the workspaceController which is built
+// later in this file.
+const sessionSettings    = _ctx.sessionSettings;
+const sessionAppearance  = _ctx.sessionAppearance;
+const sessionNovel       = _ctx.sessionNovel;
+const roundtableState    = _ctx.roundtableState;
 function sessionWorkspace(session = activeSession()) {
   return workspaceController.sessionWorkspace(session);
-}
-
-function roundtableState(session = activeSession()) {
-  session.roundtable = hydrateRoundtableState(session.roundtable);
-  return session.roundtable;
 }
 
 function clamp(value, min, max) {
