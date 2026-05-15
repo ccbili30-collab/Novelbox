@@ -164,6 +164,7 @@ import {
   normalizeChatAttachments as _normalizeChatAttachments,
   getMessageRenderSignature as _getMessageRenderSignature,
 } from "./app/runtime/message-signature.js";
+import { createStreamBatcher } from "./app/runtime/stream-batcher.js";
 
 const $ = (selector) => document.querySelector(selector);
 // All DOM selectors live in src/app/runtime/dom-registry.js so the
@@ -232,7 +233,9 @@ const roundtableGesture = {
 };
 const bridgeCallbacks = new Map();
 const bridgeStreamCallbacks = new Map();
-const streamDomTimers = new Map();
+// Streaming-DOM batching now lives in src/app/runtime/stream-batcher.js
+// so the Map-of-timers logic + cancellation is unit-testable.
+const _streamBatch = createStreamBatcher();
 const panelManager = createPanelManager(els, {
   onShow: (name) => {
     els.body.dataset.activePanel = name;
@@ -1020,24 +1023,11 @@ function cssEscape(value) {
   return window.CSS?.escape ? CSS.escape(String(value)) : String(value).replace(/["\\]/g, "\\$&");
 }
 
-function scheduleStreamDomUpdate(key, callback, delay = 120) {
-  const existing = streamDomTimers.get(key);
-  if (existing) return;
-  const timer = window.setTimeout(() => {
-    streamDomTimers.delete(key);
-    callback();
-  }, delay);
-  streamDomTimers.set(key, timer);
-}
-
-function cancelStreamDomUpdate(key = null) {
-  const keys = key ? [key] : Array.from(streamDomTimers.keys());
-  keys.forEach((item) => {
-    const timer = streamDomTimers.get(item);
-    if (timer) window.clearTimeout(timer);
-    streamDomTimers.delete(item);
-  });
-}
+// Thin shims over the stream batcher above; preserve existing call
+// sites without changing their semantics.
+const scheduleStreamDomUpdate = (key, callback, delay = 120) =>
+  _streamBatch.schedule(key, callback, delay);
+const cancelStreamDomUpdate = (key = null) => _streamBatch.cancel(key);
 
 function getNode(id, session = activeSession()) {
   return getSessionNode(session, id);
