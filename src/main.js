@@ -302,6 +302,26 @@ const aiClient = createAiClient({
   getAbortSignal: () => abortController?.signal,
 });
 registerBridgeHooks(bridgeCallbacks, bridgeStreamCallbacks);
+
+// Read-only state accessors moved to src/app/runtime/state-context.js.
+// IMPORTANT: every controller construction below references one or more
+// of these names (sessionSettings / roundtableState / activeSession /
+// apiForAssistantConfig / ...) at construction time, so the whole bag
+// of state-context aliases MUST land before the createXController calls.
+const _ctx = createStateContext(() => state);
+const activeSession         = _ctx.activeSession;
+const apiSettings           = _ctx.apiSettings;
+const globalModelDefaults   = _ctx.globalModelDefaults;
+const activeApiProvider     = _ctx.activeApiProvider;
+const syncApiFromProvider   = _ctx.syncApiFromProvider;
+const apiForProvider        = _ctx.apiForProvider;
+const apiForAssistantConfig = _ctx.apiForAssistantConfig;
+const creatorsState         = _ctx.creatorsState;
+const sessionSettings       = _ctx.sessionSettings;
+const sessionAppearance     = _ctx.sessionAppearance;
+const sessionNovel          = _ctx.sessionNovel;
+const roundtableState       = _ctx.roundtableState;
+
 const assistantController = createAssistantController({
   clean,
   uid,
@@ -507,17 +527,8 @@ const layoutPresets = {
   },
 };
 
-// Read-only state accessors moved to src/app/runtime/state-context.js.
-// The legacy 7 names re-bound here keep the rest of main.js identical.
-const _ctx = createStateContext(() => state);
-const activeSession         = _ctx.activeSession;
-const apiSettings           = _ctx.apiSettings;
-const globalModelDefaults   = _ctx.globalModelDefaults;
-const activeApiProvider     = _ctx.activeApiProvider;
-const syncApiFromProvider   = _ctx.syncApiFromProvider;
-const apiForProvider        = _ctx.apiForProvider;
-const apiForAssistantConfig = _ctx.apiForAssistantConfig;
-const creatorsState         = _ctx.creatorsState;
+// State-context aliases hoisted above the controller constructions
+// (see comment near 'registerBridgeHooks').
 
 function getCreatorIdentity(id) {
   const creators = creatorsState();
@@ -729,13 +740,10 @@ function syncSealedCreatorTemplatePrompts() {
   return changed;
 }
 
-// Session-level accessors delegated to state-context.js. sessionWorkspace
-// stays inline because it needs the workspaceController which is built
-// later in this file.
-const sessionSettings    = _ctx.sessionSettings;
-const sessionAppearance  = _ctx.sessionAppearance;
-const sessionNovel       = _ctx.sessionNovel;
-const roundtableState    = _ctx.roundtableState;
+// sessionSettings / sessionAppearance / sessionNovel / roundtableState
+// were moved up to line ~525 so they are available when the controllers
+// construct. sessionWorkspace is a hoisted function so its body — which
+// reaches workspaceController — only resolves at call time.
 function sessionWorkspace(session = activeSession()) {
   return workspaceController.sessionWorkspace(session);
 }
@@ -876,7 +884,7 @@ function cleanRoundtableAssistantOutput(assistant, content) {
 }
 
 // simpleHash lives in src/app/runtime/text-utils.js.
-const simpleHash = (text) => _simpleHash(clean(text));
+function simpleHash(text) { return _simpleHash(clean(text)); }
 
 function writerState(session = activeSession()) {
   return writerController.writerState(session);
@@ -1040,13 +1048,16 @@ function renderAssistantMarkdown(text) {
 // closures preserve every existing call site.
 const renderChatContent = (node, content, isStreamingThisNode) =>
   _renderChatContent(node, content, isStreamingThisNode, { renderAssistantMarkdown, escapeHtml });
-const cssEscape = _cssEscape;
+function cssEscape(...args) { return _cssEscape(...args); }
 
 // Thin shims over the stream batcher above; preserve existing call
 // sites without changing their semantics.
-const scheduleStreamDomUpdate = (key, callback, delay = 120) =>
-  _streamBatch.schedule(key, callback, delay);
-const cancelStreamDomUpdate = (key = null) => _streamBatch.cancel(key);
+function scheduleStreamDomUpdate(key, callback, delay = 120) {
+  return _streamBatch.schedule(key, callback, delay);
+}
+function cancelStreamDomUpdate(key = null) {
+  return _streamBatch.cancel(key);
+}
 
 function getNode(id, session = activeSession()) {
   return getSessionNode(session, id);
@@ -1488,8 +1499,8 @@ function contextInfo(extraUserText = "") {
 // Scroll follower factored into src/app/runtime/scroll-and-layout.js
 // so the scroller, threshold and rAF use are unit-testable.
 const _scroll = createScrollFollower(els.messages, 90);
-const shouldFollowBottom = _scroll.shouldFollowBottom;
-const scrollBottom       = _scroll.scrollBottom;
+function shouldFollowBottom(...args) { return _scroll.shouldFollowBottom(...args); }
+function scrollBottom(...args) { return _scroll.scrollBottom(...args); }
 
 // 127 call-sites use showToast(). Rather than rip them out, we route
 // through the new MD3 snackbar (FIFO queue, ARIA-live, M3 motion). The
@@ -1498,7 +1509,14 @@ const scrollBottom       = _scroll.scrollBottom;
 // Bridged in from src/app/runtime/feedback.js. Captures the DOM els
 // registry + the MD3 snackbar so 127 call sites can keep using
 // showToast(msg) unchanged.
-const showToast = createToast(els, showSnackbar);
+// Declared as a hoisted function wrapper that lazily constructs the
+// factory output on first call, so controllers built earlier in the
+// module body can take `showToast` as a dep without a TDZ ReferenceError.
+let _showToastFn = null;
+function showToast(...args) {
+  if (!_showToastFn) _showToastFn = createToast(els, showSnackbar);
+  return _showToastFn(...args);
+}
 
 function askThreeWayDelete({ title = "确认删除", message = "", confirmLabel = "确定", keepLabel = "保留", cancelLabel = "取消" } = {}) {
   return new Promise((resolve) => {
@@ -1527,10 +1545,19 @@ function askThreeWayDelete({ title = "确认删除", message = "", confirmLabel 
 }
 
 // prefersReducedMotion / vibrateLight: imported from feedback.js.
-// pulseElement / addMotionRipple: built from factories so durations
-// are baked in at construction time.
-const pulseElement = createPulse(MOTION_PULSE_MS);
-const addMotionRipple = createRipple(MOTION_RIPPLE_MS);
+// pulseElement / addMotionRipple: hoisted function wrappers around the
+// factory output so call sites further up the file can reference them
+// without a TDZ ReferenceError.
+let _pulseFn = null;
+let _rippleFn = null;
+function pulseElement(...args) {
+  if (!_pulseFn) _pulseFn = createPulse(MOTION_PULSE_MS);
+  return _pulseFn(...args);
+}
+function addMotionRipple(...args) {
+  if (!_rippleFn) _rippleFn = createRipple(MOTION_RIPPLE_MS);
+  return _rippleFn(...args);
+}
 
 function showCommandFeedback(target, command, event) {
   if (!target) return;
@@ -1694,24 +1721,24 @@ const _layout = createLayoutApplier({
   getAppearance: () => sessionAppearance(),
   clean,
 });
-const applyLayout            = _layout.applyLayout;
-const applySessionAppearance = _layout.applySessionAppearance;
+function applyLayout(...args) { return _layout.applyLayout(...args); }
+function applySessionAppearance(...args) { return _layout.applySessionAppearance(...args); }
 
 // Persist is debounced via requestIdleCallback so dozens of state writes
 // during streaming or rapid composer typing collapse to a single
 // localStorage write per idle frame. See
 // src/app/runtime/persistence-pipeline.js.
 const _persistence = createPersistencePipeline(persistStateNow, { timeout: 400 });
-const persistState = _persistence.persist;
-const persistStateImmediate = _persistence.persistImmediate;
+function persistState(...args) { return _persistence.persist(...args); }
+function persistStateImmediate(...args) { return _persistence.persistImmediate(...args); }
 
 // render() coalesces multiple synchronous schedule() calls within the
 // same task into a single rAF tick. Pipeline lives in
 // src/app/runtime/render-pipeline.js so scheduler ownership is shared
 // with the persistence pipeline above and is unit-tested in isolation.
 const _renderPipe = createRenderPipeline(() => renderNow());
-const render = _renderPipe.render;
-const renderImmediate = _renderPipe.renderImmediate;
+function render(...args) { return _renderPipe.render(...args); }
+function renderImmediate(...args) { return _renderPipe.renderImmediate(...args); }
 
 // Cheap visibility guards used inside renderNow to skip work for panels
 // that are currently closed. Avoids re-serialising entire sub-trees on
@@ -2045,7 +2072,7 @@ function renderRoundtableContextControls(rt) {
 }
 
 // Empty state + per-divider walker live in src/ui/renderers/roundtable-renderer.js.
-const renderRoundtableEmpty = _renderRoundtableEmpty;
+function renderRoundtableEmpty(...args) { return _renderRoundtableEmpty(...args); }
 const renderRoundtableDiscussion = (messages) =>
   buildRoundtableDiscussion(messages, { renderMessage: renderRoundtableMessage });
 
@@ -2140,8 +2167,8 @@ function renderRoundtableMessage(message) {
 }
 
 // Pure badge renderers extracted to src/ui/renderers/roundtable-renderer.js.
-const renderRoundtableDecisionBadge = _renderRoundtableDecisionBadge;
-const renderRoundtableMentionBadge = _renderRoundtableMentionBadge;
+function renderRoundtableDecisionBadge(...args) { return _renderRoundtableDecisionBadge(...args); }
+function renderRoundtableMentionBadge(...args) { return _renderRoundtableMentionBadge(...args); }
 
 function getRoundtablePaperSource() {
   const body = clean(sessionNovel().body);
@@ -2241,7 +2268,7 @@ function buildRoundtableNovelMaterials(options) {
 }
 
 // roundtableDateKey extracted to src/ui/renderers/roundtable-renderer.js.
-const roundtableDateKey = _roundtableDateKey;
+function roundtableDateKey(...args) { return _roundtableDateKey(...args); }
 
 function getViewportHeight() {
   return Math.round(window.visualViewport?.height || window.innerHeight || 760);
@@ -2593,8 +2620,8 @@ const _settingsRenderer = createSettingsRenderer({
   clean,
   escapeHtml,
 });
-const renderSettingsPage    = _settingsRenderer.renderSettingsPage;
-const renderProviderSwitcher = _settingsRenderer.renderProviderSwitcher;
+function renderSettingsPage(...args) { return _settingsRenderer.renderSettingsPage(...args); }
+function renderProviderSwitcher(...args) { return _settingsRenderer.renderProviderSwitcher(...args); }
 
 function openSettingsPage(page) {
   if (!settingsPageMeta[page]) return;
@@ -2618,7 +2645,7 @@ function stepLayoutValue(key, delta) {
 }
 
 // Body of renderSettings now lives in src/ui/renderers/settings-renderer.js.
-const renderSettings = _settingsRenderer.renderSettings;
+function renderSettings(...args) { return _settingsRenderer.renderSettings(...args); }
 
 function renderCustomLayoutPresets() {
   if (!els.customLayoutPresets) return;
@@ -3035,7 +3062,7 @@ function renderNovelPanel() {
 }
 
 // formatBytes lives in src/app/runtime/attachment-prompts.js.
-const formatBytes = _formatBytes;
+function formatBytes(...args) { return _formatBytes(...args); }
 
 function renderWorkspacePanel() {
   workspaceController.renderWorkspacePanel();
@@ -6077,6 +6104,35 @@ function copyMessageNodeText(nodeId) {
   return copyText(getMessageContent(getNode(nodeId)));
 }
 
+// IMPORTANT: layoutPresetController must construct BEFORE handleCommand
+// below — handleCommand's shorthand object literal references the 6
+// const aliases (applyLayoutPreset / saveLayoutPreset / ...) and the
+// shorthand evaluates eagerly. Putting the controller setup here makes
+// those names settled by the time the command-map is built. Previous
+// ordering raised a TDZ ReferenceError that aborted main.js execution
+// before bindCommandDelegation ran — symptom: no button on the page
+// responded to taps.
+const _layoutPresetController = createLayoutPresetController({
+  presets: layoutPresets,
+  sessionSettings,
+  hydrateLayout,
+  createDefaultLayout,
+  uid,
+  clean,
+  render,
+  resizeInput,
+  persist: () => persistState(state),
+  showToast,
+  copyText,
+  get presetNameInput() { return els.layoutPresetName; },
+});
+function applyLayoutPreset(...args) { return _layoutPresetController.applyLayoutPreset(...args); }
+function applyCustomLayoutPreset(...args) { return _layoutPresetController.applyCustomLayoutPreset(...args); }
+function saveLayoutPreset(...args) { return _layoutPresetController.saveLayoutPreset(...args); }
+function deleteLayoutPreset(...args) { return _layoutPresetController.deleteLayoutPreset(...args); }
+function resetLayoutParams(...args) { return _layoutPresetController.resetLayoutParams(...args); }
+function copyLayoutParams(...args) { return _layoutPresetController.copyLayoutParams(...args); }
+
 // 132-line command registry literal extracted into
 // src/app/runtime/command-registry-config.js. Pass every handler the
 // routes reference so missing ones become no-ops in tests.
@@ -6192,30 +6248,8 @@ const handleCommand = createCommandRegistry(buildCommandMap({
   switchSibling,
 }));
 
-// Layout-preset commands moved to src/app/runtime/layout-presets.js.
-// The controller owns the same six functions; main.js binds them to
-// the existing identifier names so the command-registry config (and
-// every existing call site) keeps working.
-const _layoutPresetController = createLayoutPresetController({
-  presets: layoutPresets,
-  sessionSettings,
-  hydrateLayout,
-  createDefaultLayout,
-  uid,
-  clean,
-  render,
-  resizeInput,
-  persist: () => persistState(state),
-  showToast,
-  copyText,
-  get presetNameInput() { return els.layoutPresetName; },
-});
-const applyLayoutPreset       = _layoutPresetController.applyLayoutPreset;
-const applyCustomLayoutPreset = _layoutPresetController.applyCustomLayoutPreset;
-const saveLayoutPreset        = _layoutPresetController.saveLayoutPreset;
-const deleteLayoutPreset      = _layoutPresetController.deleteLayoutPreset;
-const resetLayoutParams       = _layoutPresetController.resetLayoutParams;
-const copyLayoutParams        = _layoutPresetController.copyLayoutParams;
+// layoutPresetController was moved above handleCommand to fix a TDZ
+// (see the comment block before handleCommand for why).
 
 bindCommandDelegation(document, renderMenu, () => activeMenuNodeId || activeRoundtableMessageId, (value) => {
   activeMenuNodeId = value;
@@ -6290,7 +6324,7 @@ function resizeInput() {
 // Gesture helpers extracted to src/app/runtime/gestures.js. The
 // pinch-zoom + paper double-tap controllers own their own internal
 // state, so the legacy roundtableGesture object is no longer needed.
-const touchDistance = _touchDistance;
+function touchDistance(...args) { return _touchDistance(...args); }
 const lockRootScroll = () => _lockRootScroll(window, document);
 
 const _pinchGesture = createPinchZoomGesture({
