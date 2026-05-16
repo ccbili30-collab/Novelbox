@@ -29,18 +29,24 @@ import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Chat
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Forum
+import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
@@ -53,6 +59,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -69,11 +76,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.qinglan.chatnovel.R
 import com.qinglan.chatnovel.model.ChatMessage
+import com.qinglan.chatnovel.model.Persona
 import com.qinglan.chatnovel.model.Role
 import com.qinglan.chatnovel.model.Session
 import kotlinx.coroutines.launch
@@ -90,8 +100,8 @@ fun ChatScreen(
     val drawer = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     var systemPromptOpen by remember { mutableStateOf(false) }
+    var membersOpen by remember { mutableStateOf(false) }
 
-    // Auto-scroll to the latest message when content arrives.
     LaunchedEffect(state.messages.size, state.messages.lastOrNull()?.content) {
         if (state.messages.isNotEmpty()) {
             listState.animateScrollToItem(state.messages.lastIndex)
@@ -111,8 +121,8 @@ fun ChatScreen(
             SessionDrawer(
                 sessions = state.sessions,
                 activeId = state.activeSession?.id,
-                onSwitch = { id ->
-                    vm.switchSession(id)
+                onSwitch = {
+                    vm.switchSession(it)
                     scope.launch { drawer.close() }
                 },
                 onNew = {
@@ -128,7 +138,8 @@ fun ChatScreen(
                 CenterAlignedTopAppBar(
                     title = {
                         Text(
-                            state.activeSession?.title?.ifBlank { null } ?: stringResourceSafe(R.string.title_new_chat),
+                            state.activeSession?.title?.ifBlank { null }
+                                ?: stringResourceSafe(R.string.title_new_chat),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -139,6 +150,14 @@ fun ChatScreen(
                         }
                     },
                     actions = {
+                        IconButton(onClick = { membersOpen = true }) {
+                            Icon(
+                                Icons.Rounded.Groups,
+                                contentDescription = "圆桌成员",
+                                tint = if (state.roundtable.enabled) MaterialTheme.colorScheme.primary
+                                       else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                         IconButton(onClick = { systemPromptOpen = true }) {
                             Icon(Icons.Rounded.Chat, contentDescription = "系统提示")
                         }
@@ -150,7 +169,9 @@ fun ChatScreen(
                         }
                     },
                     colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
+                        containerColor = if (state.roundtable.enabled)
+                            MaterialTheme.colorScheme.secondaryContainer
+                        else MaterialTheme.colorScheme.surface,
                     ),
                 )
             },
@@ -192,6 +213,7 @@ fun ChatScreen(
                 Composer(
                     text = state.composer,
                     isGenerating = state.isGenerating,
+                    isRoundtable = state.roundtable.enabled,
                     onChange = vm::updateComposer,
                     onSend = vm::send,
                     onStop = vm::stop,
@@ -210,6 +232,95 @@ fun ChatScreen(
             onSave = { vm.setSystemPrompt(it); systemPromptOpen = false },
         )
     }
+    if (membersOpen) {
+        RoundtableMembersSheet(
+            allPersonas = state.personas,
+            selectedIds = state.roundtable.personaIds,
+            enabled = state.roundtable.enabled,
+            onToggleEnabled = vm::toggleRoundtable,
+            onToggleMember = vm::toggleRoundtableMember,
+            onDismiss = { membersOpen = false },
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RoundtableMembersSheet(
+    allPersonas: List<Persona>,
+    selectedIds: List<String>,
+    enabled: Boolean,
+    onToggleEnabled: () -> Unit,
+    onToggleMember: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+    ) {
+        Column(modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("圆桌模式", style = MaterialTheme.typography.titleLarge)
+                    Text(
+                        "开启后，下一条消息会让选中的议员按顺序依次发言。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = enabled, onCheckedChange = { onToggleEnabled() })
+            }
+            Spacer(Modifier.size(12.dp))
+            HorizontalDivider()
+            Spacer(Modifier.size(12.dp))
+            Text(
+                "参会议员（点击切换；顺序决定发言次序）",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Spacer(Modifier.size(8.dp))
+            if (allPersonas.isEmpty()) {
+                Text(
+                    "还没有议员。请到设置 → 圆桌议员添加。",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            } else {
+                LazyColumn(modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 60.dp, max = 360.dp)) {
+                    items(allPersonas, key = { it.id }) { p ->
+                        val pos = selectedIds.indexOf(p.id)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            FilterChip(
+                                selected = pos >= 0,
+                                onClick = { onToggleMember(p.id) },
+                                label = {
+                                    val prefix = if (pos >= 0) "${pos + 1}. " else ""
+                                    Text("$prefix${p.name} · ${p.roleLabel}")
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.size(12.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                FilledTonalButton(onClick = onDismiss) { Text("关闭") }
+            }
+            Spacer(Modifier.size(8.dp))
+        }
+    }
 }
 
 @Composable
@@ -223,19 +334,14 @@ private fun SessionDrawer(
     ModalDrawerSheet(
         drawerShape = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp),
     ) {
-        Column(modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)) {
+        Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
             Text(
                 "历史会话",
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 12.dp),
             )
-            TextButton(
-                onClick = onNew,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            ) {
+            TextButton(onClick = onNew, modifier = Modifier.padding(horizontal = 8.dp)) {
                 Icon(Icons.Rounded.AddComment, contentDescription = null)
                 Spacer(Modifier.size(8.dp))
                 Text(stringResourceSafe(R.string.action_new_session))
@@ -248,8 +354,7 @@ private fun SessionDrawer(
                         label = {
                             Text(
                                 s.title.ifBlank { stringResourceSafe(R.string.title_new_chat) },
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis,
                             )
                         },
                         selected = selected,
@@ -257,11 +362,8 @@ private fun SessionDrawer(
                         badge = {
                             if (sessions.size > 1) {
                                 IconButton(onClick = { onDelete(s.id) }) {
-                                    Icon(
-                                        Icons.Rounded.Delete,
-                                        contentDescription = "删除",
-                                        tint = MaterialTheme.colorScheme.error,
-                                    )
+                                    Icon(Icons.Rounded.Delete, contentDescription = "删除",
+                                        tint = MaterialTheme.colorScheme.error)
                                 }
                             }
                         },
@@ -283,18 +385,13 @@ private fun SystemPromptSheet(
     onSave: (String) -> Unit,
 ) {
     var text by remember(initial) { mutableStateOf(initial) }
-    androidx.compose.material3.ModalBottomSheet(
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
     ) {
-        Column(modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 12.dp)) {
-            Text(
-                "系统提示",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp)) {
+            Text("系统提示", style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface)
             Spacer(Modifier.size(4.dp))
             Text(
                 "在每次对话前注入到模型上下文。留空则不注入。",
@@ -303,11 +400,8 @@ private fun SystemPromptSheet(
             )
             Spacer(Modifier.size(16.dp))
             OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 120.dp, max = 320.dp),
+                value = text, onValueChange = { text = it },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 320.dp),
                 placeholder = { Text("例如：你是一个语言简练、风格略带幽默的小说编辑…") },
                 shape = RoundedCornerShape(12.dp),
             )
@@ -315,9 +409,7 @@ private fun SystemPromptSheet(
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = onDismiss) { Text("取消") }
                 Spacer(Modifier.size(8.dp))
-                androidx.compose.material3.FilledTonalButton(onClick = { onSave(text) }) {
-                    Text("保存")
-                }
+                FilledTonalButton(onClick = { onSave(text) }) { Text("保存") }
             }
             Spacer(Modifier.size(8.dp))
         }
@@ -327,30 +419,21 @@ private fun SystemPromptSheet(
 @Composable
 private fun EmptyState(onSuggestion: (String) -> Unit) {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 24.dp),
+        modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Icon(
-            Icons.Rounded.Forum,
-            contentDescription = null,
+        Icon(Icons.Rounded.Forum, contentDescription = null,
             modifier = Modifier.size(48.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+            tint = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.size(12.dp))
-        Text(
-            stringResourceSafe(R.string.empty_chat_title),
+        Text(stringResourceSafe(R.string.empty_chat_title),
             style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
+            color = MaterialTheme.colorScheme.onSurface)
         Spacer(Modifier.size(8.dp))
-        Text(
-            stringResourceSafe(R.string.empty_chat_subtitle),
+        Text(stringResourceSafe(R.string.empty_chat_subtitle),
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.size(16.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             SuggestionChip(
@@ -373,15 +456,30 @@ private fun EmptyState(onSuggestion: (String) -> Unit) {
     }
 }
 
+/** Hash a speaker id into a deterministic M3 container tone so each
+ *  persona gets a distinct (but theme-aware) bubble color. */
+@Composable
+private fun bubbleTintForSpeaker(speakerId: String?): Pair<Color, Color> {
+    if (speakerId.isNullOrBlank()) {
+        return MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    val palettes = listOf(
+        MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer,
+        MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer,
+        MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant,
+        MaterialTheme.colorScheme.surfaceContainerHighest to MaterialTheme.colorScheme.onSurface,
+    )
+    val idx = (speakerId.hashCode().rem(palettes.size).let { if (it < 0) it + palettes.size else it })
+    return palettes[idx]
+}
+
 @Composable
 private fun MessageRow(msg: ChatMessage) {
     val isUser = msg.role == Role.USER
-    val bubble = if (isUser) {
-        MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
-    } else if (msg.failed) {
-        MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
-    } else {
-        MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
+    val bubble = when {
+        isUser -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
+        msg.failed -> MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
+        else -> bubbleTintForSpeaker(msg.speakerId)
     }
     val shape = if (isUser)
         RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp)
@@ -392,25 +490,31 @@ private fun MessageRow(msg: ChatMessage) {
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
     ) {
-        Surface(
-            shape = shape,
-            color = bubble.first,
-            modifier = Modifier.padding(if (isUser) PaddingValues(start = 48.dp) else PaddingValues(end = 48.dp)),
+        Column(
+            modifier = Modifier.padding(
+                if (isUser) PaddingValues(start = 48.dp) else PaddingValues(end = 48.dp)
+            ),
+            horizontalAlignment = if (isUser) Alignment.End else Alignment.Start,
         ) {
-            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
-                val showLoadingDots = msg.streaming && msg.content.isEmpty()
-                if (showLoadingDots) {
-                    Text(
-                        "…",
-                        color = bubble.second.copy(alpha = 0.7f),
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
-                } else {
-                    Text(
-                        msg.content,
-                        color = bubble.second,
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
+            if (!isUser && !msg.speakerName.isNullOrBlank()) {
+                Text(
+                    msg.speakerName,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.W500,
+                    modifier = Modifier.padding(start = 6.dp, bottom = 2.dp),
+                )
+            }
+            Surface(shape = shape, color = bubble.first) {
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                    val showLoadingDots = msg.streaming && msg.content.isEmpty()
+                    if (showLoadingDots) {
+                        Text("…", color = bubble.second.copy(alpha = 0.7f),
+                            style = MaterialTheme.typography.bodyLarge)
+                    } else {
+                        Text(msg.content, color = bubble.second,
+                            style = MaterialTheme.typography.bodyLarge)
+                    }
                 }
             }
         }
@@ -421,6 +525,7 @@ private fun MessageRow(msg: ChatMessage) {
 private fun Composer(
     text: String,
     isGenerating: Boolean,
+    isRoundtable: Boolean,
     onChange: (String) -> Unit,
     onSend: () -> Unit,
     onStop: () -> Unit,
@@ -432,48 +537,61 @@ private fun Composer(
         shadowElevation = 1.dp,
         modifier = modifier.fillMaxWidth(),
     ) {
-        Row(
-            verticalAlignment = Alignment.Bottom,
-            modifier = Modifier.padding(start = 12.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
-        ) {
-            TextField(
-                value = text,
-                onValueChange = onChange,
-                placeholder = { Text(stringResourceSafe(R.string.composer_hint)) },
-                modifier = Modifier
-                    .weight(1f)
-                    .heightIn(min = 48.dp, max = 188.dp),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                    focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
-                    unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
-                ),
-                shape = RoundedCornerShape(28.dp),
-                maxLines = 6,
-            )
-            Spacer(Modifier.size(8.dp))
-            AnimatedVisibility(visible = isGenerating, enter = fadeIn(), exit = fadeOut()) {
-                FilledIconButton(
-                    onClick = onStop,
-                    shape = MaterialTheme.shapes.large,
-                    colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                    ),
-                    modifier = Modifier.size(48.dp),
-                ) {
-                    Icon(Icons.Rounded.Stop, contentDescription = stringResourceSafe(R.string.composer_stop))
+        Column(modifier = Modifier.padding(start = 12.dp, end = 6.dp, top = 8.dp, bottom = 8.dp)) {
+            if (isRoundtable) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 6.dp)) {
+                    Icon(
+                        Icons.Rounded.Groups,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(Modifier.size(4.dp))
+                    Text(
+                        "圆桌模式 · 发送后所有参会议员依次发言",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
                 }
             }
-            AnimatedVisibility(visible = !isGenerating, enter = fadeIn(), exit = fadeOut()) {
-                FilledIconButton(
-                    onClick = onSend,
-                    enabled = text.isNotBlank(),
-                    shape = MaterialTheme.shapes.large,
-                    modifier = Modifier.size(48.dp),
-                ) {
-                    Icon(Icons.Rounded.ArrowUpward, contentDescription = stringResourceSafe(R.string.composer_send))
+            Row(verticalAlignment = Alignment.Bottom) {
+                TextField(
+                    value = text,
+                    onValueChange = onChange,
+                    placeholder = { Text(stringResourceSafe(R.string.composer_hint)) },
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp, max = 188.dp),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                    ),
+                    shape = RoundedCornerShape(28.dp),
+                    maxLines = 6,
+                )
+                Spacer(Modifier.size(8.dp))
+                AnimatedVisibility(visible = isGenerating, enter = fadeIn(), exit = fadeOut()) {
+                    FilledIconButton(
+                        onClick = onStop,
+                        shape = MaterialTheme.shapes.large,
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                        ),
+                        modifier = Modifier.size(48.dp),
+                    ) {
+                        Icon(Icons.Rounded.Stop, contentDescription = stringResourceSafe(R.string.composer_stop))
+                    }
+                }
+                AnimatedVisibility(visible = !isGenerating, enter = fadeIn(), exit = fadeOut()) {
+                    FilledIconButton(
+                        onClick = onSend,
+                        enabled = text.isNotBlank(),
+                        shape = MaterialTheme.shapes.large,
+                        modifier = Modifier.size(48.dp),
+                    ) {
+                        Icon(Icons.Rounded.ArrowUpward, contentDescription = stringResourceSafe(R.string.composer_send))
+                    }
                 }
             }
         }

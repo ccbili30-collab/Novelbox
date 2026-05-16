@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.qinglan.chatnovel.data.PersonaStoreTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-05-16T05:52:18" hostname="vm" time="0.1">
+<testsuite name="com.qinglan.chatnovel.data.PersonaStoreTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-05-16T06:12:59" hostname="vm" time="0.134">
   <properties/>
-  <testcase name="upsert is idempotent + persisted" classname="com.qinglan.chatnovel.data.PersonaStoreTest" time="0.09"/>
-  <testcase name="mutate only touches the matching id" classname="com.qinglan.chatnovel.data.PersonaStoreTest" time="0.003"/>
+  <testcase name="upsert is idempotent + persisted" classname="com.qinglan.chatnovel.data.PersonaStoreTest" time="0.123"/>
+  <testcase name="mutate only touches the matching id" classname="com.qinglan.chatnovel.data.PersonaStoreTest" time="0.005"/>
   <testcase name="first load seeds Persona DEFAULTS" classname="com.qinglan.chatnovel.data.PersonaStoreTest" time="0.001"/>
   <testcase name="delete removes by id" classname="com.qinglan.chatnovel.data.PersonaStoreTest" time="0.002"/>
-  <testcase name="seedOnEmpty=false stays empty on missing file" classname="com.qinglan.chatnovel.data.PersonaStoreTest" time="0.001"/>
+  <testcase name="seedOnEmpty=false stays empty on missing file" classname="com.qinglan.chatnovel.data.PersonaStoreTest" time="0.0"/>
   <testcase name="corrupt json + seed=true falls back to DEFAULTS" classname="com.qinglan.chatnovel.data.PersonaStoreTest" time="0.002"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>

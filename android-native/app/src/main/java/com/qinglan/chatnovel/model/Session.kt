@@ -3,13 +3,27 @@ package com.qinglan.chatnovel.model
 import kotlinx.serialization.Serializable
 
 /**
- * A complete conversation. Persisted to disk via [SessionStore].
+ * Per-session roundtable configuration. Lives inside [Session] so it
+ * persists alongside the chat history.
  *
- * - id: stable identifier; not user-visible.
- * - title: derived from the first user message, editable later.
- * - systemPrompt: optional system message prepended to the API call.
- * - messages: full chat history (linear; no branching yet).
- * - createdAt / updatedAt: ms epoch, used for sort order.
+ *  - enabled: when true, the chat surface switches to multi-AI
+ *    roundtable mode (the next user message triggers a round of
+ *    sequential persona replies).
+ *  - personaIds: ordered list of personas that will speak in this
+ *    round. Order is the legacy "selected by number" order from the
+ *    web app.
+ *  - temperature: shared temperature for every persona this round
+ *    (per-persona overrides land in Phase 6+ if needed).
+ */
+@Serializable
+data class RoundtableConfig(
+    val enabled: Boolean = false,
+    val personaIds: List<String> = emptyList(),
+    val temperature: Double = 0.7,
+)
+
+/**
+ * A complete conversation. Persisted to disk via [SessionStore].
  */
 @Serializable
 data class Session(
@@ -19,6 +33,7 @@ data class Session(
     val messages: List<ChatMessage> = emptyList(),
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = createdAt,
+    val roundtable: RoundtableConfig = RoundtableConfig(),
 ) {
     /** The first user message, trimmed to 40 chars, with a fallback. */
     fun deriveTitle(): String {
