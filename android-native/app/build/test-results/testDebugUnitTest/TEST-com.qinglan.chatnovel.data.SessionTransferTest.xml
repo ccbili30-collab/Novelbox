@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.qinglan.chatnovel.data.SessionTransferTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-05-16T05:37:39" hostname="vm" time="0.022">
+  <properties/>
+  <testcase name="importSession round-trips" classname="com.qinglan.chatnovel.data.SessionTransferTest" time="0.006"/>
+  <testcase name="importAll returns empty list on garbage" classname="com.qinglan.chatnovel.data.SessionTransferTest" time="0.0"/>
+  <testcase name="exportAll + importAll round-trip preserves order" classname="com.qinglan.chatnovel.data.SessionTransferTest" time="0.001"/>
+  <testcase name="filenameFor falls back when title is blank" classname="com.qinglan.chatnovel.data.SessionTransferTest" time="0.007"/>
+  <testcase name="filenameFor strips reserved chars and trims" classname="com.qinglan.chatnovel.data.SessionTransferTest" time="0.006"/>
+  <testcase name="importSession returns null on garbage" classname="com.qinglan.chatnovel.data.SessionTransferTest" time="0.001"/>
+  <testcase name="exportSession produces parseable JSON" classname="com.qinglan.chatnovel.data.SessionTransferTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

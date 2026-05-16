@@ -1,6 +1,7 @@
 package com.qinglan.chatnovel
 
 import android.app.Application
+import com.qinglan.chatnovel.data.PersonaStore
 import com.qinglan.chatnovel.data.SessionStore
 import com.qinglan.chatnovel.data.SettingsStore
 import java.io.File
@@ -19,6 +20,12 @@ class TBirdApplication : Application() {
     val sessionStore: SessionStore by lazy {
         val file = File(filesDir, "sessions/sessions.json")
         SessionStore(file).also { it.load() }
+    }
+
+    /** Persisted roundtable persona library. */
+    val personaStore: PersonaStore by lazy {
+        val file = File(filesDir, "personas/personas.json")
+        PersonaStore(file).also { it.load() }
     }
 
     override fun onCreate() {
