@@ -25,3 +25,7 @@ dotf_inspect/
 downloads/
 fungal-war-addon/
 fungal-war-flesh-war/
+
+# Built debug APK + Android SDK local config
+*.apk
+android-app/local.properties
