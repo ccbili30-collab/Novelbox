@@ -1,7 +1,7 @@
 import { createCreatorIdentity } from "../domain/creator/creator-model.js";
 import {
   GENERATIVE_AGENT_MEMORY_LIMIT,
-  getSealedRoundtableCreatorBase,
+  getRoundtableCreatorTemplateBase,
   hydrateRoundtableState,
   normalizeAssistantMemories,
 } from "../domain/roundtable/roundtable-model.js";
@@ -70,7 +70,7 @@ export function createImportExportController({
     if (!sourceTemplateId && !sealedTemplateCode) return clean(creator.prompt);
     const templateId = sourceTemplateId
       || (sealedTemplateCode === "T" ? "sealed-t" : sealedTemplateCode === "B" ? "sealed-b" : "");
-    return clean(getSealedRoundtableCreatorBase(templateId)?.prompt) || clean(creator.prompt);
+    return clean(getRoundtableCreatorTemplateBase(templateId)?.prompt) || clean(creator.prompt);
   }
 
   function collectSessionCreatorIds(session) {

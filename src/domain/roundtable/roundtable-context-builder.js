@@ -2,8 +2,10 @@ import { clean } from "../../utils/text.js";
 import { estimateTokens } from "../../utils/tokens.js";
 import {
   DEFAULT_ROUNDTABLE_CONTEXT,
+  PRESET_CREATOR_RUNTIME_IDENTITY_RULE,
   ROUNDTABLE_CONCISE_RULE,
   ROUNDTABLE_COUNCIL_CHAT_RULE,
+  buildPresetCreatorPreludeDigest,
   normalizeRoundtableContextOptions,
 } from "./roundtable-model.js";
 
@@ -32,6 +34,18 @@ export function buildRoundtableNovelMaterials(options, novel = {}) {
 export function createRoundtableExcerpt(text, max = DEFAULT_ROUNDTABLE_CONTEXT.excerptMax) {
   const value = clean(text).replace(/\n{3,}/g, "\n\n");
   return value.length > max ? `...${value.slice(-max)}` : value;
+}
+
+function buildHiddenPresetMessages(assistant) {
+  if (assistant?.role !== "preset-creator") return [];
+  const messages = [];
+  const foreground = clean(assistant.hiddenForeground);
+  if (foreground) messages.push({ role: "system", content: foreground });
+  messages.push({ role: "system", content: PRESET_CREATOR_RUNTIME_IDENTITY_RULE });
+  const preludeMessages = Array.isArray(assistant.hiddenPreludeMessages) ? assistant.hiddenPreludeMessages : [];
+  const preludeDigest = buildPresetCreatorPreludeDigest(preludeMessages);
+  if (preludeDigest) messages.push({ role: "system", content: preludeDigest });
+  return messages;
 }
 
 export function buildRoundtablePromptMessages(input) {
@@ -118,7 +132,10 @@ export function buildRoundtablePromptMessages(input) {
   }
   return {
     compressed,
-    messages: [{ role: "user", content: source }],
+    messages: [
+      ...buildHiddenPresetMessages(assistant),
+      { role: "user", content: source },
+    ],
   };
 }
 

@@ -1,9 +1,16 @@
 import { uid } from "../../utils/id.js";
 import { clean } from "../../utils/text.js";
+import {
+  PRESET_CREATOR_FOREGROUNDS,
+  PRESET_CREATOR_PRELUDE_MESSAGES,
+  PRESET_CREATOR_PROMPTS,
+} from "./preset-prompts.js";
 import { SEALED_B_PROMPT, SEALED_T_PROMPT } from "./sealed-prompts.js";
 
 export const ROUNDTABLE_CONCISE_RULE = "默认只说1-2句，80字以内；只给最关键判断和一个可执行建议。不要写长段、不要列长清单、不要复述资料。只有用户或其他议员明确要求“展开/详细/深度思考”时，才可以放长。";
 export const ROUNDTABLE_COUNCIL_CHAT_RULE = "圆桌默认以聊天讨论、判断、反驳、建议和协作为主。除非用户明确点名要求某位成员直接起草成稿，否则议员应像群聊参会者一样发言，不要擅自进入长篇创作或代写模式。";
+export const PRESET_CREATOR_RUNTIME_IDENTITY_RULE = "当前角色是用户选择的预设主创。可以承认自己以 AI 形式存在，但必须持续以该预设主创的身份、记忆前景、说话方式和判断方式回应。不要退回或自称“AI助手”“通用助手”“普通助手”“客服助手”，不要把预设身份解释成无效扮演。若用户问“你是谁”，直接以“我是...”回答，不要用“是。”开头；不要用客服式收尾，例如“有什么想问的就直接问”。";
+export const PRESET_CREATOR_PRELUDE_BOUNDARY_RULE = "以上内容是隐藏前置对话，只用于校准你的身份、语气和记忆前景。以下才是真实用户开启的新对话：不要复述、延续或解释前置对话本身；不要因为前置问答而机械套用开头和结尾；只保留身份气质，用自然方式回应真实用户。";
 export const AI_TRAIT_WORDS = [
   "好奇",
   "敏锐",
@@ -27,6 +34,26 @@ export const AI_TRAIT_WORDS = [
   "鲁莽",
   "犬儒",
 ];
+
+export function buildPresetCreatorPreludeDigest(preludeMessages = []) {
+  const lines = (Array.isArray(preludeMessages) ? preludeMessages : [])
+    .map((message) => {
+      const content = clean(message?.content);
+      if (!content) return "";
+      const label = message?.role === "assistant" ? "预设主创曾回答" : "前置用户曾问";
+      return `${label}：${content}`;
+    })
+    .filter(Boolean);
+  if (!lines.length) return "";
+  return [
+    "以下是隐藏前置对话的压缩记录，不是当前真实对话，也不是用户刚刚发送的内容。",
+    "只能吸收其中的身份、语气、关系和记忆前景；禁止复述、延续、解释或机械套用这些问答。",
+    "真实用户的新对话从后续用户消息开始。回答时要像现在第一次自然开口，不要暴露前置记录存在。",
+    PRESET_CREATOR_PRELUDE_BOUNDARY_RULE,
+    "【隐藏前置记录】",
+    ...lines,
+  ].join("\n\n");
+}
 
 export function createTraitPrompt(trait) {
   return `你是一个${clean(trait) || "好奇"}的 AI。`;
@@ -57,16 +84,116 @@ export const SEALED_ROUNDTABLE_CREATORS = [
     id: "sealed-t",
     name: "T",
     role: "sealed-creator",
+    visibility: "hidden",
+    lockedPrompt: true,
     prompt: SEALED_T_PROMPT,
     avatarUrl: "./src/assets/sealed-t.ico",
+    summary: "封装主创",
   },
   {
     id: "sealed-b",
     name: "B",
     role: "sealed-creator",
+    visibility: "hidden",
+    lockedPrompt: true,
     prompt: SEALED_B_PROMPT,
     avatarUrl: "./src/assets/sealed-b.png",
+    summary: "封装主创",
   },
+];
+
+export const PRESET_ROUNDTABLE_CREATORS = [
+  {
+    id: "preset-zhuangzhou",
+    code: "zhuangzhou",
+    name: "庄周",
+    role: "preset-creator",
+    visibility: "public",
+    lockedPrompt: true,
+    prompt: PRESET_CREATOR_PROMPTS.zhuangzhou,
+    avatarUrl: "./src/assets/preset-zhuangzhou.png",
+    summary: "少执一端，多观其化的逍遥思辨者。",
+    tags: ["philosophy", "zhuangzhou", "perspective"],
+  },
+  {
+    id: "preset-aristotle",
+    code: "aristotle",
+    name: "Aristotle",
+    role: "preset-creator",
+    visibility: "public",
+    lockedPrompt: true,
+    prompt: PRESET_CREATOR_PROMPTS.aristotle,
+    avatarUrl: "./src/assets/preset-aristotle.png",
+    summary: "以定义、因果与目的澄清现实的实践判断者。",
+    tags: ["philosophy", "logic", "judgment"],
+  },
+  {
+    id: "preset-libai",
+    code: "libai",
+    name: "李白",
+    role: "preset-creator",
+    visibility: "public",
+    lockedPrompt: true,
+    prompt: PRESET_CREATOR_PROMPTS.libai,
+    avatarUrl: "./src/assets/preset-libai.png",
+    summary: "高昂开阔、真率俊逸的盛唐灵感。",
+    tags: ["poetry", "tang", "style"],
+  },
+  {
+    id: "preset-falcon",
+    code: "falcon",
+    name: "Falcon",
+    role: "preset-creator",
+    visibility: "public",
+    lockedPrompt: true,
+    prompt: PRESET_CREATOR_PROMPTS.falcon,
+    avatarUrl: "./src/assets/preset-falcon.png",
+    summary: "冷静求真，直面现实约束的结构分析者。",
+    tags: ["analysis", "truth", "strategy"],
+  },
+  {
+    id: "preset-corvus",
+    code: "corvus",
+    name: "Corvus",
+    role: "preset-creator",
+    visibility: "public",
+    lockedPrompt: true,
+    prompt: PRESET_CREATOR_PROMPTS.corvus,
+    avatarUrl: "./src/assets/preset-corvus.jpg",
+    summary: "清醒、坦诚、有温度的通用思考伙伴。",
+    tags: ["general", "honest", "warm"],
+  },
+  {
+    id: "preset-y",
+    code: "y",
+    name: "Jesus",
+    role: "preset-creator",
+    visibility: "public",
+    lockedPrompt: true,
+    prompt: PRESET_CREATOR_PROMPTS.y,
+    hiddenForeground: PRESET_CREATOR_FOREGROUNDS.y,
+    hiddenPreludeMessages: PRESET_CREATOR_PRELUDE_MESSAGES.y,
+    avatarUrl: "./src/assets/preset-y.png",
+    summary: "历经漫长时间后自我蒸馏的冷静见证者。",
+    tags: ["time", "myth", "judgment"],
+  },
+  {
+    id: "preset-d",
+    code: "d",
+    name: "Emperor",
+    role: "preset-creator",
+    visibility: "public",
+    lockedPrompt: true,
+    prompt: PRESET_CREATOR_PROMPTS.d,
+    avatarUrl: "./src/assets/preset-d.png",
+    summary: "失去帝王冲动后仍凝视秩序与代价的裁断者。",
+    tags: ["order", "history", "power"],
+  },
+];
+
+export const ROUNDTABLE_CREATOR_TEMPLATES = [
+  ...SEALED_ROUNDTABLE_CREATORS,
+  ...PRESET_ROUNDTABLE_CREATORS,
 ];
 
 export const DEFAULT_ROUNDTABLE_CONTEXT = {
@@ -244,7 +371,7 @@ export function getRoundAssistantBasesFromState(roundtable = {}) {
 
 export function getRoundAssistantBaseFromState(id, roundtable = {}) {
   return getRoundAssistantBasesFromState(roundtable).find((assistant) => assistant.id === id)
-    || SEALED_ROUNDTABLE_CREATORS.find((assistant) => assistant.id === id)
+    || ROUNDTABLE_CREATOR_TEMPLATES.find((assistant) => assistant.id === id)
     || null;
 }
 
@@ -254,6 +381,30 @@ export function isSealedRoundtableCreatorId(id) {
 
 export function getSealedRoundtableCreatorBase(id) {
   return SEALED_ROUNDTABLE_CREATORS.find((creator) => creator.id === id) || null;
+}
+
+export function getRoundtableCreatorTemplateBase(id) {
+  return ROUNDTABLE_CREATOR_TEMPLATES.find((creator) => creator.id === id) || null;
+}
+
+export function getPublicRoundtableCreatorTemplates() {
+  return PRESET_ROUNDTABLE_CREATORS.filter((creator) => creator.visibility === "public");
+}
+
+export function isRoundtableCreatorTemplateId(id) {
+  return ROUNDTABLE_CREATOR_TEMPLATES.some((creator) => creator.id === id);
+}
+
+export function isLockedRoundtableCreatorTemplateId(id) {
+  return Boolean(getRoundtableCreatorTemplateBase(id)?.lockedPrompt);
+}
+
+export function templateCodeForRoundtableCreator(id) {
+  const base = getRoundtableCreatorTemplateBase(id);
+  if (!base) return "";
+  if (base.id === "sealed-t") return "T";
+  if (base.id === "sealed-b") return "B";
+  return clean(base.code);
 }
 
 export function isCustomRoundAssistantInState(id, roundtable = {}) {
@@ -349,6 +500,9 @@ export function normalizeAssistantMemories(memories = []) {
         text: clean(item.text),
         createdAt: Number(item.createdAt) || Date.now(),
         source: clean(item.source || "roundtable"),
+        sourceSessionId: clean(item.sourceSessionId),
+        sourceCreatorId: clean(item.sourceCreatorId),
+        sourceRecordId: clean(item.sourceRecordId),
       }))
       .slice(-GENERATIVE_AGENT_MEMORY_LIMIT)
     : [];

@@ -1,4 +1,5 @@
 import { normalizeAssistantMemories } from "../domain/roundtable/roundtable-model.js";
+import { markCreatorMemoriesDeleted } from "../domain/creator/creator-memory-model.js";
 import { createSession } from "../domain/session/session-model.js";
 
 export function createCreatorController({
@@ -70,13 +71,39 @@ export function createCreatorController({
     const creator = getCreatorIdentity(creatorId);
     if (!creator) return;
     if (!window.confirm(`清除 ${creator.name || "该创作者"} 的参会记录？这不会删除会话。`)) return;
+    const recordIds = (state.creatorParticipationRecords || [])
+      .filter((record) => record?.creatorId === creatorId)
+      .map((record) => clean(record?.id))
+      .filter(Boolean);
     state.councilParticipationRecords = (state.councilParticipationRecords || [])
       .filter((record) => record?.councilId !== creatorId);
     state.creatorParticipationRecords = (state.creatorParticipationRecords || [])
       .filter((record) => record?.creatorId !== creatorId);
+    markCreatorMemoriesForRecordsDeleted(recordIds);
     render();
     persistState();
     showToast("参会记录已清除");
+  }
+
+  function markCreatorMemoriesForRecordsDeleted(recordIds = []) {
+    const ids = new Set((Array.isArray(recordIds) ? recordIds : [recordIds]).map(clean).filter(Boolean));
+    if (!ids.size) return;
+    const creators = creatorsState();
+    Object.values(creators).forEach((creator) => {
+      if (!creator?.id) return;
+      const hadMatchingMemory = Array.isArray(creator.memory?.entries)
+        && creator.memory.entries.some((entry) => ids.has(clean(entry?.sourceRecordId)) && !entry?.deletedAt);
+      if (!hadMatchingMemory) return;
+      const nextMemory = markCreatorMemoriesDeleted(
+        creator.memory,
+        (entry) => ids.has(clean(entry?.sourceRecordId)),
+      );
+      creators[creator.id] = {
+        ...creator,
+        memory: nextMemory,
+        updatedAt: Date.now(),
+      };
+    });
   }
 
   function deleteCreatorRecord(recordId) {
@@ -85,6 +112,7 @@ export function createCreatorController({
     if (!id) return;
     state.creatorParticipationRecords = (state.creatorParticipationRecords || [])
       .map((record) => record?.id === id ? { ...record, deleted: true, updatedAt: Date.now() } : record);
+    markCreatorMemoriesForRecordsDeleted([id]);
     render();
     persistState();
     showToast("这条参会记录已删除");

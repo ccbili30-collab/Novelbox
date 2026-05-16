@@ -10,6 +10,36 @@
 
 ---
 
+## Current Implementation Status
+
+Updated: 2026-05-15
+
+This plan is the active construction map for:
+
+`creator identity system + cross-session memory pool + roundtable participation records + automatic retrieval injection before model calls`.
+
+| Status | Area | Current state | Next action |
+| --- | --- | --- | --- |
+| Done | Explicit memory model | `creator-memory-model.js` exists; new memory entries support source session, source node, source record, branch hash, type, importance, and deletion markers. Legacy `compressedSnapshots` remain readable. | Keep compatibility while new writes move to `memory.entries`. |
+| Done | Branch-aware memory | `branch-signature.js` exists; main chat memory can be tied to active branch hash, and abandoned branch memory can be pruned. | Verify resend/regenerate paths always call pruning after branch switch. |
+| Done | Memory writer foundation | `creator-memory-writer.js` exists; relevant user/assistant text can become creator memory. Writer output is excluded. | Tune heuristics after real usage, especially Chinese trigger words. |
+| Done | Roundtable participation records | `creatorParticipationRecords` and legacy `councilParticipationRecords` both exist. Roundtable messages are recorded and can be distilled into creator memory. Deleting one record, or clearing a creator's records, now marks derived `sourceRecordId` memories deleted everywhere. | Keep polishing how records are displayed in the 3-level creators page. |
+| Done | Local retrieval | `creator-memory-retrieval.js` exists; retrieval scores by keyword overlap, recency, importance, same session, and same roundtable. | Keep first pass local; no embeddings. |
+| Done | Prompt injection | Main chat and roundtable prompt builders call creator memory lookup and inject snippets before model calls. Main chat AI versions and roundtable speaker messages now record the referenced snippets used for generation. | Tune retrieval wording after real usage. |
+| Partial | Creator/variant boundary | A session has `session.creatorId`; switching chat/roundtable mode keeps the same primary creator. Pulling same-app creators from other sessions now keeps the same identity and records source-session memory under that creator instead of creating a fake independent clone. New roundtable councilors start as local seats; opening independent private chat upgrades the local seat into a real creator with its own session. | Continue cleaning old unreachable clone-era code and verify the upgrade flow on device. |
+| Partial | Creators page | The `Creators` settings page exists with creator list, detail page, memories, records, sessions, roundtables, query, import/export, and deletion controls. | Polish the 3-level navigation and remove long participation text from assistant settings. |
+| Done | Referenced memory UI | Main-chat AI messages and roundtable speaker messages store compact `referencedMemories` lists and show them in collapsed low-weight blocks under responses. | Verify in mobile WebView after the next APK install. |
+| Partial | Compression hooks | Main context overflow and some roundtable/source-session compression exists. | Add explicit round-end / roundtable-leave compression hook if changed. |
+| Partial | Delete and forget | Session and creator deletion confirmation exists; participation record deletion marks records deleted and now forgets derived memories. | Continue safer alias/root handling and verify creator/session delete choices on device. |
+| Partial | Regression suite | Test scripts exist for memory model, branch pruning, writer, retrieval, distillation, record-delete forgetting, roundtable import identity, aliases, session branching, markdown, global model config. | Run the full Node suite before deeper edits; Android build after behavior changes. |
+
+Immediate safe work order:
+
+1. Run the existing memory/session regression scripts and fix any failures.
+2. Add missing referenced-memory metadata capture without changing creator deletion semantics.
+3. Revisit same-app pulled creator identity alias/root handling in small patches.
+4. Only after tests pass, polish the creators page navigation/details.
+
 ## Approved Product Rules
 
 1. Automatic memory is allowed, with a user-facing off switch later.

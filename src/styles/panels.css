@@ -296,7 +296,8 @@
 .creator-card-avatar img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  background: #fff;
 }
 
 .creator-card-avatar.large {
@@ -972,6 +973,10 @@
   margin: 12px 0;
 }
 
+.assistant-avatar-row {
+  grid-template-columns: auto minmax(0, 1fr) 46px;
+}
+
 .avatar-preview {
   display: grid;
   place-items: center;
@@ -980,12 +985,18 @@
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 18px;
-  color: #fff;
-  background: #3b352d;
+  color: #2f2b25;
+  background: #fff;
   font-weight: 800;
 }
 
-.avatar-preview img,
+.avatar-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #fff;
+}
+
 .background-preview img {
   width: 100%;
   height: 100%;
@@ -1016,6 +1027,22 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.preset-creator-trigger {
+  width: 46px;
+  height: 46px;
+  min-height: 0;
+  align-self: center;
+  border: 1px solid #1d1d1b;
+  border-radius: 15px;
+  padding: 0;
+  background: #1d1d1b;
+  color: #fff;
+  box-shadow: 0 12px 26px rgba(20, 20, 18, 0.16);
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .avatar-setting-actions button,
@@ -1236,13 +1263,20 @@
 
 .session-item {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
-  padding: 11px;
+  padding: 9px 10px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: #fff;
+  transition: background 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.session-item.active {
+  border-color: rgba(31, 41, 51, 0.42);
+  background: linear-gradient(90deg, rgba(31, 41, 51, 0.07), #fff 46%);
+  box-shadow: inset 3px 0 0 #1f2933, 0 8px 18px rgba(31, 41, 51, 0.08);
 }
 
 .session-main {
@@ -1250,18 +1284,52 @@
   text-align: left;
 }
 
-.session-main strong,
-.session-main span {
+.session-title-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: start;
+}
+
+.session-main strong {
+  display: -webkit-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 1.32;
+  font-weight: 650;
+}
+
+.session-meta {
   display: block;
+  margin-top: 3px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.session-main span,
+.session-meta,
 .muted {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
+}
+
+.session-current-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  color: #fff;
+  background: #1f2933;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 600;
+  line-height: 1;
 }
 
 .session-actions {
@@ -1892,7 +1960,7 @@
 }
 
 .assistant-config-dialog .assistant-avatar-row {
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: 42px minmax(0, 1fr) 42px;
   gap: 9px;
   margin: 9px 0;
 }
@@ -1906,6 +1974,7 @@
 
 .assistant-config-dialog .avatar-setting-actions {
   gap: 6px;
+  min-width: 0;
 }
 
 .assistant-config-dialog .avatar-setting-actions button,
@@ -1913,6 +1982,15 @@
   padding: 6px 8px;
   border-radius: 8px;
   font-size: 12px;
+}
+
+.assistant-config-dialog .preset-creator-trigger {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
 }
 
 .assistant-config-dialog > form > .dialog-actions {
@@ -2293,6 +2371,391 @@
   width: 100%;
   height: 100%;
   object-fit: contain;
+  background: #fff;
+}
+
+.preset-creator-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10020;
+  display: grid;
+  place-items: center;
+  padding: max(16px, env(safe-area-inset-top)) 14px max(16px, env(safe-area-inset-bottom));
+  overflow: hidden;
+  background: #020202;
+  color: #f3f0e8;
+  animation: presetOverlayBlackIn 620ms ease both;
+}
+
+.preset-creator-overlay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.58;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 50% 43%, rgba(255, 246, 224, 0.1), transparent 28%),
+    radial-gradient(circle at 18% 78%, rgba(255, 255, 255, 0.035), transparent 24%),
+    linear-gradient(180deg, #050505, #0a0908 58%, #020202);
+}
+
+.preset-creator-overlay::after {
+  content: "";
+  position: absolute;
+  inset: -18% -40%;
+  opacity: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(100deg, transparent 0 41%, rgba(248, 240, 224, 0.16) 48%, transparent 57%),
+    linear-gradient(100deg, transparent 0 56%, rgba(248, 240, 224, 0.09) 62%, transparent 69%);
+  transform: translateX(45%);
+  animation: presetLightSweep 1.25s linear infinite;
+}
+
+@keyframes presetOverlayBlackIn {
+  from { opacity: 0; background-color: rgba(0, 0, 0, 0); }
+  to { opacity: 1; background-color: #020202; }
+}
+
+@keyframes presetLightSweep {
+  0%, 28% { opacity: 0; transform: translateX(45%); }
+  45% { opacity: 0.22; }
+  72%, 100% { opacity: 0; transform: translateX(-45%); }
+}
+
+.preset-creator-overlay[hidden] {
+  display: none;
+}
+
+.preset-creator-panel {
+  position: relative;
+  z-index: 1;
+  width: min(430px, 100%);
+  height: min(820px, 100%);
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.preset-close-button {
+  display: none;
+}
+
+.preset-creator-head {
+  display: none;
+}
+
+.preset-creator-head strong {
+  font-size: 22px;
+}
+
+.preset-creator-head span {
+  color: rgba(243, 240, 232, 0.52);
+  font-size: 12px;
+}
+
+.preset-creator-list {
+  position: absolute;
+  inset: 0;
+}
+
+.preset-star-field {
+  position: relative;
+  height: 100%;
+  transform-origin: center;
+}
+
+.preset-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: rgba(246, 240, 230, 0.74);
+  font-size: 15px;
+  letter-spacing: 0.06em;
+  animation: presetWaitingPulse 1.2s ease-in-out infinite;
+}
+
+.preset-bg-stars {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  animation: presetStarsFadeIn 980ms ease 180ms forwards;
+}
+
+.preset-bg-star {
+  position: absolute;
+  left: var(--sx);
+  top: var(--sy);
+  width: var(--ss);
+  height: var(--ss);
+  border-radius: 999px;
+  background: rgba(255, 248, 232, var(--sa));
+  box-shadow:
+    0 0 6px rgba(255, 248, 232, calc(var(--sa) * 0.7)),
+    0 0 15px rgba(255, 248, 232, calc(var(--sa) * 0.22));
+  animation: presetBgStarDrift calc(var(--sd) * 0.42) linear infinite;
+  animation-delay: var(--sdelay);
+}
+
+@keyframes presetWaitingPulse {
+  0%, 100% { opacity: 0.45; filter: blur(0.2px); }
+  50% { opacity: 0.88; filter: blur(0); }
+}
+
+@keyframes presetStarsFadeIn {
+  to { opacity: 1; }
+}
+
+@keyframes presetBgStarDrift {
+  from { transform: translate3d(0, 0, 0); opacity: 0.12; }
+  12% { opacity: 0.78; }
+  70% { opacity: 0.42; }
+  to { transform: translate3d(-54vw, 4vh, 0); opacity: 0.08; }
+}
+
+.preset-star-node {
+  position: absolute;
+  z-index: 2;
+  left: var(--x);
+  top: var(--y);
+  width: var(--size);
+  height: var(--size);
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  padding: 0;
+  background: transparent;
+  color: #f8f0df;
+  opacity: 0.78;
+  transform: translate(-50%, -50%) scale(1);
+  transition:
+    width 220ms ease,
+    height 220ms ease,
+    opacity 280ms ease,
+    transform 520ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation:
+    presetNodeRise 780ms cubic-bezier(0.16, 0.84, 0.2, 1) both,
+    presetNodePulse 5.8s ease-in-out infinite;
+  animation-delay: var(--delay, 0ms);
+}
+
+.preset-creator-overlay.is-focusing .preset-star-node {
+  transition:
+    left 620ms cubic-bezier(0.18, 0.86, 0.18, 1),
+    top 620ms cubic-bezier(0.18, 0.86, 0.18, 1),
+    width 620ms cubic-bezier(0.18, 0.86, 0.18, 1),
+    height 620ms cubic-bezier(0.18, 0.86, 0.18, 1),
+    opacity 280ms ease,
+    transform 520ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.preset-creator-overlay.has-entered .preset-star-node {
+  animation: presetNodePulse 5.8s ease-in-out infinite;
+}
+
+.preset-star-node.dim {
+  opacity: 0.36;
+}
+
+.preset-star-node.active {
+  z-index: 5;
+  opacity: 1;
+}
+
+.preset-creator-avatar {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 50%;
+  background: #fff;
+  color: #2f2b25;
+  font-weight: 800;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.14),
+    0 22px 62px rgba(255, 255, 255, 0.07),
+    0 0 54px rgba(255, 244, 224, 0.1);
+}
+
+.preset-creator-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #fff;
+}
+
+.preset-star-node.active .preset-creator-avatar {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.22),
+    0 30px 96px rgba(255, 244, 224, 0.16),
+    0 0 82px rgba(255, 244, 224, 0.17);
+}
+
+@keyframes presetNodePulse {
+  0%, 100% { filter: brightness(0.92); }
+  50% { filter: brightness(1.12); }
+}
+
+@keyframes presetNodeRise {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 58vh) scale(0.56);
+    filter: blur(9px) brightness(0.65);
+  }
+  70% {
+    opacity: 1;
+    filter: blur(0) brightness(1.08);
+  }
+  to {
+    opacity: 0.78;
+    transform: translate(-50%, -50%) scale(1);
+    filter: blur(0) brightness(1);
+  }
+}
+
+.preset-star-detail {
+  position: absolute;
+  z-index: 4;
+  left: 34px;
+  right: 34px;
+  bottom: 42px;
+  min-height: 96px;
+  padding-top: 0;
+  border-top: 0;
+  display: grid;
+  align-content: center;
+  gap: 12px;
+  text-align: center;
+  opacity: 0;
+  transform: translateY(12px);
+  pointer-events: none;
+  transition: opacity 260ms ease, transform 360ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.preset-star-detail.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.preset-star-detail b {
+  display: block;
+  color: rgba(248, 242, 230, 0.9);
+  font-family: "Cormorant Garamond", "Playfair Display", Didot, "Bodoni 72", Georgia, "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", "SimSun", serif;
+  font-size: 31px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  line-height: 1.1;
+}
+
+.preset-star-detail b::after {
+  content: "";
+  display: block;
+  width: min(220px, 62vw);
+  height: 1px;
+  margin: 13px auto 0;
+  background: linear-gradient(90deg, transparent, rgba(248, 242, 230, 0.3), transparent);
+}
+
+.preset-star-detail small {
+  max-width: 330px;
+  margin: 0 auto;
+  color: rgba(248, 242, 230, 0.72);
+  font-family: "Cormorant Garamond", "Playfair Display", Didot, "Bodoni 72", Georgia, "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", "SimSun", serif;
+  font-size: 15px;
+  letter-spacing: 0.03em;
+  line-height: 1.6;
+}
+
+.preset-creator-overlay.is-shattering::before {
+  animation: presetScreenCrack 520ms steps(5, end) both;
+  background:
+    linear-gradient(24deg, transparent 0 49.4%, rgba(255, 255, 255, 0.34) 49.6% 50.1%, transparent 50.4%),
+    linear-gradient(142deg, transparent 0 47.8%, rgba(255, 255, 255, 0.24) 48% 48.35%, transparent 48.7%),
+    linear-gradient(76deg, transparent 0 56%, rgba(255, 255, 255, 0.18) 56.2% 56.55%, transparent 56.8%),
+    radial-gradient(circle at 52% 46%, rgba(255, 255, 255, 0.18), transparent 18%),
+    #020202;
+}
+
+.preset-creator-overlay.is-shattering::after {
+  inset: 0;
+  opacity: 1;
+  background:
+    conic-gradient(from 12deg at 50% 43%, rgba(255, 255, 255, 0.14), transparent 10deg 42deg, rgba(255, 255, 255, 0.09) 55deg, transparent 82deg, rgba(255, 255, 255, 0.12) 106deg, transparent 140deg, rgba(255, 255, 255, 0.08) 190deg, transparent 240deg, rgba(255, 255, 255, 0.12) 302deg, transparent 360deg);
+  clip-path: polygon(50% 42%, 100% 8%, 89% 100%, 50% 42%, 0 84%, 18% 10%, 50% 42%, 100% 74%, 0 100%);
+  animation: presetGlassBurst 520ms cubic-bezier(0.22, 0.68, 0.2, 1) both;
+}
+
+.preset-star-detail.text-shatter b,
+.preset-star-detail.text-shatter small {
+  animation: presetTextShatter 360ms ease both;
+}
+
+.preset-star-detail.text-shatter small {
+  animation-delay: 70ms;
+}
+
+.preset-creator-overlay.is-shaking .preset-bg-stars {
+  animation: presetSkyShake 260ms ease both;
+}
+
+.preset-creator-overlay.is-shaking .preset-star-node {
+  animation:
+    presetOrbitFling 360ms cubic-bezier(0.18, 0.86, 0.2, 1) both,
+    presetNodePulse 5.8s ease-in-out infinite;
+}
+
+.preset-creator-overlay.is-shattering .preset-star-node,
+.preset-creator-overlay.is-shattering .preset-bg-star,
+.preset-creator-overlay.is-shattering .preset-star-detail {
+  animation: presetShatterAway 520ms cubic-bezier(0.22, 0.68, 0.2, 1) both;
+}
+
+@keyframes presetTextShatter {
+  0% { opacity: 0; transform: translateY(10px) scaleX(1.08); filter: blur(8px); }
+  52% { opacity: 0.62; transform: translateY(-1px) scaleX(0.92); filter: blur(2px); }
+  100% { opacity: 1; transform: translateY(0) scaleX(1); filter: blur(0); }
+}
+
+@keyframes presetSkyShake {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  18% { transform: translate3d(-7px, 2px, 0) rotate(-0.45deg); }
+  42% { transform: translate3d(6px, -3px, 0) rotate(0.38deg); }
+  68% { transform: translate3d(-3px, -1px, 0) rotate(-0.2deg); }
+}
+
+@keyframes presetOrbitFling {
+  0%, 100% { transform: translate(-50%, -50%) rotate(0deg); }
+  36% { transform: translate(-50%, -50%) rotate(8deg) translateX(8px); }
+  68% { transform: translate(-50%, -50%) rotate(3deg) translateX(3px); }
+}
+
+@keyframes presetShatterAway {
+  0% { opacity: 1; filter: blur(0); }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--burst-x, 0), var(--burst-y, 0), 0) scale(0.38) rotate(24deg);
+    filter: blur(10px);
+  }
+}
+
+@keyframes presetScreenCrack {
+  0% { opacity: 0.4; filter: contrast(1); }
+  35% { opacity: 1; filter: contrast(2.4) brightness(1.4); }
+  100% { opacity: 0; filter: contrast(3) brightness(0.2); }
+}
+
+@keyframes presetGlassBurst {
+  0% { opacity: 0; transform: scale(0.98) rotate(0deg); filter: blur(0); }
+  28% { opacity: 1; }
+  100% { opacity: 0; transform: scale(1.32) rotate(7deg); filter: blur(8px); }
 }
 
 .sealed-creator-info b {

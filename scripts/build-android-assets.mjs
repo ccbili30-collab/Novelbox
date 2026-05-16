@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { dirname, join, normalize, resolve } from "node:path";
 
@@ -21,6 +21,7 @@ const sealedPromptFiles = {
   T: process.env.TBIRD_SEALED_T_PROMPT_FILE || "",
   B: process.env.TBIRD_SEALED_B_PROMPT_FILE || "",
 };
+const presetPromptFile = process.env.TBIRD_PRESET_PROMPTS_FILE || "";
 
 function toPosix(path) {
   return path.replace(/\\/g, "/");
@@ -86,6 +87,12 @@ function readSealedPrompt(path) {
   return path ? readFileSync(resolve(path), "utf8") : "";
 }
 
+function readPresetPrompts() {
+  if (!presetPromptFile) return null;
+  const source = JSON.parse(readFileSync(resolve(presetPromptFile), "utf8").replace(/^\uFEFF/, ""));
+  return source && typeof source === "object" ? source : {};
+}
+
 function buildSealedPromptModuleSource() {
   if (!sealedPromptFiles.T && !sealedPromptFiles.B) return "";
   const tPrompt = readSealedPrompt(sealedPromptFiles.T);
@@ -113,6 +120,35 @@ function buildSealedPromptModuleSource() {
     `const __SEALED_B_BLOCK = ${encodeSealedPrompt(bPrompt)};`,
     "const SEALED_T_PROMPT = __sealedDecode(__SEALED_T_BLOCK);",
     "const SEALED_B_PROMPT = __sealedDecode(__SEALED_B_BLOCK);",
+  ].join("\n");
+}
+
+function buildPresetPromptModuleSource() {
+  const prompts = readPresetPrompts();
+  if (!prompts) return "";
+  const entries = Object.entries(prompts)
+    .filter(([, value]) => typeof value === "string")
+    .map(([key, value]) => `${JSON.stringify(key)}: __sealedDecode(${encodeSealedPrompt(value)})`);
+  return [
+    "// Generated only inside the Android asset bundle.",
+    "// Public source keeps preset creator prompts empty; this block is casual unpacking resistance, not real secrecy.",
+    "const __sealedTextDecoder = new TextDecoder();",
+    "function __sealedKeyByte(index, seed, salt) {",
+    "  let value = (seed ^ ((index + 1) * 0x9e3779b1) ^ (salt[index % salt.length] << ((index % 4) * 8))) >>> 0;",
+    "  value ^= value << 13; value >>>= 0;",
+    "  value ^= value >>> 17; value >>>= 0;",
+    "  value ^= value << 5;",
+    "  return value & 255;",
+    "}",
+    "function __sealedDecode(block) {",
+    "  if (!block || !Array.isArray(block.data) || !block.data.length) return \"\";",
+    "  const bytes = new Uint8Array(block.data.length);",
+    "  for (let index = 0; index < block.data.length; index += 1) {",
+    "    bytes[index] = block.data[index] ^ __sealedKeyByte(index, block.seed, block.salt);",
+    "  }",
+    "  return __sealedTextDecoder.decode(bytes);",
+    "}",
+    `const PRESET_CREATOR_PROMPTS = { ${entries.join(", ")} };`,
   ].join("\n");
 }
 
@@ -148,6 +184,10 @@ function stripModuleSyntax(file) {
     const sealedSource = buildSealedPromptModuleSource();
     if (sealedSource) return sealedSource;
   }
+  if (relative === "src/domain/roundtable/preset-prompts.js") {
+    const presetSource = buildPresetPromptModuleSource();
+    if (presetSource) return presetSource;
+  }
   let source = readFileSync(file, "utf8");
   source = source.replace(/import\s*\{[\s\S]*?\}\s*from\s*["'].+?["'];?\s*/g, "");
   source = source.replace(/\bexport\s+(async\s+function|function|const|let|var|class)\b/g, "$1");
@@ -178,3 +218,7 @@ mkdirSync(join(outDir, "src"), { recursive: true });
 writeFileSync(join(outDir, "index.html"), html);
 writeFileSync(join(outDir, "src/android-main.js"), bundle);
 writeFileSync(join(outDir, "README_REVERSE_ENGINEERING.txt"), reverseEngineeringNote);
+const assetsDir = resolve(root, "src/assets");
+if (existsSync(assetsDir)) {
+  cpSync(assetsDir, join(outDir, "src/assets"), { recursive: true });
+}

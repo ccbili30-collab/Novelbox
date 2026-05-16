@@ -34,14 +34,18 @@ import {
 import {
   DEFAULT_ROUNDTABLE_CONTEXT,
   GENERATIVE_AGENT_MEMORY_LIMIT,
+  PRESET_CREATOR_RUNTIME_IDENTITY_RULE,
   SEALED_ROUNDTABLE_CREATORS,
+  buildPresetCreatorPreludeDigest,
   createRandomTraitPrompt,
   createRoundAssistantConfigView,
-  getSealedRoundtableCreatorBase,
+  getPublicRoundtableCreatorTemplates,
+  getRoundtableCreatorTemplateBase,
   getRoundAssistantBaseFromState,
   getRoundAssistantBasesFromState,
   getRoundAssistantAliases,
   hydrateRoundtableState,
+  isLockedRoundtableCreatorTemplateId,
   isCustomRoundAssistantInState,
   isSealedRoundtableCreatorId,
   normalizeAssistantMemories,
@@ -49,6 +53,7 @@ import {
   normalizeMentionName,
   normalizeRoundtableContextOptions,
   resolveRoundAssistant,
+  templateCodeForRoundtableCreator,
 } from "./domain/roundtable/roundtable-model.js";
 import {
   buildAssistantMentionInstruction,
@@ -282,6 +287,9 @@ const els = {
   sealedCreatorOverlay: $("#sealedCreatorOverlay"),
   sealedCreatorList: $("#sealedCreatorList"),
   closeSealedCreatorOverlay: $("#closeSealedCreatorOverlayButton"),
+  presetCreatorOverlay: $("#presetCreatorOverlay"),
+  presetCreatorList: $("#presetCreatorList"),
+  closePresetCreatorOverlay: $("#closePresetCreatorOverlayButton"),
   resetAssistantConfig: $("#resetAssistantConfigButton"),
   deleteAssistant: $("#deleteAssistantButton"),
   importAssistant: $("#importAssistantButton"),
@@ -314,6 +322,17 @@ let pendingCustomAssistantDraftId = null;
 let sealedCreatorTapCount = 0;
 let sealedCreatorTapTimer = null;
 let sealedCreatorOverlayOpen = false;
+let presetCreatorOverlayOpen = false;
+let activePresetCreatorId = "";
+let presetCreatorOrbitFrame = 0;
+let presetCreatorOrbitAngle = 0;
+let presetCreatorOrbitSpeed = 0.00042;
+let presetCreatorTargetOrbitSpeed = 0.00042;
+let presetCreatorLastOrbitStamp = 0;
+let presetCreatorNextSpeedShift = 0;
+let presetCreatorReturnAssistantId = "";
+let presetCreatorBlankTapCount = 0;
+let presetCreatorOpenTimer = 0;
 let sealedCreatorHistoryOpen = false;
 let closingSealedCreatorFromButton = false;
 let keepRoundtableMembersOnDialogBack = false;
@@ -837,14 +856,14 @@ function syncSealedCreatorTemplatePrompts() {
   Object.values(creators).forEach((creator) => {
     const templateId = clean(creator?.sourceTemplateId);
     if (!templateId) return;
-    const base = getSealedRoundtableCreatorBase(templateId);
+    const base = getRoundtableCreatorTemplateBase(templateId);
     if (!base) return;
     const nextPrompt = clean(base.prompt);
     if (!nextPrompt || clean(creator.prompt) === nextPrompt) return;
     creators[creator.id] = hydrateCreatorIdentity({
       ...creator,
       prompt: nextPrompt,
-      sealedTemplateCode: base.id === "sealed-t" ? "T" : base.id === "sealed-b" ? "B" : clean(creator.sealedTemplateCode),
+      sealedTemplateCode: templateCodeForRoundtableCreator(base.id) || clean(creator.sealedTemplateCode),
       updatedAt: Date.now(),
     });
     changed = true;
@@ -927,6 +946,7 @@ function getRoundAssistant(id) {
       ...(config.contextOptions || {}),
     }));
     if (assistant) {
+      Object.assign(assistant, getPresetTemplateRuntimeFields(id));
       assistant.networkEnabled = Boolean(config.networkEnabled);
       assistant.activationProfile = clean(config.activationProfile) || assistant.activationProfile;
       assistant.memories = [
@@ -1200,6 +1220,29 @@ function renderChatContent(node, content, isStreamingThisNode) {
     return `<div class="message-content message-markdown">${renderAssistantMarkdown(content)}</div>`;
   }
   return `<span class="message-content">${escapeHtml(content)}</span>`;
+}
+
+function renderReferencedMemoryList(memories = []) {
+  const items = normalizeReferencedMemories(memories);
+  if (!items.length) return "";
+  return `
+    <details class="referenced-memory" data-command-skip>
+      <summary>参考记忆 ${items.length}</summary>
+      <div class="referenced-memory-list">
+        ${items.map((item) => {
+          const source = state.sessions.find((session) => session.id === item.sourceSessionId);
+          const sourceTitle = source ? titleForSession(source) : "";
+          return `
+            <p>
+              <b>${escapeHtml(item.type)}</b>
+              ${sourceTitle ? `<span>${escapeHtml(sourceTitle)}</span>` : ""}
+              <em>${escapeHtml(item.text)}</em>
+            </p>
+          `;
+        }).join("")}
+      </div>
+    </details>
+  `;
 }
 
 function cssEscape(value) {
@@ -1489,6 +1532,44 @@ function buildCreatorMemoryLookupBlock(creatorId, query = "", options = {}) {
   ].join("\n\n");
 }
 
+function normalizeReferencedMemories(snippets = []) {
+  return (Array.isArray(snippets) ? snippets : [])
+    .filter((item) => clean(item?.text))
+    .slice(0, 8)
+    .map((item) => ({
+      id: clean(item.id),
+      type: clean(item.type) || "记忆",
+      text: createRoundtableExcerpt(item.text, 180),
+      sourceSessionId: clean(item.sourceSessionId),
+      createdAt: Number(item.createdAt) || 0,
+    }));
+}
+
+function getGenerationReferencedMemories(creatorId, query = "", options = {}) {
+  return normalizeReferencedMemories(getCreatorMemorySnippets(creatorId, query, {
+    includeRecent: true,
+    limit: Number(options.limit) || 6,
+    sessionId: options.sessionId || activeSession()?.id,
+    roundtableId: options.roundtableId,
+  }));
+}
+
+function getRoundtableInstructionText(instruction) {
+  if (instruction && typeof instruction === "object" && !Array.isArray(instruction)) {
+    return clean(instruction.text);
+  }
+  return clean(instruction);
+}
+
+function getRoundtableReferencedMemories(assistantId, instruction) {
+  if (!assistantId || assistantId === "user" || assistantId === "writer") return [];
+  return getGenerationReferencedMemories(assistantId, getRoundtableInstructionText(instruction), {
+    limit: 6,
+    sessionId: activeSession()?.id,
+    roundtableId: activeSession()?.id,
+  });
+}
+
 function normalizeContextTokenThreshold(value, fallback = AUTO_CONTEXT_TOKEN_THRESHOLD) {
   const number = Number(value);
   if (!Number.isFinite(number) || number <= 0) return fallback;
@@ -1523,6 +1604,7 @@ function contextMessages(extraUserText = "", includeDraftAssistantId = null) {
     if (clean(systemPrompt)) {
       messages.push({ role: "system", content: systemPrompt });
     }
+    messages.push(...hiddenPresetMessagesForCreator(getPrimaryCreatorId()));
     const novelMemory = buildNovelMemory();
     if (novelMemory) {
       messages.push({ role: "system", content: novelMemory });
@@ -1579,6 +1661,7 @@ function estimateFullContextTokens(extraUserText = "", includeDraftAssistantId =
   if (includeDraftAssistantId) selected = selected.filter((node) => node.id !== includeDraftAssistantId);
   const parts = [
     getMainSystemPrompt(),
+    ...hiddenPresetMessagesForCreator(getPrimaryCreatorId()).map((message) => message.content),
     buildNovelMemory(),
     buildWorkspaceMemory(),
     ...selected.map(renderMessagePlainContent),
@@ -2336,6 +2419,7 @@ function renderRoundtableMessage(message) {
   const mentionBadge = renderRoundtableMentionBadge(message);
   const failedClass = message.failed ? " failed" : "";
   const streamingClass = message.streaming ? " streaming" : "";
+  const referencedMemory = !isUser && !message.streaming ? renderReferencedMemoryList(message.referencedMemories) : "";
   if (isWriter) {
     const writerTip = message.streaming
       ? "正在写入正文..."
@@ -2358,7 +2442,7 @@ function renderRoundtableMessage(message) {
           ${decision}
           ${mentionBadge}
           <div class="roundtable-writer-tip">${escapeHtml(writerTip)}</div>
-          <div class="roundtable-writer-snippet roundtable-markdown">${renderRoundtableRichText(message.content || "")}${message.streaming ? '<span class="stream-caret"></span>' : ""}</div>
+          <div class="roundtable-writer-snippet roundtable-markdown">${renderRoundtableRichText(message.content || "")}${referencedMemory}${message.streaming ? '<span class="stream-caret"></span>' : ""}</div>
         </div>
       </article>
     `;
@@ -2374,7 +2458,7 @@ function renderRoundtableMessage(message) {
           ${mentionBadge}
           <time>${escapeHtml(time)}</time>
         </div>
-        <div class="roundtable-speech roundtable-markdown" data-command="toggle-roundtable-menu" data-round-id="${message.id}">${renderRoundtableRichText(message.content || "")}${message.streaming ? '<span class="stream-caret"></span>' : ""}</div>
+        <div class="roundtable-speech roundtable-markdown" data-command="toggle-roundtable-menu" data-round-id="${message.id}">${renderRoundtableRichText(message.content || "")}${referencedMemory}${message.streaming ? '<span class="stream-caret"></span>' : ""}</div>
       </div>
     </article>
   `;
@@ -2649,6 +2733,7 @@ function getMessageRenderSignature(node) {
     node.versions?.length || 0,
     version?.createdAt || node.createdAt || 0,
     version?.usage?.total_tokens || 0,
+    normalizeReferencedMemories(version?.referencedMemories).map((item) => `${item.id}:${item.type}:${item.text}`).join("|"),
     content,
     attachments.map((item) => `${item.id}:${item.name}:${item.dataUrl?.length || 0}`).join("|"),
     parent?.activeChildId || "",
@@ -2719,8 +2804,7 @@ function renderMessage(node) {
   const content = getMessageContent(node);
   const attachments = normalizeChatAttachments(node.attachments);
   const version = getAssistantVersion(node);
-  const usage = version?.usage?.total_tokens ? ` · ${formatK(version.usage.total_tokens)} tok` : "";
-  const meta = `${content.length}字 · ${formatTime(version?.createdAt || node.createdAt)}${usage}`;
+  const meta = formatMessageMeta(node, content, version);
   const isUser = node.role === "user";
   const versionIndex = node.role === "assistant" ? Math.max(0, node.versions.findIndex((item) => item.id === node.activeVersionId)) + 1 : 1;
   const failedClass = node.role === "assistant" && /^请求失败[:：]/.test(clean(content)) ? " failed" : "";
@@ -2740,6 +2824,7 @@ function renderMessage(node) {
     loadingContent
       ? `<span class="message-content message-loading-dots" aria-label="正在生成"><i></i><i></i><i></i></span>`
       : renderChatContent(node, content, isStreamingThisNode),
+    node.role === "assistant" && !isStreamingThisNode ? renderReferencedMemoryList(version?.referencedMemories) : "",
     isStreamingThisNode ? '<span class="stream-caret"></span>' : "",
   ].join("");
   return `
@@ -3022,6 +3107,11 @@ function renderCreatorMemorySnapshotItem(creatorId, item, options = {}) {
       </div>
     </article>
   `;
+}
+
+function formatMessageMeta(node, content = getMessageContent(node), version = getAssistantVersion(node)) {
+  const usage = version?.usage?.total_tokens ? ` · ${formatK(version.usage.total_tokens)} tok` : "";
+  return `${clean(content).length}字 · ${formatTime(version?.createdAt || node.createdAt)}${usage}`;
 }
 
 function renderCreatorRecordItem(record, options = {}) {
@@ -3321,8 +3411,72 @@ function deleteCreatorIdentity(creatorId) {
   creatorController.deleteCreatorIdentity(creatorId);
 }
 
+function promoteLocalAssistantToCreator(assistantId) {
+  const id = clean(assistantId);
+  if (!id || id === "writer" || getCreatorIdentity(id) || !isCustomRoundAssistant(id)) return getCreatorIdentity(id);
+  if (assistantConfigTargetId === id) {
+    saveAssistantConfigFromForm({ close: false, render: false, toast: false });
+  }
+  const rt = roundtableState();
+  const base = getRoundAssistantBase(id);
+  const config = rt.assistantConfigs?.[id] || {};
+  if (!base || !config) return null;
+  const name = clean(config.name) || clean(base.name) || "议员";
+  const privateMessages = assistantController.normalizePrivateMessages(config.privateMessages);
+  const privateMemoryText = privateMessages.length
+    ? privateMessages.slice(-20).map((message) => `${message.role === "user" ? "用户" : name}：${clean(message.content)}`).join("\n")
+    : "";
+  const memories = normalizeAssistantMemories([
+    ...normalizeAssistantMemories(config.memories),
+    privateMemoryText ? {
+      id: uid("memory"),
+      text: `从圆桌本地私聊升级为创作者时带入的近期私聊：\n${privateMemoryText}`,
+      source: "local-private-chat",
+      sourceSessionId: activeSession()?.id,
+      sourceCreatorId: id,
+      createdAt: Date.now(),
+    } : null,
+  ]);
+  const creator = saveCreatorIdentity(createCreatorIdentity({
+    id,
+    name,
+    prompt: clean(config.prompt) || clean(base.prompt) || createRandomTraitPrompt(),
+    avatarDataUrl: clean(config.avatarDataUrl),
+    activationProfile: clean(config.activationProfile),
+    modelConfig: {
+      providerId: clean(config.providerId) || apiSettings().currentProviderId,
+      baseUrl: clean(config.apiBaseUrl) || apiSettings().baseUrl,
+      model: clean(config.model) || sessionSettings().model,
+      temperature: Number.isFinite(Number(config.temperature)) ? Number(config.temperature) : sessionSettings().temperature,
+      maxTokens: Number(config.maxTokens) || sessionSettings().maxTokens,
+      contextTokenBudget: Number(config.contextTokenBudget) || apiSettings().contextTokenBudget,
+    },
+    memory: {
+      displayName: `${name}记忆`,
+      compressedSnapshots: memories,
+    },
+  }));
+  rt.assistantConfigs[id] = {
+    ...config,
+    name,
+    prompt: clean(creator.prompt),
+    memories,
+    promotedCreator: true,
+  };
+  if (!rt.selectedIds.includes(id)) rt.selectedIds.push(id);
+  rememberCreatorRoundtableJoin(id, {
+    summary: `${name}从本地议员升级为创作者身份。`,
+  });
+  touchSession(activeSession());
+  persistState(state);
+  return creator;
+}
+
 function openCreatorPrivateSession(creatorId) {
-  creatorController.openCreatorPrivateSession(creatorId);
+  const id = clean(creatorId);
+  const creator = getCreatorIdentity(id) || promoteLocalAssistantToCreator(id);
+  if (!creator) return showToast("没有找到可打开私聊的创作者");
+  creatorController.openCreatorPrivateSession(creator.id);
 }
 
 function renderNovelPanel() {
@@ -3931,6 +4085,7 @@ async function generateIntoAssistant(nodeId, userText, versionId, continueMode =
   activeMenuNodeId = null;
   setAssistantVersionContent(node, version, "");
   version.usage = null;
+  version.referencedMemories = [];
   renderMessages();
   renderGenerationChrome();
   try {
@@ -3941,7 +4096,12 @@ async function generateIntoAssistant(nodeId, userText, versionId, continueMode =
       if (error.name === "AbortError") throw error;
       showToast(humanizeError(error, "自动压缩失败，已改用现有资料继续"));
     }
-    const contextCompression = getAutoContextCompressedInfo(continueMode ? CONTINUE_PROMPT : userText);
+    const generationQuery = continueMode ? CONTINUE_PROMPT : userText;
+    const referencedMemories = getGenerationReferencedMemories(getPrimaryCreatorId(), generationQuery, {
+      limit: 6,
+      sessionId: activeSession()?.id,
+    });
+    const contextCompression = getAutoContextCompressedInfo(generationQuery);
     if (contextCompression.compressed) showToast("上下文过长，已自动使用小说资料压缩续写");
     const result = sessionSettings().stream
       ? await callOpenAIStream((partial) => {
@@ -3954,6 +4114,7 @@ async function generateIntoAssistant(nodeId, userText, versionId, continueMode =
     if (!content) throw new Error("模型没有返回内容，请检查模型是否支持当前接口或关闭流式输出后重试");
     setAssistantVersionContent(node, version, content);
     version.usage = result.usage || null;
+    version.referencedMemories = referencedMemories;
     version.createdAt = Date.now();
     touchSession(activeSession());
   } catch (error) {
@@ -4019,7 +4180,11 @@ function renderStreamingNode(nodeId, versionId, options = {}) {
       contentElement.insertAdjacentHTML("afterend", '<span class="stream-caret"></span>');
     }
     const row = card.closest(".chat-row[data-node-id]");
-    if (row) row.dataset.renderSignature = getMessageRenderSignature(node);
+    if (row) {
+      const meta = row.querySelector(".chat-message-meta");
+      if (meta) meta.textContent = formatMessageMeta(node, nextContent, version);
+      row.dataset.renderSignature = getMessageRenderSignature(node);
+    }
     if (follow) scrollBottom();
   });
 }
@@ -4869,8 +5034,39 @@ function isCurrentAssistantSealed() {
   return Boolean(clean(getCreatorIdentity(assistantConfigTargetId)?.sourceTemplateId));
 }
 
+function isCreatorPromptLocked(creatorId) {
+  return isLockedRoundtableCreatorTemplateId(getCreatorSourceTemplateId(creatorId));
+}
+
+function isHiddenCreatorTemplate(creatorId) {
+  const template = getRoundtableCreatorTemplateBase(getCreatorSourceTemplateId(creatorId));
+  return template?.visibility === "hidden";
+}
+
 function getMainSystemPrompt(session = activeSession()) {
   return clean(getCreatorIdentity(getPrimaryCreatorId(session))?.prompt) || clean(sessionSettings(session).systemPrompt);
+}
+
+function hiddenPresetMessagesForCreator(creatorId) {
+  const template = getRoundtableCreatorTemplateBase(getCreatorSourceTemplateId(creatorId));
+  if (!template || template.role !== "preset-creator") return [];
+  const messages = [];
+  const foreground = clean(template.hiddenForeground);
+  if (foreground) messages.push({ role: "system", content: foreground });
+  messages.push({ role: "system", content: PRESET_CREATOR_RUNTIME_IDENTITY_RULE });
+  const preludeMessages = Array.isArray(template.hiddenPreludeMessages) ? template.hiddenPreludeMessages : [];
+  const preludeDigest = buildPresetCreatorPreludeDigest(preludeMessages);
+  if (preludeDigest) messages.push({ role: "system", content: preludeDigest });
+  return messages;
+}
+
+function getPresetTemplateRuntimeFields(creatorId) {
+  const template = getRoundtableCreatorTemplateBase(getCreatorSourceTemplateId(creatorId));
+  if (!template || template.role !== "preset-creator") return {};
+  return {
+    hiddenForeground: clean(template.hiddenForeground),
+    hiddenPreludeMessages: Array.isArray(template.hiddenPreludeMessages) ? template.hiddenPreludeMessages : [],
+  };
 }
 
 function getPrimaryCreatorRuntimeConfig() {
@@ -4957,7 +5153,11 @@ function closeSealedCreatorOverlay(options = {}) {
 }
 
 function selectSealedCreator(id) {
-  const base = getSealedRoundtableCreatorBase(id);
+  return applyCreatorTemplate(id, { openConfig: true, toastPrefix: "已套用封装模板 " });
+}
+
+function applyCreatorTemplate(id, options = {}) {
+  const base = getRoundtableCreatorTemplateBase(id);
   if (!base) return;
   const session = activeSession();
   const currentCreator = getRoundAssistant(getPrimaryCreatorId());
@@ -4967,12 +5167,15 @@ function selectSealedCreator(id) {
     session,
     extraNames: [currentCreator?.name],
   });
+  const shouldSyncAvatar = !clean(previous?.avatarDataUrl)
+    || previousTemplateId !== base.id
+    || shouldSyncName;
   const creator = saveCreatorIdentity({
     ...previous,
     name: shouldSyncName ? base.name : (clean(previous?.name) || base.name),
-    avatarDataUrl: previousTemplateId && previousTemplateId !== base.id ? base.avatarUrl : (clean(previous?.avatarDataUrl) || base.avatarUrl),
+    avatarDataUrl: shouldSyncAvatar ? base.avatarUrl : (clean(previous?.avatarDataUrl) || base.avatarUrl),
     sourceTemplateId: base.id,
-    sealedTemplateCode: base.id === "sealed-t" ? "T" : base.id === "sealed-b" ? "B" : "",
+    sealedTemplateCode: templateCodeForRoundtableCreator(base.id),
     prompt: clean(base.prompt),
     modelConfig: {
       ...(previous?.modelConfig || {}),
@@ -4985,9 +5188,259 @@ function selectSealedCreator(id) {
   persistState(state);
   render();
   renderSealedCreatorOverlay();
-  closeSealedCreatorOverlay({ fromButton: true });
-  openAssistantConfig(creator.id, { mode: "creator" });
-  showToast(`已套用封装模板 ${creator.name || base.name}`);
+  if (sealedCreatorOverlayOpen) closeSealedCreatorOverlay({ fromButton: true });
+  if (options.openConfig !== false) openAssistantConfig(creator.id, { mode: "creator" });
+  showToast(`${options.toastPrefix || "已套用封装模板 "}${creator.name || base.name}`);
+}
+
+function selectPresetCreator(id) {
+  closePresetCreatorOverlay();
+  return applyCreatorTemplate(id, { openConfig: true, toastPrefix: "已套用预设主创 " });
+}
+
+function presetCreatorTemplatesForRing() {
+  return getPublicRoundtableCreatorTemplates();
+}
+
+function presetCreatorAvatarSize(count, active = false) {
+  const safeCount = Math.max(1, Number(count) || 1);
+  const base = Math.round(Math.max(38, Math.min(54, 66 - safeCount * 2.2)));
+  return active ? Math.round(Math.max(70, Math.min(88, base * 1.55))) : base;
+}
+
+function presetCreatorStageRect() {
+  const field = els.presetCreatorList?.querySelector(".preset-star-field");
+  const rect = field?.getBoundingClientRect();
+  return {
+    width: Math.max(320, rect?.width || window.innerWidth || 360),
+    height: Math.max(520, rect?.height || window.innerHeight || 680),
+  };
+}
+
+function presetCreatorPosition(preset, index, presets = presetCreatorTemplatesForRing()) {
+  const stage = presetCreatorStageRect();
+  const count = Math.max(1, presets.length);
+  if (preset.id === activePresetCreatorId) {
+    return {
+      x: stage.width / 2,
+      y: stage.height * 0.42,
+      size: presetCreatorAvatarSize(count, true),
+    };
+  }
+  const visible = activePresetCreatorId
+    ? presets.filter((item) => item.id !== activePresetCreatorId)
+    : presets;
+  const visibleIndex = activePresetCreatorId
+    ? visible.findIndex((item) => item.id === preset.id)
+    : index;
+  const visibleCount = Math.max(1, visible.length);
+  const angle = presetCreatorOrbitAngle + visibleIndex * (Math.PI * 2 / visibleCount) - Math.PI / 2;
+  const size = presetCreatorAvatarSize(count, false) * (activePresetCreatorId ? 0.84 : 1);
+  const radius = Math.max(size * 1.75, Math.min(stage.width, stage.height) * (activePresetCreatorId ? 0.3 : 0.35));
+  const centerX = stage.width / 2;
+  const centerY = activePresetCreatorId ? stage.height * 0.42 : stage.height * 0.48;
+  return {
+    x: centerX + Math.cos(angle) * radius,
+    y: centerY + Math.sin(angle) * radius,
+    size,
+  };
+}
+
+function updatePresetCreatorDetail(options = {}) {
+  if (!els.presetCreatorList) return;
+  const preset = presetCreatorTemplatesForRing().find((item) => item.id === activePresetCreatorId);
+  const detail = els.presetCreatorList.querySelector(".preset-star-detail");
+  if (!detail) return;
+  detail.classList.remove("text-shatter");
+  if (!preset) {
+    detail.classList.remove("show");
+    detail.innerHTML = "";
+    return;
+  }
+  detail.innerHTML = `
+    <b>${escapeHtml(preset.name || "预设主创")}</b>
+    <small>${escapeHtml(preset.summary || "再次点击中央头像套用。")}</small>
+  `;
+  detail.classList.add("show");
+  if (options.shatter) {
+    void detail.offsetWidth;
+    detail.classList.add("text-shatter");
+    window.setTimeout(() => detail.classList.remove("text-shatter"), 520);
+  }
+}
+
+function applyPresetCreatorOrbitLayout() {
+  if (!els.presetCreatorList) return;
+  const presets = presetCreatorTemplatesForRing();
+  els.presetCreatorList.querySelectorAll(".preset-star-node").forEach((node) => {
+    const preset = presets.find((item) => item.id === node.dataset.presetId);
+    if (!preset) return;
+    const index = presets.findIndex((item) => item.id === preset.id);
+    const position = presetCreatorPosition(preset, index, presets);
+    const selected = preset.id === activePresetCreatorId;
+    node.style.setProperty("--x", `${position.x}px`);
+    node.style.setProperty("--y", `${position.y}px`);
+    node.style.setProperty("--size", `${position.size}px`);
+    node.classList.toggle("active", selected);
+    node.classList.toggle("dim", Boolean(activePresetCreatorId) && !selected);
+  });
+}
+
+function animatePresetCreatorOrbit(stamp = 0) {
+  if (!presetCreatorLastOrbitStamp) presetCreatorLastOrbitStamp = stamp;
+  const delta = Math.min(42, stamp - presetCreatorLastOrbitStamp);
+  presetCreatorLastOrbitStamp = stamp;
+  if (stamp > presetCreatorNextSpeedShift) {
+    presetCreatorTargetOrbitSpeed = Math.random() < 0.28
+      ? 0.00004 + Math.random() * 0.00012
+      : 0.00048 + Math.random() * 0.00185;
+    presetCreatorNextSpeedShift = stamp + 900 + Math.random() * 2400;
+  }
+  presetCreatorOrbitSpeed += (presetCreatorTargetOrbitSpeed - presetCreatorOrbitSpeed) * 0.026;
+  presetCreatorOrbitAngle += presetCreatorOrbitSpeed * delta;
+  applyPresetCreatorOrbitLayout();
+  presetCreatorOrbitFrame = requestAnimationFrame(animatePresetCreatorOrbit);
+}
+
+function startPresetCreatorOrbit() {
+  cancelAnimationFrame(presetCreatorOrbitFrame);
+  presetCreatorLastOrbitStamp = 0;
+  presetCreatorNextSpeedShift = 0;
+  presetCreatorOrbitSpeed = 0.00042;
+  presetCreatorTargetOrbitSpeed = 0.0011;
+  presetCreatorOrbitFrame = requestAnimationFrame(animatePresetCreatorOrbit);
+}
+
+function stopPresetCreatorOrbit() {
+  cancelAnimationFrame(presetCreatorOrbitFrame);
+  presetCreatorOrbitFrame = 0;
+}
+
+function renderPresetCreatorStars() {
+  return Array.from({ length: 92 }, (_, index) => {
+    const x = Math.random() * 100;
+    const y = Math.random() * 100;
+    const size = 1 + Math.random() * 2.2;
+    const alpha = 0.16 + Math.random() * 0.42;
+    const drift = 14 + Math.random() * 28;
+    const delay = Math.random() * -7;
+    const angle = Math.random() * Math.PI * 2;
+    const distance = 38 + Math.random() * 44;
+    const burstX = Math.cos(angle) * distance;
+    const burstY = Math.sin(angle) * distance;
+    return `<i class="preset-bg-star" style="--sx:${x.toFixed(2)}%;--sy:${y.toFixed(2)}%;--ss:${size.toFixed(2)}px;--sa:${alpha.toFixed(2)};--sd:${drift.toFixed(2)}s;--sdelay:${delay.toFixed(2)}s;--burst-x:${burstX.toFixed(2)}vw;--burst-y:${burstY.toFixed(2)}vh"></i>`;
+  }).join("");
+}
+
+function renderPresetCreatorOverlay() {
+  if (!els.presetCreatorList) return;
+  const presets = presetCreatorTemplatesForRing();
+  const currentTemplateId = clean(getCreatorIdentity(getPrimaryCreatorId())?.sourceTemplateId);
+  els.presetCreatorList.innerHTML = presets.length
+    ? `
+      <div class="preset-star-field">
+        <div class="preset-bg-stars" aria-hidden="true">${renderPresetCreatorStars()}</div>
+        ${presets.map((preset, index) => {
+        const selected = currentTemplateId === preset.id;
+        const avatar = clean(preset.avatarUrl)
+          ? `<img src="${escapeHtml(preset.avatarUrl)}" alt="" />`
+          : escapeHtml((preset.name || "预").slice(0, 1));
+        const burstAngle = index * (Math.PI * 2 / Math.max(1, presets.length)) - Math.PI / 2;
+        const burstX = Math.cos(burstAngle) * 48;
+        const burstY = Math.sin(burstAngle) * 42;
+        return `
+          <button class="preset-star-node ${selected ? "selected" : ""} ${preset.id === activePresetCreatorId ? "active" : activePresetCreatorId ? "dim" : ""}" type="button" data-command="focus-preset-creator" data-preset-id="${escapeHtml(preset.id)}" style="--x:50%;--y:50%;--size:52px;--delay:${140 + index * 115}ms;--burst-x:${burstX.toFixed(2)}vw;--burst-y:${burstY.toFixed(2)}vh">
+            <span class="preset-creator-avatar">${avatar}</span>
+          </button>
+        `;
+      }).join("")}
+        <div class="preset-star-detail"></div>
+      </div>
+    `
+    : `<p class="muted">还没有预设主创。</p>`;
+  applyPresetCreatorOrbitLayout();
+  updatePresetCreatorDetail();
+}
+
+function closePresetCreatorOverlay(options = {}) {
+  presetCreatorOverlayOpen = false;
+  activePresetCreatorId = "";
+  presetCreatorBlankTapCount = 0;
+  window.clearTimeout(presetCreatorOpenTimer);
+  stopPresetCreatorOrbit();
+  if (!els.presetCreatorOverlay) return;
+  const finish = () => {
+    els.presetCreatorOverlay.hidden = true;
+    els.presetCreatorOverlay.classList.remove("is-loading", "is-ready", "is-shaking", "is-shattering", "is-focusing", "has-entered");
+    if (options.reopenConfig && presetCreatorReturnAssistantId) {
+      openAssistantConfig(presetCreatorReturnAssistantId, { mode: "creator" });
+    }
+  };
+  if (options.shatter) {
+    els.presetCreatorOverlay.classList.add("is-shattering");
+    window.setTimeout(finish, 520);
+    return;
+  }
+  finish();
+}
+
+function openPresetCreatorPicker() {
+  if (!els.presetCreatorOverlay) return showToast("预设主创界面不可用");
+  document.activeElement?.blur?.();
+  presetCreatorReturnAssistantId = assistantConfigTargetId || getPrimaryCreatorId();
+  activePresetCreatorId = "";
+  presetCreatorBlankTapCount = 0;
+  const openOverlay = () => {
+    presetCreatorOverlayOpen = true;
+    els.presetCreatorOverlay.hidden = false;
+    els.presetCreatorOverlay.classList.remove("is-ready", "is-shaking", "is-shattering", "is-focusing", "has-entered");
+    els.presetCreatorOverlay.classList.add("is-loading");
+    els.presetCreatorList.innerHTML = `<div class="preset-loading">waiting......</div>`;
+    window.clearTimeout(presetCreatorOpenTimer);
+    presetCreatorOpenTimer = window.setTimeout(() => {
+      renderPresetCreatorOverlay();
+      els.presetCreatorOverlay.classList.remove("is-loading");
+      els.presetCreatorOverlay.classList.add("is-ready");
+      startPresetCreatorOrbit();
+      window.setTimeout(() => {
+        els.presetCreatorOverlay?.classList.add("has-entered");
+      }, 1150);
+    }, 620);
+  };
+  if (els.assistantConfigDialog?.open) {
+    closeOpenDialog({ fromHistory: true });
+    window.setTimeout(openOverlay, 160);
+    return;
+  }
+  openOverlay();
+}
+
+function focusPresetCreator(id) {
+  const preset = presetCreatorTemplatesForRing().find((item) => item.id === clean(id));
+  if (!preset) return;
+  if (activePresetCreatorId === preset.id) {
+    selectPresetCreator(preset.id);
+    return;
+  }
+  presetCreatorBlankTapCount = 0;
+  activePresetCreatorId = preset.id;
+  els.presetCreatorOverlay?.classList.add("is-focusing");
+  applyPresetCreatorOrbitLayout();
+  updatePresetCreatorDetail({ shatter: true });
+  window.setTimeout(() => els.presetCreatorOverlay?.classList.remove("is-focusing"), 700);
+}
+
+function handlePresetCreatorBlankClick(event) {
+  if (!presetCreatorOverlayOpen || !els.presetCreatorOverlay || els.presetCreatorOverlay.classList.contains("is-loading")) return;
+  if (event.target.closest(".preset-star-node")) return;
+  presetCreatorBlankTapCount += 1;
+  els.presetCreatorOverlay.classList.remove("is-shaking");
+  void els.presetCreatorOverlay.offsetWidth;
+  els.presetCreatorOverlay.classList.add("is-shaking");
+  window.setTimeout(() => els.presetCreatorOverlay?.classList.remove("is-shaking"), 280);
+  if (presetCreatorBlankTapCount >= 3) {
+    closePresetCreatorOverlay({ shatter: true, reopenConfig: true });
+  }
 }
 
 function handleAssistantAvatarSecretTap() {
@@ -5116,6 +5569,31 @@ function discardPendingCustomAssistantDraft(options = {}) {
 function createCustomRoundAssistant() {
   discardPendingCustomAssistantDraft({ render: false });
   const rt = roundtableState();
+  const id = uid("round_member");
+  const assistant = {
+    id,
+    name: `新议员${rt.selectedIds.length + 1}`,
+    role: "议员",
+    prompt: createRandomTraitPrompt(),
+  };
+  rt.customAssistants.push(assistant);
+  rt.assistantConfigs[id] = {
+    name: assistant.name,
+    prompt: assistant.prompt,
+    providerId: apiSettings().currentProviderId,
+    model: sessionSettings().model,
+    temperature: sessionSettings().temperature,
+    maxTokens: sessionSettings().maxTokens,
+    contextTokenBudget: apiSettings().contextTokenBudget,
+    contextOptions: normalizeRoundtableContextOptions(rt.contextOptions),
+    memories: [],
+    privateMessages: [],
+  };
+  rt.selectedIds.push(id);
+  pendingCustomAssistantDraftId = id;
+  render();
+  openAssistantConfig(id);
+  return;
   const creator = createCreatorIdentity({
     name: `新议员${rt.selectedIds.length + 1}`,
     prompt: createRandomTraitPrompt(),
@@ -5173,8 +5651,9 @@ function openAssistantConfig(id, options = {}) {
   if (!assistant || !config) return;
   const rawConfig = roundtableState().assistantConfigs?.[id] || {};
   assistantConfigTargetId = id;
-  const sealedCreator = Boolean(clean(getCreatorIdentity(id)?.sourceTemplateId)) || isSealedRoundtableCreatorId(id);
-  assistantConfigMode = options.mode || (sealedCreator ? "creator" : "member");
+  const promptLockedCreator = isCreatorPromptLocked(id) || isSealedRoundtableCreatorId(id);
+  const sealedCreator = promptLockedCreator;
+  assistantConfigMode = options.mode || (promptLockedCreator ? "creator" : "member");
   assistantModelPickerOpen = false;
   ensureAssistantModelPickerUi();
   const isCreatorMode = assistantConfigMode === "creator" || assistantConfigMode === "creator-model";
@@ -5452,6 +5931,17 @@ function renderAssistantPrivateChat(assistantId = assistantConfigTargetId) {
   }
   if (!assistantId || assistantId === "writer") {
     els.assistantPrivateChatList.innerHTML = `<p class="assistant-participation-empty">写手是输出通道，不开启议员私聊。</p>`;
+    if (els.assistantPrivateChatInput) els.assistantPrivateChatInput.disabled = true;
+    if (els.sendAssistantPrivateChat) els.sendAssistantPrivateChat.disabled = true;
+    return;
+  }
+  if (isCustomRoundAssistant(assistantId)) {
+    const messages = getAssistantPrivateMessages(assistantId);
+    els.assistantPrivateChatList.innerHTML = `
+      <p class="assistant-participation-empty">这个议员现在还是本圆桌里的本地席位。打开独立私聊后，他会升级为创作者并拥有自己的会话记忆。</p>
+      ${messages.length ? `<p class="assistant-participation-empty">已有 ${messages.length} 条本地私聊会作为近期记忆带入。</p>` : ""}
+      <button type="button" data-command="open-creator-private-session" data-creator-id="${escapeHtml(assistantId)}">打开独立私聊</button>
+    `;
     if (els.assistantPrivateChatInput) els.assistantPrivateChatInput.disabled = true;
     if (els.sendAssistantPrivateChat) els.sendAssistantPrivateChat.disabled = true;
     return;
@@ -5816,7 +6306,12 @@ function addRoundtableFailureMessage(assistant, error) {
 
 async function addAssistantRoundtableReply(assistant, content, extra = {}, instruction = "") {
   const text = cleanRoundtableAssistantOutput(assistant, content);
-  const message = addRoundtableMessage(assistant.id, assistant.name, text, extra);
+  const message = addRoundtableMessage(assistant.id, assistant.name, text, {
+    ...extra,
+    referencedMemories: normalizeReferencedMemories(extra.referencedMemories?.length
+      ? extra.referencedMemories
+      : getRoundtableReferencedMemories(assistant.id, instruction)),
+  });
   rememberCouncilParticipation(assistant, message, instruction);
   await rememberActivatedAssistantTurn(assistant, text, instruction);
   return message;
@@ -5841,13 +6336,16 @@ function renderStreamingRoundtableMessage(message) {
     : els.roundtableDiscussion?.querySelector(`.roundtable-speech${selector}`);
   if (!target) return;
   scheduleStreamDomUpdate(`round:${message.id}`, () => {
-    target.innerHTML = `${renderRoundtableRichText(message.content || "")}${message.streaming ? '<span class="stream-caret"></span>' : ""}`;
+    const referencedMemory = !message.streaming ? renderReferencedMemoryList(message.referencedMemories) : "";
+    target.innerHTML = `${renderRoundtableRichText(message.content || "")}${referencedMemory}${message.streaming ? '<span class="stream-caret"></span>' : ""}`;
   });
 }
 
 async function streamAssistantRoundtableReply(assistant, instruction, extra = {}) {
+  const referencedMemories = getRoundtableReferencedMemories(assistant.id, instruction);
   const message = addRoundtableMessage(assistant.id, assistant.name, "", {
     ...extra,
+    referencedMemories,
     streaming: Boolean(sessionSettings().stream),
   });
   const text = await callRoundtableAssistant(assistant, instruction, (partial) => {
@@ -6410,6 +6908,9 @@ const handleCommand = createCommandRegistry({
   "roundtable-member-down": (target) => moveRoundtableMember(target.dataset.memberId, 1),
   "roundtable-edit-assistant": (target) => openAssistantConfig(target.dataset.memberId),
   "select-sealed-creator": (target) => selectSealedCreator(target.dataset.sealedId),
+  "open-preset-creator-picker": () => openPresetCreatorPicker(),
+  "focus-preset-creator": (target) => focusPresetCreator(target.dataset.presetId),
+  "select-preset-creator": (target) => selectPresetCreator(target.dataset.presetId),
   "roundtable-cycle": () => toggleRoundtableRound(),
   "roundtable-start": () => startRoundtableRound(),
   "roundtable-resume": () => resumeRoundtableRound(),
@@ -6862,6 +7363,11 @@ els.assistantConfigDialog?.addEventListener("click", (event) => {
 
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
+  if (presetCreatorOverlayOpen) {
+    closePresetCreatorOverlay();
+    event.preventDefault();
+    return;
+  }
   if (sealedCreatorOverlayOpen) {
     event.preventDefault();
     return;
@@ -6917,6 +7423,10 @@ window.addEventListener("popstate", () => {
   }
   if (roundtableState().membersOpen) {
     closeRoundtableMembers({ fromHistory: true });
+    return;
+  }
+  if (presetCreatorOverlayOpen) {
+    closePresetCreatorOverlay();
     return;
   }
   if (panelManager.getActivePanel() === "settings" && activeSettingsPage === "creators" && activeCreatorDetailId) {
@@ -7045,6 +7555,8 @@ els.clearAssistantAvatar?.addEventListener("click", clearAssistantAvatar);
 els.assistantAvatarFile?.addEventListener("change", handleAssistantAvatarSelected);
 els.assistantAvatarPreview?.addEventListener("click", handleAssistantAvatarSecretTap);
 els.closeSealedCreatorOverlay?.addEventListener("click", () => closeSealedCreatorOverlay({ fromButton: true }));
+els.closePresetCreatorOverlay?.addEventListener("click", closePresetCreatorOverlay);
+els.presetCreatorOverlay?.addEventListener("click", handlePresetCreatorBlankClick);
 els.importAssistant?.addEventListener("click", importAssistantConfig);
 els.exportAssistant?.addEventListener("click", exportAssistantConfig);
 els.assistantImportFile?.addEventListener("change", handleAssistantImportSelected);

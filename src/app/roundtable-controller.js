@@ -129,6 +129,22 @@ export function createRoundtableController({
     pendingImports.delete(importKey(sessionId, memberId));
   }
 
+  function appendSourceSessionMemory(creator, source, text, options = {}) {
+    const sourceCreatorId = clean(options.sourceCreatorId) || clean(creator?.id);
+    const memory = {
+      id: uid("memory"),
+      text,
+      source: clean(options.source) || "source-session-reference",
+      sourceSessionId: source.id,
+      sourceCreatorId,
+      createdAt: Date.now(),
+    };
+    return normalizeAssistantMemories([
+      ...normalizeAssistantMemories(creator?.memory?.compressedSnapshots),
+      memory,
+    ]);
+  }
+
   function summarizeSourceSessionForClone(source, assistant) {
     const path = activePath(source);
     const dialogue = path
@@ -202,37 +218,18 @@ export function createRoundtableController({
     if (!sourceCreator) throw new Error("来源主创身份不存在，无法入席");
     const compressedText = await compressSourceSessionMemoryForClone(source, assistant);
     const name = clean(sourceCreator.name) || clean(assistant.name) || "主创";
-    const memory = {
-      id: uid("memory"),
-      text: compressedText,
-      source: "source-session-clone",
-      sourceSessionId: source.id,
+    const memories = appendSourceSessionMemory(sourceCreator, source, compressedText, {
+      source: "source-session-reference",
       sourceCreatorId: sourceCreator.id,
-      createdAt: Date.now(),
-    };
-    const memories = normalizeAssistantMemories(sourceCreator.memory?.compressedSnapshots);
-    memories.push(memory);
+    });
     const creator = saveCreatorIdentity({
       ...sourceCreator,
-      memory: {
-        displayName: `${name}来源记忆`,
-        notes: `克隆自「${titleForSession(source)}」`,
-        compressedSnapshots: normalizeAssistantMemories([{
-          id: uid("memory"),
-          text: compressedText,
-          source: "source-session-clone",
-          sourceSessionId: source.id,
-          sourceCreatorId: source.creatorId,
-          createdAt: Date.now(),
-        }]),
-      },
       memory: {
         ...(sourceCreator.memory || {}),
         compressedSnapshots: memories,
       },
       updatedAt: Date.now(),
     });
-    saveCreatorIdentity(creator);
     return { creator, name, compressedText };
   }
 
@@ -256,20 +253,14 @@ export function createRoundtableController({
         const creator = getCreatorIdentity(assistant.id);
         try {
           const compressedText = await compressSourceSessionMemoryForClone(source, assistant);
-          const memories = normalizeAssistantMemories(creator.memory?.compressedSnapshots);
-          memories.push({
-            id: uid("memory"),
-            text: compressedText,
-            source: "source-session-join",
-            sourceSessionId: source.id,
-            sourceCreatorId: source.creatorId,
-            createdAt: Date.now(),
-          });
           saveCreatorIdentity({
             ...creator,
             memory: {
               ...(creator.memory || {}),
-              compressedSnapshots: memories,
+              compressedSnapshots: appendSourceSessionMemory(creator, source, compressedText, {
+                source: "source-session-join",
+                sourceCreatorId: creator.id,
+              }),
             },
             updatedAt: Date.now(),
           });
@@ -315,14 +306,14 @@ export function createRoundtableController({
             memberId: assistant.id,
             sessionTitle: titleForSession(source),
             sourceCreatorId: creator.id,
-            clone: true,
+            reference: true,
             importedAt: Date.now(),
           },
         };
         if (!rt.selectedIds.includes(creator.id)) rt.selectedIds.push(creator.id);
         rememberCreatorRoundtableJoin(creator.id, {
           sourceTitle: titleForSession(source),
-          clone: true,
+          reference: true,
         });
         touchSession(activeSession());
         persistState();
@@ -386,7 +377,7 @@ export function createRoundtableController({
             text: compressedText,
             source: "source-session-import",
             sourceSessionId: source.id,
-            sourceCreatorId: source.creatorId,
+            sourceCreatorId: clean(assistant.id) || clean(source.creatorId),
             createdAt: Date.now(),
           },
         ]),

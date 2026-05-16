@@ -5,8 +5,8 @@
   height: 36px;
   border-radius: 50%;
   overflow: hidden;
-  color: #fff;
-  background: #2f77c7;
+  color: #2f2b25;
+  background: #fff;
   font-size: 14px;
   font-weight: 600;
 }
@@ -18,7 +18,8 @@
 .avatar img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  background: #fff;
 }
 
 .message-card {
@@ -535,8 +536,8 @@
   height: 22px;
   overflow: hidden;
   border-radius: 50%;
-  color: #f8f5ed;
-  background: #202020;
+  color: #2f2b25;
+  background: #fff;
   font-size: 10px;
   font-weight: 900;
 }
@@ -550,6 +551,7 @@
   width: 100%;
   height: 100%;
   object-fit: contain;
+  background: #fff;
 }
 
 .model-select-copy {
@@ -2391,12 +2393,15 @@ body.paper-dragging .paper-grip {
 .roundtable-avatar {
   overflow: hidden;
   border: 0;
+  background: #fff;
+  color: #2f2b25;
 }
 
 .roundtable-avatar img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  background: #fff;
 }
 
 .roundtable-avatar.avatar-button {
@@ -3098,7 +3103,8 @@ body.roundtable-mode.paper-dragging .paper-scroll-viewport {
 .chat-avatar img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  background: #fff;
 }
 
 .user-chat-avatar {
@@ -3106,7 +3112,8 @@ body.roundtable-mode.paper-dragging .paper-scroll-viewport {
 }
 
 .assistant-chat-avatar {
-  background: #778b85;
+  background: #fff;
+  color: #2f2b25;
 }
 
 .assistant-chat-avatar.sealed-chat-avatar {
@@ -3124,7 +3131,8 @@ body.roundtable-mode.paper-dragging .paper-scroll-viewport {
 }
 
 .assistant-avatar {
-  background: #778b85;
+  background: #fff;
+  color: #2f2b25;
 }
 
 .chat-main {
@@ -3208,6 +3216,69 @@ body.roundtable-mode.paper-dragging .paper-scroll-viewport {
   padding-inline: 2px;
   font-size: 11px;
   line-height: 1.25;
+}
+
+.referenced-memory {
+  display: block;
+  margin-top: 6px;
+  padding-top: 5px;
+  border-top: 1px solid rgba(92, 82, 68, 0.1);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.referenced-memory summary {
+  width: max-content;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.referenced-memory summary::-webkit-details-marker {
+  display: none;
+}
+
+.referenced-memory summary::before {
+  content: "+";
+  display: inline-block;
+  margin-right: 4px;
+  color: rgba(92, 82, 68, 0.55);
+}
+
+.referenced-memory[open] summary::before {
+  content: "-";
+}
+
+.referenced-memory-list {
+  display: grid;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.referenced-memory-list p {
+  margin: 0;
+}
+
+.referenced-memory-list b,
+.referenced-memory-list span {
+  margin-right: 6px;
+  font-weight: 600;
+  color: rgba(62, 56, 48, 0.72);
+}
+
+.referenced-memory-list em {
+  display: block;
+  margin-top: 1px;
+  color: rgba(62, 56, 48, 0.68);
+  font-style: normal;
+}
+
+.roundtable-speech .referenced-memory,
+.roundtable-writer-snippet .referenced-memory {
+  margin-top: 7px;
+  padding-top: 6px;
+  font-size: 10.5px;
 }
 
 .chat-row .switcher {

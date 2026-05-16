@@ -5,6 +5,7 @@ src/services_setup.ps1
 .server-job-id
 .server-pid
 tmp/
+tmp-*.png
 outputs/
 dist/
 spore_lore_extract/

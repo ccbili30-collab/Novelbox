@@ -408,6 +408,7 @@
               <span>模型自带联网</span>
             </label>
           </div>
+          <button class="preset-creator-trigger" type="button" data-command="open-preset-creator-picker" aria-label="选择预设主创">预</button>
         </div>
         <details id="assistantModelFold" class="assistant-fold">
           <summary>模型</summary>
@@ -517,6 +518,17 @@
         <button id="closeSealedCreatorOverlayButton" class="sealed-close-button" type="button" aria-label="关闭封装主创">×</button>
         <h2 id="sealedCreatorTitle" class="visually-hidden">封装主创</h2>
         <div id="sealedCreatorList" class="sealed-creator-list"></div>
+      </section>
+    </div>
+
+    <div id="presetCreatorOverlay" class="preset-creator-overlay" hidden aria-modal="true" role="dialog" aria-labelledby="presetCreatorTitle">
+      <section class="preset-creator-panel">
+        <button id="closePresetCreatorOverlayButton" class="preset-close-button" type="button" aria-label="关闭预设主创">×</button>
+        <div class="preset-creator-head">
+          <strong id="presetCreatorTitle">预设主创</strong>
+          <span>选择一个封装好的主创模板</span>
+        </div>
+        <div id="presetCreatorList" class="preset-creator-list"></div>
       </section>
     </div>
 
