@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.qinglan.chatnovel.ui.personas.PersonasScreenUiTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-05-16T07:31:18" hostname="vm" time="0.455">
+<testsuite name="com.qinglan.chatnovel.ui.personas.PersonasScreenUiTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-05-16T10:53:22" hostname="vm" time="0.491">
   <properties/>
-  <testcase name="empty library shows the inviting placeholder" classname="com.qinglan.chatnovel.ui.personas.PersonasScreenUiTest" time="0.164"/>
-  <testcase name="seeded library renders the first default personas" classname="com.qinglan.chatnovel.ui.personas.PersonasScreenUiTest" time="0.155"/>
-  <testcase name="back button invokes the navigation callback" classname="com.qinglan.chatnovel.ui.personas.PersonasScreenUiTest" time="0.136"/>
+  <testcase name="empty library shows the inviting placeholder" classname="com.qinglan.chatnovel.ui.personas.PersonasScreenUiTest" time="0.189"/>
+  <testcase name="seeded library renders the first default personas" classname="com.qinglan.chatnovel.ui.personas.PersonasScreenUiTest" time="0.165"/>
+  <testcase name="back button invokes the navigation callback" classname="com.qinglan.chatnovel.ui.personas.PersonasScreenUiTest" time="0.137"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

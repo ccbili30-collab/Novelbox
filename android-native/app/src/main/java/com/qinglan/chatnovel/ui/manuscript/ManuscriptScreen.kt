@@ -19,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -79,9 +80,33 @@ fun ManuscriptScreen(
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
+    val ctx = androidx.compose.ui.platform.LocalContext.current
 
     var editing by remember(state.activeSession?.id) { mutableStateOf(false) }
     var draft by remember(state.activeSession?.id, current) { mutableStateOf(current) }
+    // Memoised so the count doesn't recalculate on every recomposition.
+    val wordCount = remember(current) {
+        com.qinglan.chatnovel.data.ManuscriptExporter.wordCount(current)
+    }
+
+    val exportLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.CreateDocument("text/markdown"),
+    ) { uri: android.net.Uri? ->
+        val session = state.activeSession
+        if (uri != null && session != null) {
+            val md = com.qinglan.chatnovel.data.ManuscriptExporter.exportManuscriptMarkdown(session)
+            val ok = com.qinglan.chatnovel.ui.share.writeText(ctx, uri, md)
+            scope.launch {
+                snackbar.showSnackbar(if (ok) "已导出 Markdown" else "导出失败")
+            }
+        }
+    }
+    fun startExport() {
+        val session = state.activeSession ?: return
+        val safe = session.title.ifBlank { "manuscript" }
+            .replace(Regex("[\\\\/:*?\"<>|\\s]+"), "_").take(50)
+        exportLauncher.launch("$safe.md")
+    }
 
     // Re-sync the editor draft if the underlying manuscript changes
     // while we're in read mode (e.g. a writer persona appended text).
@@ -92,7 +117,18 @@ fun ManuscriptScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("正文小窗") },
+                title = {
+                    Column {
+                        Text("正文小窗")
+                        if (current.isNotEmpty()) {
+                            Text(
+                                "$wordCount 字",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Rounded.ArrowBack, contentDescription = "返回")
@@ -105,6 +141,9 @@ fun ManuscriptScreen(
                             scope.launch { snackbar.showSnackbar("已复制到剪贴板") }
                         }) {
                             Icon(Icons.Rounded.ContentCopy, contentDescription = "复制全文")
+                        }
+                        IconButton(onClick = { startExport() }) {
+                            Icon(Icons.Rounded.Download, contentDescription = "导出 Markdown")
                         }
                     }
                     if (editing) {
