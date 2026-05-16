@@ -186,6 +186,33 @@ class ChatViewModel(
 
     fun clearError() = _state.update { it.copy(error = null) }
 
+    /** Replace the active session's manuscript text. */
+    fun updateManuscript(text: String) {
+        val activeId = _state.value.activeSession?.id ?: return
+        viewModelScope.launch {
+            sessions.mutateOne(activeId) {
+                it.copy(manuscript = text, updatedAt = System.currentTimeMillis())
+            }
+        }
+    }
+
+    /**
+     * Append a block to the manuscript, separated from any prior
+     * content by a blank line. Useful for "send to manuscript" flows
+     * from a writer persona's reply.
+     */
+    fun appendToManuscript(text: String) {
+        if (text.isBlank()) return
+        val activeId = _state.value.activeSession?.id ?: return
+        viewModelScope.launch {
+            sessions.mutateOne(activeId) { s ->
+                val joined = if (s.manuscript.isBlank()) text.trim()
+                             else s.manuscript.trimEnd() + "\n\n" + text.trim()
+                s.copy(manuscript = joined, updatedAt = System.currentTimeMillis())
+            }
+        }
+    }
+
     /** Remove a single message from the active session. */
     fun deleteMessage(messageId: String) {
         val activeId = _state.value.activeSession?.id ?: return

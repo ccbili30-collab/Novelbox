@@ -32,6 +32,7 @@ import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Forum
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Menu
+import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material.icons.rounded.Tune
@@ -94,6 +95,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun ChatScreen(
     onOpenSettings: () -> Unit,
+    onOpenManuscript: () -> Unit = {},
     vm: ChatViewModel = viewModel(),
 ) {
     val state by vm.state.collectAsState()
@@ -179,6 +181,9 @@ fun ChatScreen(
                         }
                         IconButton(onClick = { systemPromptOpen = true }) {
                             Icon(Icons.Rounded.Chat, contentDescription = "系统提示")
+                        }
+                        IconButton(onClick = onOpenManuscript) {
+                            Icon(Icons.Rounded.MenuBook, contentDescription = "正文小窗")
                         }
                         IconButton(onClick = { vm.newSession() }) {
                             Icon(Icons.Rounded.AddComment, contentDescription = stringResourceSafe(R.string.action_new_session))

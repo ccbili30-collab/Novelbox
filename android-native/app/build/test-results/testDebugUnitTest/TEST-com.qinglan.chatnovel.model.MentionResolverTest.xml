@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.qinglan.chatnovel.model.MentionResolverTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-05-16T06:37:15" hostname="vm" time="0.006">
+<testsuite name="com.qinglan.chatnovel.model.MentionResolverTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-05-16T06:56:02" hostname="vm" time="0.012">
   <properties/>
   <testcase name="candidatesFor empty partial returns first N" classname="com.qinglan.chatnovel.model.MentionResolverTest" time="0.001"/>
   <testcase name="candidatesFor substring match works when no prefix matches" classname="com.qinglan.chatnovel.model.MentionResolverTest" time="0.0"/>
   <testcase name="caret inside CJK fragment returns partial" classname="com.qinglan.chatnovel.model.MentionResolverTest" time="0.001"/>
   <testcase name="caret right after @ returns empty partial" classname="com.qinglan.chatnovel.model.MentionResolverTest" time="0.0"/>
   <testcase name="whitespace before caret kills the fragment" classname="com.qinglan.chatnovel.model.MentionResolverTest" time="0.0"/>
-  <testcase name="insertMention replaces fragment with at-name plus trailing space" classname="com.qinglan.chatnovel.model.MentionResolverTest" time="0.003"/>
-  <testcase name="insertMention handles CJK names" classname="com.qinglan.chatnovel.model.MentionResolverTest" time="0.0"/>
+  <testcase name="insertMention replaces fragment with at-name plus trailing space" classname="com.qinglan.chatnovel.model.MentionResolverTest" time="0.007"/>
+  <testcase name="insertMention handles CJK names" classname="com.qinglan.chatnovel.model.MentionResolverTest" time="0.001"/>
   <testcase name="candidatesFor returns empty on unknown partial" classname="com.qinglan.chatnovel.model.MentionResolverTest" time="0.0"/>
   <testcase name="no caret-in-fragment returns null" classname="com.qinglan.chatnovel.model.MentionResolverTest" time="0.0"/>
-  <testcase name="candidatesFor prefix match is case-insensitive" classname="com.qinglan.chatnovel.model.MentionResolverTest" time="0.0"/>
+  <testcase name="candidatesFor prefix match is case-insensitive" classname="com.qinglan.chatnovel.model.MentionResolverTest" time="0.001"/>
   <testcase name="caret inside ASCII fragment returns partial" classname="com.qinglan.chatnovel.model.MentionResolverTest" time="0.0"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>

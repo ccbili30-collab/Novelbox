@@ -24,6 +24,10 @@ data class RoundtableConfig(
 
 /**
  * A complete conversation. Persisted to disk via [SessionStore].
+ *
+ * `manuscript` is the long-form text region attached to a session —
+ * the web app calls it "正文小窗 / paper". Users edit it directly or
+ * have a writer persona produce prose that gets appended here.
  */
 @Serializable
 data class Session(
@@ -31,6 +35,7 @@ data class Session(
     val title: String = "新会话",
     val systemPrompt: String = "",
     val messages: List<ChatMessage> = emptyList(),
+    val manuscript: String = "",
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = createdAt,
     val roundtable: RoundtableConfig = RoundtableConfig(),
