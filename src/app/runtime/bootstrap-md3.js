@@ -155,4 +155,24 @@ export function bootMd3({
   if (features.scrollFab) {
     bindScrollFabAndEmptyState({ doc, win, messages: els.messages, input: els.input });
   }
+
+  // PERF: when the user is actively scrolling we add `is-scrolling` to
+  // the body so the global CSS rule paused every transition + animation.
+  // 140ms after the last scroll the class is removed and motion
+  // resumes. Eliminates the "tap while scrolling = jank" feedback.
+  const scrollers = [els.messages, els.roundtableDiscussion, els.roundtablePaperViewport].filter(Boolean);
+  if (scrollers.length && doc.body?.classList) {
+    let scrollResetTimer = 0;
+    const onAnyScroll = () => {
+      if (!doc.body.classList.contains("is-scrolling")) {
+        doc.body.classList.add("is-scrolling");
+      }
+      if (scrollResetTimer) win.clearTimeout(scrollResetTimer);
+      scrollResetTimer = win.setTimeout(() => {
+        doc.body.classList.remove("is-scrolling");
+        scrollResetTimer = 0;
+      }, 140);
+    };
+    for (const s of scrollers) s.addEventListener("scroll", onAnyScroll, { passive: true });
+  }
 }

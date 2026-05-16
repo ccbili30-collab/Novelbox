@@ -1517,3 +1517,100 @@ body.is-generating .app .composer .send-button {
  * stop cramming together on narrow screens. */
 .app .topbar { padding-inline: 8px; gap: 2px; }
 .app .topbar h1#sessionTitle { padding-inline: 4px; }
+
+/* ============================================================== */
+/* PERF: instant tap feedback                                      */
+/* User reports every tap still feels a beat slow.                 */
+/* Root cause: every state-layer `::before` and every :active
+ * transform animates over 100-300ms before the user sees anything.
+ * On low-end Android WebView the GPU work + layout invalidation
+ * add up. Make press state INSTANT (transition: none on :active),
+ * keep the hover/focus transition for graceful enter.
+ */
+.app .icon-button:active,
+.app .icon-button:active::before,
+.app .composer .round-button:active,
+.app .composer .round-button:active::before,
+.app .composer .composer-tool-button:active,
+.app .composer .composer-tool-button:active::before,
+.app .composer .composer-add-button:active,
+.app .composer .composer-add-button:active::before,
+.app .composer .roundtable-cycle-button:active,
+.app .composer .roundtable-cycle-button:active::before,
+.app .composer .send-button:active,
+.app .composer .context-badge:active,
+.app .composer .context-badge:active::before,
+.settings-slot:active::before,
+.session-card__main:active::before,
+.md-button:active,
+.md-button:active::before,
+.md-icon-button:active,
+.md-icon-button:active::before,
+.md-fab:active,
+.md-chip:active,
+.md-list-item:active,
+.session-card__main:active,
+.settings-slot:active,
+.message-empty-suggestions .md-chip:active {
+  transition: none !important;
+  animation: none !important;
+}
+
+/* PERF: shorten the "leave press" return so the bg fades back fast. */
+.app .icon-button::before,
+.app .composer .round-button::before,
+.app .composer .composer-tool-button::before,
+.app .composer .composer-add-button::before,
+.app .composer .roundtable-cycle-button::before,
+.app .composer .context-badge::before,
+.app .composer #modelSelectButton::before,
+.md-icon-button::before,
+.md-state-layer::before,
+.settings-slot::before,
+.session-card__main::before {
+  transition: opacity 80ms linear !important;
+}
+
+/* PERF: skip the heavy 'background-color medium2' on the topbar.
+ * The scroll-aware tonal lift is a nicety, not a primary signal —
+ * drop the animation so scrolling stays buttery on low-end. */
+.app .topbar { transition: none; }
+
+/* PERF: composer textarea focus — drop the bg crossfade so typing
+ * doesn't burn a paint on focus.  */
+.app .composer textarea#chatInput { transition: none; }
+
+/* PERF: kill the per-pointerdown legacy motion-press class entirely.
+ * We already hide .motion-press / .motion-ripple visually, but the
+ * JS adds + removes the class anyway, triggering style recalcs. CSS
+ * can override the class to be a no-op transform. */
+.motion-press { animation: none !important; transform: none !important; }
+
+/* PERF: Material Symbols font has many variation axes; lock to the
+ * static defaults so the browser can cache a single glyph variant
+ * instead of recomputing per element. */
+.md-icon {
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24 !important;
+}
+.md-icon--filled,
+.md-nav-bar__item[aria-current="page"] .md-icon {
+  font-variation-settings: "FILL" 1, "wght" 400, "GRAD" 0, "opsz" 24 !important;
+}
+
+/* PERF: turn off transitions while the user is actively scrolling.
+ * Triggered by adding `is-scrolling` to <body>, removed on scrollend
+ * by the bootstrap.
+ */
+body.is-scrolling * {
+  transition: none !important;
+  animation-play-state: paused !important;
+}
+
+/* PERF: clamp variable-font weight axis on Roboto Flex too. The
+ * font-weight axis is the only one in use, so freeze the others.
+ */
+body,
+input, textarea, select, button {
+  font-variation-settings: "wght" 400;
+}
+strong, b, .session-card__title, .settings-slot__copy b { font-variation-settings: "wght" 500; }
