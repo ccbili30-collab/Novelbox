@@ -239,6 +239,43 @@ fun ChatScreen(
                     }
                 }
                 HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                // Roundtable control strip: resume a paused round or
+                // kick off another round of the same speakers.
+                val pendingCount = state.roundtable.pendingQueue.size
+                val canResume = !state.isGenerating && state.roundtable.enabled && pendingCount > 0
+                val canStartAnother = !state.isGenerating && state.roundtable.enabled
+                    && pendingCount == 0 && state.roundtable.personaIds.isNotEmpty()
+                    && state.messages.any { it.role == Role.ASSISTANT }
+                androidx.compose.animation.AnimatedVisibility(visible = canResume || canStartAnother) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (canResume) {
+                            FilledTonalButton(onClick = vm::resumeRoundtable) {
+                                Icon(
+                                    Icons.Rounded.Groups,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Spacer(Modifier.size(8.dp))
+                                Text("继续本轮 ($pendingCount 位等候)")
+                            }
+                        } else if (canStartAnother) {
+                            FilledTonalButton(onClick = vm::startAnotherRound) {
+                                Icon(
+                                    Icons.Rounded.Groups,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Spacer(Modifier.size(8.dp))
+                                Text("再来一轮")
+                            }
+                        }
+                    }
+                }
                 Composer(
                     text = state.composer,
                     isGenerating = state.isGenerating,

@@ -14,12 +14,18 @@ import kotlinx.serialization.Serializable
  *    web app.
  *  - temperature: shared temperature for every persona this round
  *    (per-persona overrides land in Phase 6+ if needed).
+ *  - pendingQueue: persona ids that still owe a reply for the
+ *    currently-in-flight round. Populated when send() fires a new
+ *    user message in roundtable mode; drained as each turn
+ *    finishes. Surviving entries after a stop() / process restart
+ *    can be resumed via ChatViewModel.resumeRoundtable().
  */
 @Serializable
 data class RoundtableConfig(
     val enabled: Boolean = false,
     val personaIds: List<String> = emptyList(),
     val temperature: Double = 0.7,
+    val pendingQueue: List<String> = emptyList(),
 )
 
 /**

@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.qinglan.chatnovel.ui.chat.ChatViewModelRoundtableTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-05-16T10:53:21" hostname="vm" time="0.279">
+<testsuite name="com.qinglan.chatnovel.ui.chat.ChatViewModelRoundtableTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-05-16T11:52:22" hostname="vm" time="0.137">
   <properties/>
-  <testcase name="roundtable starts disabled with an empty member list" classname="com.qinglan.chatnovel.ui.chat.ChatViewModelRoundtableTest" time="0.069"/>
-  <testcase name="toggleRoundtable flips the persisted flag" classname="com.qinglan.chatnovel.ui.chat.ChatViewModelRoundtableTest" time="0.041"/>
-  <testcase name="member order matches the order taps were applied" classname="com.qinglan.chatnovel.ui.chat.ChatViewModelRoundtableTest" time="0.055"/>
-  <testcase name="toggleRoundtableMember adds then removes by id" classname="com.qinglan.chatnovel.ui.chat.ChatViewModelRoundtableTest" time="0.112"/>
+  <testcase name="roundtable starts disabled with an empty member list" classname="com.qinglan.chatnovel.ui.chat.ChatViewModelRoundtableTest" time="0.024"/>
+  <testcase name="toggleRoundtable flips the persisted flag" classname="com.qinglan.chatnovel.ui.chat.ChatViewModelRoundtableTest" time="0.031"/>
+  <testcase name="member order matches the order taps were applied" classname="com.qinglan.chatnovel.ui.chat.ChatViewModelRoundtableTest" time="0.029"/>
+  <testcase name="toggleRoundtableMember adds then removes by id" classname="com.qinglan.chatnovel.ui.chat.ChatViewModelRoundtableTest" time="0.053"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

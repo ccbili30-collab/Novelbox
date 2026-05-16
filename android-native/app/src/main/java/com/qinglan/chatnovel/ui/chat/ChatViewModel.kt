@@ -159,6 +159,12 @@ class ChatViewModel(
                 return@launch
             }
             if (active.roundtable.enabled && _state.value.selectedPersonas.isNotEmpty()) {
+                // Seed the pendingQueue with the selected personas;
+                // the run loop drains it as each turn finishes.
+                val seedIds = _state.value.selectedPersonas.map { it.id }
+                sessions.mutateOne(activeId) { s ->
+                    s.copy(roundtable = s.roundtable.copy(pendingQueue = seedIds))
+                }
                 runRoundtableRound(prefs, activeId)
             } else {
                 val placeholder = ChatMessage.assistantPlaceholder()
@@ -185,6 +191,51 @@ class ChatViewModel(
     }
 
     fun clearError() = _state.update { it.copy(error = null) }
+
+    /**
+     * Resume an interrupted roundtable round: re-runs the loop using
+     * the persisted pendingQueue. No-op when nothing is waiting or
+     * a generation is already in flight.
+     */
+    fun resumeRoundtable() {
+        if (_state.value.isGenerating) return
+        val activeId = _state.value.activeSession?.id ?: return
+        val pending = sessions.get(activeId)?.roundtable?.pendingQueue.orEmpty()
+        if (pending.isEmpty()) return
+        viewModelScope.launch {
+            val prefs = store.flow.first()
+            if (!prefs.isApiReady()) {
+                _state.update { it.copy(error = "未填写 API Key / Base URL") }
+                return@launch
+            }
+            _state.update { it.copy(isGenerating = true, error = null) }
+            runRoundtableRound(prefs, activeId)
+        }
+    }
+
+    /**
+     * Kick off another roundtable round on the same selected personas,
+     * without requiring a fresh user message — the model will see
+     * the existing chat history and continue from there.
+     */
+    fun startAnotherRound() {
+        if (_state.value.isGenerating) return
+        val activeId = _state.value.activeSession?.id ?: return
+        val selected = _state.value.selectedPersonas
+        if (selected.isEmpty()) return
+        viewModelScope.launch {
+            val prefs = store.flow.first()
+            if (!prefs.isApiReady()) {
+                _state.update { it.copy(error = "未填写 API Key / Base URL") }
+                return@launch
+            }
+            sessions.mutateOne(activeId) { s ->
+                s.copy(roundtable = s.roundtable.copy(pendingQueue = selected.map { it.id }))
+            }
+            _state.update { it.copy(isGenerating = true, error = null) }
+            runRoundtableRound(prefs, activeId)
+        }
+    }
 
     /** Replace the active session's manuscript text. */
     fun updateManuscript(text: String) {
@@ -338,14 +389,33 @@ class ChatViewModel(
         streamJob?.cancel()
         streamJob = viewModelScope.launch {
             try {
-                val active = sessions.get(activeId)!!
-                val initialOrder = active.roundtable.personaIds
-                    .mapNotNull { pid -> _state.value.personas.firstOrNull { it.id == pid } }
-                var queue: List<Persona> = initialOrder
-                var idx = 0
-                while (idx < queue.size) {
-                    val persona = queue[idx]
-                    val replyText = runPersonaTurn(prefs, activeId, persona, idx, queue.size, active.systemPrompt)
+                // Drain the persisted pendingQueue one persona at a
+                // time. After each turn we write the remaining ids
+                // back to disk so a stop() / process kill / phone
+                // reboot leaves the round resumable.
+                val totalAtStart = sessions.get(activeId)?.roundtable?.pendingQueue?.size ?: 0
+                var processed = 0
+                while (true) {
+                    val snap = sessions.get(activeId) ?: break
+                    val queueIds = snap.roundtable.pendingQueue
+                    if (queueIds.isEmpty()) break
+                    val nextId = queueIds.first()
+                    val persona = _state.value.personas.firstOrNull { it.id == nextId }
+                    // Unknown persona id — drop it and continue.
+                    if (persona == null) {
+                        sessions.mutateOne(activeId) { s ->
+                            s.copy(roundtable = s.roundtable.copy(
+                                pendingQueue = s.roundtable.pendingQueue.drop(1),
+                            ))
+                        }
+                        continue
+                    }
+                    val replyText = runPersonaTurn(
+                        prefs, activeId, persona,
+                        roundIndex = processed,
+                        totalSpeakers = totalAtStart.coerceAtLeast(processed + queueIds.size),
+                        sessionSystemPrompt = snap.systemPrompt,
+                    )
                     // Writer personas auto-append their prose to the manuscript so
                     // the user gets a built-up draft alongside the discussion.
                     if (isWriterPersona(persona) && replyText.isNotBlank()) {
@@ -355,10 +425,21 @@ class ChatViewModel(
                             s.copy(manuscript = joined, updatedAt = System.currentTimeMillis())
                         }
                     }
-                    // Re-order remaining personas based on @mentions in the reply.
+                    // Parse @mentions from the reply; if any matches a
+                    // persona that's still in the pendingQueue (and is
+                    // not the one we just finished), move it to the
+                    // head of the queue.
                     val mentioned = Roundtable.parseMentions(replyText, _state.value.personas)
-                    queue = Roundtable.reorderForMentions(queue, idx, mentioned)
-                    idx += 1
+                    sessions.mutateOne(activeId) { s ->
+                        val rest = s.roundtable.pendingQueue.drop(1) // pop the persona we just ran
+                        val mentionedIds = mentioned
+                            .map { it.id }
+                            .filter { id -> id in rest }
+                            .distinct()
+                        val rest2 = mentionedIds + rest.filterNot { it in mentionedIds }
+                        s.copy(roundtable = s.roundtable.copy(pendingQueue = rest2))
+                    }
+                    processed += 1
                 }
             } catch (t: Throwable) {
                 _state.update { it.copy(error = t.message ?: t.javaClass.simpleName) }
