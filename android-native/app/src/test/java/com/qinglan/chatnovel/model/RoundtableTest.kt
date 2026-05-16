@@ -74,4 +74,34 @@ class RoundtableTest {
         assertTrue(msg.startsWith("你扮演的角色是「Plain」"))
         assertTrue(!msg.contains("\n\n\n"))
     }
+
+    @Test fun `composeSystemPrompt includes injected memories as a bullet list`() {
+        val p = Persona(id = "p", name = "Plain")
+        val mem = listOf(
+            MemoryEntry(id = "a", content = "我习惯写短句"),
+            MemoryEntry(id = "b", content = "我不爱用形容词"),
+        )
+        val msg = Roundtable.composeSystemPrompt(
+            sessionPrompt = "",
+            persona = p,
+            roundIndex = 0,
+            totalSpeakers = 1,
+            recalledMemories = mem,
+        )
+        assertTrue(msg.contains("你长期记得的事实："))
+        assertTrue(msg.contains("- 我习惯写短句"))
+        assertTrue(msg.contains("- 我不爱用形容词"))
+    }
+
+    @Test fun `composeSystemPrompt omits the memory section when none are recalled`() {
+        val p = Persona(id = "p", name = "Plain")
+        val msg = Roundtable.composeSystemPrompt(
+            sessionPrompt = "",
+            persona = p,
+            roundIndex = 0,
+            totalSpeakers = 1,
+            recalledMemories = emptyList(),
+        )
+        assertTrue(!msg.contains("你长期记得的事实"))
+    }
 }

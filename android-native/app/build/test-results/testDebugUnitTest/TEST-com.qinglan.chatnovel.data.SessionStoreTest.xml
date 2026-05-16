@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.qinglan.chatnovel.data.SessionStoreTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-05-16T07:00:23" hostname="vm" time="0.033">
+<testsuite name="com.qinglan.chatnovel.data.SessionStoreTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-05-16T07:31:09" hostname="vm" time="0.03">
   <properties/>
-  <testcase name="Session deriveTitle falls back to existing title when no user msg" classname="com.qinglan.chatnovel.data.SessionStoreTest" time="0.004"/>
-  <testcase name="rename trims input and rejects empty" classname="com.qinglan.chatnovel.data.SessionStoreTest" time="0.004"/>
-  <testcase name="newSession persists and becomes active" classname="com.qinglan.chatnovel.data.SessionStoreTest" time="0.002"/>
+  <testcase name="Session deriveTitle falls back to existing title when no user msg" classname="com.qinglan.chatnovel.data.SessionStoreTest" time="0.003"/>
+  <testcase name="rename trims input and rejects empty" classname="com.qinglan.chatnovel.data.SessionStoreTest" time="0.005"/>
+  <testcase name="newSession persists and becomes active" classname="com.qinglan.chatnovel.data.SessionStoreTest" time="0.003"/>
   <testcase name="mutateOne updates only the matching session" classname="com.qinglan.chatnovel.data.SessionStoreTest" time="0.003"/>
   <testcase name="corrupt json yields empty store, no throw" classname="com.qinglan.chatnovel.data.SessionStoreTest" time="0.001"/>
   <testcase name="upsert is idempotent + sorts by updatedAt desc" classname="com.qinglan.chatnovel.data.SessionStoreTest" time="0.004"/>
-  <testcase name="load on missing file yields empty list" classname="com.qinglan.chatnovel.data.SessionStoreTest" time="0.002"/>
+  <testcase name="load on missing file yields empty list" classname="com.qinglan.chatnovel.data.SessionStoreTest" time="0.001"/>
   <testcase name="setActive flips the active pointer" classname="com.qinglan.chatnovel.data.SessionStoreTest" time="0.002"/>
   <testcase name="delete keeps the rest and reassigns active" classname="com.qinglan.chatnovel.data.SessionStoreTest" time="0.003"/>
   <testcase name="Session deriveTitle picks first user message trimmed" classname="com.qinglan.chatnovel.data.SessionStoreTest" time="0.003"/>
-  <testcase name="Session deriveTitle clips to 40 chars" classname="com.qinglan.chatnovel.data.SessionStoreTest" time="0.001"/>
+  <testcase name="Session deriveTitle clips to 40 chars" classname="com.qinglan.chatnovel.data.SessionStoreTest" time="0.002"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

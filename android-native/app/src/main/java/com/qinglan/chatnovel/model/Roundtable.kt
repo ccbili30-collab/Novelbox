@@ -72,11 +72,16 @@ object Roundtable {
         persona: Persona,
         roundIndex: Int,
         totalSpeakers: Int,
+        recalledMemories: List<MemoryEntry> = emptyList(),
     ): String {
         val parts = mutableListOf<String>()
         if (sessionPrompt.isNotBlank()) parts += sessionPrompt.trim()
         parts += "你扮演的角色是「${persona.name}」（${persona.roleLabel}）。"
         if (persona.prompt.isNotBlank()) parts += persona.prompt.trim()
+        if (recalledMemories.isNotEmpty()) {
+            val list = recalledMemories.joinToString("\n") { "- ${it.content.trim()}" }
+            parts += "你长期记得的事实：\n$list"
+        }
         parts += "当前轮次第 ${roundIndex + 1}/$totalSpeakers 位发言。" +
                 "请直接用第一人称发言，不要复读其他人的话；不要署名，不要写场记。"
         return parts.joinToString("\n\n")

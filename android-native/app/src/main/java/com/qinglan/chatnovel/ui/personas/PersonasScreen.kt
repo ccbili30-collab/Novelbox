@@ -231,6 +231,8 @@ private fun PersonaEditorSheet(
     var roleLabel by remember(initial.id) { mutableStateOf(initial.roleLabel) }
     var prompt by remember(initial.id) { mutableStateOf(initial.prompt) }
     var modelOverride by remember(initial.id) { mutableStateOf(initial.modelOverride.orEmpty()) }
+    var memories by remember(initial.id) { mutableStateOf(initial.memories) }
+    var pendingMemory by remember(initial.id) { mutableStateOf("") }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -281,6 +283,82 @@ private fun PersonaEditorSheet(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
             )
+
+            // --- Long-term memories ---
+            androidx.compose.material3.HorizontalDivider()
+            Text(
+                "长期记忆 (${memories.size})",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                "发言前会按相关度自动注入；置顶项总是被采用。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (memories.isNotEmpty()) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 0.dp, max = 220.dp),
+                ) {
+                    items(memories, key = { it.id }) { entry ->
+                        androidx.compose.foundation.layout.Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            androidx.compose.material3.AssistChip(
+                                onClick = {
+                                    memories = memories.map {
+                                        if (it.id == entry.id) it.copy(pinned = !it.pinned) else it
+                                    }
+                                },
+                                label = {
+                                    Text(if (entry.pinned) "📌 已置顶" else "置顶")
+                                },
+                                modifier = Modifier.padding(end = 4.dp),
+                            )
+                            Text(
+                                entry.content,
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 3,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            )
+                            IconButton(onClick = { memories = memories.filterNot { it.id == entry.id } }) {
+                                Icon(
+                                    Icons.Rounded.Delete,
+                                    contentDescription = "删除记忆",
+                                    tint = MaterialTheme.colorScheme.error,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            androidx.compose.foundation.layout.Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                OutlinedTextField(
+                    value = pendingMemory,
+                    onValueChange = { pendingMemory = it },
+                    label = { Text("新记忆") },
+                    placeholder = { Text("例如：我喜欢冷峻克制的句子") },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp),
+                )
+                Spacer(Modifier.size(8.dp))
+                FilledTonalButton(
+                    enabled = pendingMemory.trim().isNotEmpty(),
+                    onClick = {
+                        memories = memories + com.qinglan.chatnovel.model.MemoryEntry.blank(pendingMemory.trim())
+                        pendingMemory = ""
+                    },
+                ) { Text("添加") }
+            }
+
             androidx.compose.foundation.layout.Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
@@ -295,6 +373,7 @@ private fun PersonaEditorSheet(
                             roleLabel = roleLabel.trim().ifEmpty { "议员" },
                             prompt = prompt,
                             modelOverride = modelOverride.trim().ifEmpty { null },
+                            memories = memories,
                             updatedAt = System.currentTimeMillis(),
                         ))
                     },

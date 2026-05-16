@@ -387,11 +387,24 @@ class ChatViewModel(
         )
         sessions.mutateOne(activeId) { it.copy(messages = it.messages + placeholder) }
         try {
+            // Pick the most relevant memories using the user's last
+            // message as the query — the most concrete signal the
+            // persona can latch onto for the upcoming turn.
+            val activeSnap = sessions.get(activeId)!!
+            val lastUserText = activeSnap.messages
+                .lastOrNull { it.role == Role.USER }?.content
+                ?: ""
+            val recalled = com.qinglan.chatnovel.model.MemoryRetrieval.pickRelevant(
+                memories = persona.memories,
+                query = lastUserText,
+                limit = 5,
+            )
             val turnSystem = Roundtable.composeSystemPrompt(
                 sessionPrompt = sessionSystemPrompt,
                 persona = persona,
                 roundIndex = roundIndex,
                 totalSpeakers = totalSpeakers,
+                recalledMemories = recalled,
             )
             val history = buildRoundtableHistoryFor(persona, sessions.get(activeId)!!, placeholder.id, turnSystem)
             val cfg = OpenAIClient.Config(

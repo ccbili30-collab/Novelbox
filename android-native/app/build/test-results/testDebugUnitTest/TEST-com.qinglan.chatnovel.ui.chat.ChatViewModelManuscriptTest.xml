@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.qinglan.chatnovel.ui.chat.ChatViewModelManuscriptTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-05-16T07:00:31" hostname="vm" time="0.175">
+<testsuite name="com.qinglan.chatnovel.ui.chat.ChatViewModelManuscriptTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-05-16T07:31:18" hostname="vm" time="0.187">
   <properties/>
-  <testcase name="appendToManuscript on blank text is a no-op" classname="com.qinglan.chatnovel.ui.chat.ChatViewModelManuscriptTest" time="0.043"/>
-  <testcase name="manuscript persists across SessionStore reload" classname="com.qinglan.chatnovel.ui.chat.ChatViewModelManuscriptTest" time="0.036"/>
-  <testcase name="appendToManuscript trims trailing whitespace from prior content" classname="com.qinglan.chatnovel.ui.chat.ChatViewModelManuscriptTest" time="0.032"/>
+  <testcase name="appendToManuscript on blank text is a no-op" classname="com.qinglan.chatnovel.ui.chat.ChatViewModelManuscriptTest" time="0.04"/>
+  <testcase name="manuscript persists across SessionStore reload" classname="com.qinglan.chatnovel.ui.chat.ChatViewModelManuscriptTest" time="0.04"/>
+  <testcase name="appendToManuscript trims trailing whitespace from prior content" classname="com.qinglan.chatnovel.ui.chat.ChatViewModelManuscriptTest" time="0.047"/>
   <testcase name="updateManuscript writes the active session manuscript and persists" classname="com.qinglan.chatnovel.ui.chat.ChatViewModelManuscriptTest" time="0.027"/>
-  <testcase name="appendToManuscript appends with blank-line separator" classname="com.qinglan.chatnovel.ui.chat.ChatViewModelManuscriptTest" time="0.037"/>
+  <testcase name="appendToManuscript appends with blank-line separator" classname="com.qinglan.chatnovel.ui.chat.ChatViewModelManuscriptTest" time="0.03"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

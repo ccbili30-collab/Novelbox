@@ -23,6 +23,8 @@ data class Persona(
     val prompt: String = "",
     /** Optional per-persona model override; falls back to AppPrefs.modelId. */
     val modelOverride: String? = null,
+    /** Long-term memory entries the persona "knows" across sessions. */
+    val memories: List<MemoryEntry> = emptyList(),
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = createdAt,
 ) {
