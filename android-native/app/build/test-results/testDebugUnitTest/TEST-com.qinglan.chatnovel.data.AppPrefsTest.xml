@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.qinglan.chatnovel.data.AppPrefsTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-05-16T11:52:16" hostname="vm" time="0.002">
+<testsuite name="com.qinglan.chatnovel.data.AppPrefsTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-05-16T12:15:19" hostname="vm" time="0.016">
   <properties/>
-  <testcase name="default prefs target OpenAI baseUrl" classname="com.qinglan.chatnovel.data.AppPrefsTest" time="0.001"/>
-  <testcase name="isApiReady requires key + base" classname="com.qinglan.chatnovel.data.AppPrefsTest" time="0.001"/>
+  <testcase name="default prefs target OpenAI baseUrl" classname="com.qinglan.chatnovel.data.AppPrefsTest" time="0.004"/>
+  <testcase name="isApiReady requires key + base" classname="com.qinglan.chatnovel.data.AppPrefsTest" time="0.012"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

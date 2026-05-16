@@ -87,6 +87,17 @@ class OpenAIClient(
             ?.get("content")?.jsonPrimitive?.contentOrNull
     }.getOrNull()
 
+    /**
+     * Non-streaming convenience: collect the entire response as one
+     * string. Built on top of [generateStream] so we don't duplicate
+     * SSE parsing.
+     */
+    suspend fun generate(messages: List<ChatMessage>, cfg: Config): String {
+        val sb = StringBuilder()
+        generateStream(messages, cfg).collect { sb.append(it) }
+        return sb.toString()
+    }
+
     private fun jsonBody(messages: List<ChatMessage>, cfg: Config, stream: Boolean): String {
         val msgArr = buildJsonArray {
             for (m in messages) {

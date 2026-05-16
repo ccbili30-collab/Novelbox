@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.qinglan.chatnovel.data.ManuscriptExporterTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-05-16T11:52:16" hostname="vm" time="0.013">
+<testsuite name="com.qinglan.chatnovel.data.ManuscriptExporterTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-05-16T12:15:19" hostname="vm" time="0.039">
   <properties/>
-  <testcase name="manuscript Markdown handles blank title and body" classname="com.qinglan.chatnovel.data.ManuscriptExporterTest" time="0.006"/>
-  <testcase name="wordCount handles mixed CJK plus ASCII" classname="com.qinglan.chatnovel.data.ManuscriptExporterTest" time="0.002"/>
+  <testcase name="manuscript Markdown handles blank title and body" classname="com.qinglan.chatnovel.data.ManuscriptExporterTest" time="0.022"/>
+  <testcase name="wordCount handles mixed CJK plus ASCII" classname="com.qinglan.chatnovel.data.ManuscriptExporterTest" time="0.001"/>
   <testcase name="session Markdown omits transcript section when no messages" classname="com.qinglan.chatnovel.data.ManuscriptExporterTest" time="0.0"/>
-  <testcase name="manuscript Markdown escapes quotes in title" classname="com.qinglan.chatnovel.data.ManuscriptExporterTest" time="0.0"/>
-  <testcase name="session Markdown includes transcript with named speakers" classname="com.qinglan.chatnovel.data.ManuscriptExporterTest" time="0.003"/>
+  <testcase name="manuscript Markdown escapes quotes in title" classname="com.qinglan.chatnovel.data.ManuscriptExporterTest" time="0.002"/>
+  <testcase name="session Markdown includes transcript with named speakers" classname="com.qinglan.chatnovel.data.ManuscriptExporterTest" time="0.01"/>
   <testcase name="manuscript Markdown carries YAML front-matter and body" classname="com.qinglan.chatnovel.data.ManuscriptExporterTest" time="0.0"/>
-  <testcase name="wordCount treats punctuation-glued tokens as one token each" classname="com.qinglan.chatnovel.data.ManuscriptExporterTest" time="0.001"/>
+  <testcase name="wordCount treats punctuation-glued tokens as one token each" classname="com.qinglan.chatnovel.data.ManuscriptExporterTest" time="0.0"/>
   <testcase name="wordCount handles pure ASCII" classname="com.qinglan.chatnovel.data.ManuscriptExporterTest" time="0.0"/>
   <testcase name="wordCount handles pure CJK" classname="com.qinglan.chatnovel.data.ManuscriptExporterTest" time="0.0"/>
   <system-out><![CDATA[]]></system-out>

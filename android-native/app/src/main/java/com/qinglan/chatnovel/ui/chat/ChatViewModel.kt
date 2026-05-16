@@ -193,6 +193,60 @@ class ChatViewModel(
     fun clearError() = _state.update { it.copy(error = null) }
 
     /**
+     * Ask the LLM to extract memories the given persona should retain
+     * from the active session's recent chat history, then append the
+     * new (deduplicated) entries to the persona's memories pool.
+     */
+    fun extractMemoriesForPersona(personaId: String, onDone: (Int) -> Unit = {}) {
+        if (_state.value.isGenerating) return
+        val persona = _state.value.personas.firstOrNull { it.id == personaId } ?: return
+        val history = _state.value.activeSession?.messages.orEmpty()
+        if (history.none { it.content.isNotBlank() }) {
+            _state.update { it.copy(error = "当前会话还没有可提取的对话") }
+            return
+        }
+        viewModelScope.launch {
+            val prefs = store.flow.first()
+            if (!prefs.isApiReady()) {
+                _state.update { it.copy(error = "未填写 API Key / Base URL") }
+                return@launch
+            }
+            _state.update { it.copy(isGenerating = true, error = null) }
+            try {
+                val prompt = com.qinglan.chatnovel.data.MemoryExtractor
+                    .buildExtractionPrompt(persona, history, maxMemories = 5)
+                val cfg = OpenAIClient.Config(
+                    baseUrl = prefs.apiBaseUrl,
+                    apiKey = prefs.apiKey,
+                    model = persona.modelOverride?.takeIf { it.isNotBlank() } ?: prefs.modelId,
+                )
+                val reply = client.generate(
+                    messages = listOf(
+                        ChatMessage(id = "ex-${persona.id}", role = Role.USER, content = prompt),
+                    ),
+                    cfg = cfg,
+                )
+                val parsed = com.qinglan.chatnovel.data.MemoryExtractor.parseExtractedMemories(reply)
+                val fresh = com.qinglan.chatnovel.data.MemoryExtractor
+                    .dedupAgainst(persona.memories, parsed)
+                if (fresh.isNotEmpty()) {
+                    val entries = fresh.map {
+                        com.qinglan.chatnovel.model.MemoryEntry.blank(it)
+                    }
+                    personaStore.mutate(personaId) { p ->
+                        p.copy(memories = p.memories + entries,
+                               updatedAt = System.currentTimeMillis())
+                    }
+                }
+                onDone(fresh.size)
+            } catch (t: Throwable) {
+                _state.update { it.copy(error = t.message ?: t.javaClass.simpleName) }
+            }
+            _state.update { it.copy(isGenerating = false) }
+        }
+    }
+
+    /**
      * Resume an interrupted roundtable round: re-runs the loop using
      * the persisted pendingQueue. No-op when nothing is waiting or
      * a generation is already in flight.

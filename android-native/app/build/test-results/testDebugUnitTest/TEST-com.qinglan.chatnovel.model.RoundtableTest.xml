@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.qinglan.chatnovel.model.RoundtableTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-05-16T11:52:17" hostname="vm" time="0.008">
+<testsuite name="com.qinglan.chatnovel.model.RoundtableTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-05-16T12:15:20" hostname="vm" time="0.008">
   <properties/>
   <testcase name="parseMentions returns empty on empty inputs" classname="com.qinglan.chatnovel.model.RoundtableTest" time="0.001"/>
-  <testcase name="composeSystemPrompt includes injected memories as a bullet list" classname="com.qinglan.chatnovel.model.RoundtableTest" time="0.001"/>
+  <testcase name="composeSystemPrompt includes injected memories as a bullet list" classname="com.qinglan.chatnovel.model.RoundtableTest" time="0.004"/>
   <testcase name="composeSystemPrompt omits the memory section when none are recalled" classname="com.qinglan.chatnovel.model.RoundtableTest" time="0.0"/>
   <testcase name="composeSystemPrompt omits blank parts cleanly" classname="com.qinglan.chatnovel.model.RoundtableTest" time="0.0"/>
-  <testcase name="parseMentions deduplicates while preserving first-mention order" classname="com.qinglan.chatnovel.model.RoundtableTest" time="0.003"/>
-  <testcase name="reorderForMentions returns input unchanged when index out of range" classname="com.qinglan.chatnovel.model.RoundtableTest" time="0.001"/>
+  <testcase name="parseMentions deduplicates while preserving first-mention order" classname="com.qinglan.chatnovel.model.RoundtableTest" time="0.001"/>
+  <testcase name="reorderForMentions returns input unchanged when index out of range" classname="com.qinglan.chatnovel.model.RoundtableTest" time="0.0"/>
   <testcase name="parseMentions ignores unknown handles" classname="com.qinglan.chatnovel.model.RoundtableTest" time="0.0"/>
   <testcase name="parseMentions matches ASCII and CJK aliases case-insensitively" classname="com.qinglan.chatnovel.model.RoundtableTest" time="0.0"/>
   <testcase name="reorderForMentions ignores mentions of already-spoken personas" classname="com.qinglan.chatnovel.model.RoundtableTest" time="0.001"/>

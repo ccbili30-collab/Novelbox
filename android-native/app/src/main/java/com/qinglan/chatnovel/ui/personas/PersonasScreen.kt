@@ -133,8 +133,19 @@ fun PersonasScreen(
 
     val target = editing
     if (target != null) {
+        val chatVm: com.qinglan.chatnovel.ui.chat.ChatViewModel =
+            androidx.lifecycle.viewmodel.compose.viewModel()
+        val snackbar = remember { androidx.compose.material3.SnackbarHostState() }
         PersonaEditorSheet(
             initial = target,
+            onExtractMemories = {
+                chatVm.extractMemoriesForPersona(target.id) { added ->
+                    scope.launch {
+                        if (added > 0) snackbar.showSnackbar("已新增 $added 条记忆")
+                        else snackbar.showSnackbar("没有新的可记忆内容")
+                    }
+                }
+            },
             onDismiss = { editing = null },
             onSave = { saved ->
                 scope.launch { store.upsert(saved) }
@@ -226,6 +237,7 @@ private fun PersonaEditorSheet(
     initial: Persona,
     onDismiss: () -> Unit,
     onSave: (Persona) -> Unit,
+    onExtractMemories: () -> Unit = {},
 ) {
     var name by remember(initial.id) { mutableStateOf(initial.name) }
     var roleLabel by remember(initial.id) { mutableStateOf(initial.roleLabel) }
@@ -286,11 +298,20 @@ private fun PersonaEditorSheet(
 
             // --- Long-term memories ---
             androidx.compose.material3.HorizontalDivider()
-            Text(
-                "长期记忆 (${memories.size})",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
+            androidx.compose.foundation.layout.Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    "长期记忆 (${memories.size})",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+                androidx.compose.material3.TextButton(onClick = onExtractMemories) {
+                    Text("从对话提取")
+                }
+            }
             Text(
                 "发言前会按相关度自动注入；置顶项总是被采用。",
                 style = MaterialTheme.typography.bodySmall,
