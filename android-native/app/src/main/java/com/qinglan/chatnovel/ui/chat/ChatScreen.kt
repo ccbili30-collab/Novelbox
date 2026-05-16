@@ -3,8 +3,6 @@ package com.qinglan.chatnovel.ui.chat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,15 +22,18 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AddComment
 import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material.icons.rounded.Chat
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Forum
+import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
@@ -40,6 +41,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.NavigationDrawerItemDefaults
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
@@ -48,24 +54,29 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.qinglan.chatnovel.R
 import com.qinglan.chatnovel.model.ChatMessage
 import com.qinglan.chatnovel.model.Role
+import com.qinglan.chatnovel.model.Session
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -76,6 +87,9 @@ fun ChatScreen(
     val state by vm.state.collectAsState()
     val listState = rememberLazyListState()
     val snackbar = remember { SnackbarHostState() }
+    val drawer = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+    var systemPromptOpen by remember { mutableStateOf(false) }
 
     // Auto-scroll to the latest message when content arrives.
     LaunchedEffect(state.messages.size, state.messages.lastOrNull()?.content) {
@@ -91,76 +105,221 @@ fun ChatScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        stringResourceSafe(R.string.title_new_chat),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+    ModalNavigationDrawer(
+        drawerState = drawer,
+        drawerContent = {
+            SessionDrawer(
+                sessions = state.sessions,
+                activeId = state.activeSession?.id,
+                onSwitch = { id ->
+                    vm.switchSession(id)
+                    scope.launch { drawer.close() }
                 },
-                navigationIcon = {
-                    IconButton(onClick = { vm.newSession() }) {
-                        Icon(Icons.Rounded.AddComment, contentDescription = stringResourceSafe(R.string.action_new_session))
-                    }
+                onNew = {
+                    vm.newSession()
+                    scope.launch { drawer.close() }
                 },
-                actions = {
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Rounded.Tune, contentDescription = stringResourceSafe(R.string.action_settings))
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                ),
+                onDelete = vm::deleteSession,
             )
         },
-        snackbarHost = {
-            SnackbarHost(snackbar) { data ->
-                Snackbar(
-                    snackbarData = data,
-                    containerColor = MaterialTheme.colorScheme.inverseSurface,
-                    contentColor = MaterialTheme.colorScheme.inverseOnSurface,
-                    shape = MaterialTheme.shapes.extraSmall,
+    ) {
+        Scaffold(
+            topBar = {
+                CenterAlignedTopAppBar(
+                    title = {
+                        Text(
+                            state.activeSession?.title?.ifBlank { null } ?: stringResourceSafe(R.string.title_new_chat),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { scope.launch { drawer.open() } }) {
+                            Icon(Icons.Rounded.Menu, contentDescription = stringResourceSafe(R.string.action_history))
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { systemPromptOpen = true }) {
+                            Icon(Icons.Rounded.Chat, contentDescription = "系统提示")
+                        }
+                        IconButton(onClick = { vm.newSession() }) {
+                            Icon(Icons.Rounded.AddComment, contentDescription = stringResourceSafe(R.string.action_new_session))
+                        }
+                        IconButton(onClick = onOpenSettings) {
+                            Icon(Icons.Rounded.Tune, contentDescription = stringResourceSafe(R.string.action_settings))
+                        }
+                    },
+                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                    ),
                 )
-            }
-        },
-        contentWindowInsets = WindowInsets.statusBars,
-        modifier = Modifier.fillMaxSize(),
-    ) { padding ->
-        Column(modifier = Modifier
-            .fillMaxSize()
-            .padding(padding)) {
-            Box(modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()) {
-                if (state.messages.isEmpty()) {
-                    EmptyState(onSuggestion = { vm.updateComposer(it) })
-                } else {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        items(state.messages, key = { it.id }) { msg ->
-                            MessageRow(msg)
+            },
+            snackbarHost = {
+                SnackbarHost(snackbar) { data ->
+                    Snackbar(
+                        snackbarData = data,
+                        containerColor = MaterialTheme.colorScheme.inverseSurface,
+                        contentColor = MaterialTheme.colorScheme.inverseOnSurface,
+                        shape = MaterialTheme.shapes.extraSmall,
+                    )
+                }
+            },
+            contentWindowInsets = WindowInsets.statusBars,
+            modifier = Modifier.fillMaxSize(),
+        ) { padding ->
+            Column(modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)) {
+                Box(modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()) {
+                    if (state.messages.isEmpty()) {
+                        EmptyState(onSuggestion = { vm.updateComposer(it) })
+                    } else {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            items(state.messages, key = { it.id }) { msg ->
+                                MessageRow(msg)
+                            }
                         }
                     }
                 }
+                HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                Composer(
+                    text = state.composer,
+                    isGenerating = state.isGenerating,
+                    onChange = vm::updateComposer,
+                    onSend = vm::send,
+                    onStop = vm::stop,
+                    modifier = Modifier
+                        .windowInsetsPadding(WindowInsets.navigationBars)
+                        .imePadding(),
+                )
             }
-            HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
-            Composer(
-                text = state.composer,
-                isGenerating = state.isGenerating,
-                onChange = vm::updateComposer,
-                onSend = vm::send,
-                onStop = vm::stop,
-                modifier = Modifier
-                    .windowInsetsPadding(WindowInsets.navigationBars)
-                    .imePadding(),
+        }
+    }
+
+    if (systemPromptOpen) {
+        SystemPromptSheet(
+            initial = state.systemPrompt,
+            onDismiss = { systemPromptOpen = false },
+            onSave = { vm.setSystemPrompt(it); systemPromptOpen = false },
+        )
+    }
+}
+
+@Composable
+private fun SessionDrawer(
+    sessions: List<Session>,
+    activeId: String?,
+    onSwitch: (String) -> Unit,
+    onNew: () -> Unit,
+    onDelete: (String) -> Unit,
+) {
+    ModalDrawerSheet(
+        drawerShape = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp),
+    ) {
+        Column(modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)) {
+            Text(
+                "历史会话",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 12.dp),
             )
+            TextButton(
+                onClick = onNew,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            ) {
+                Icon(Icons.Rounded.AddComment, contentDescription = null)
+                Spacer(Modifier.size(8.dp))
+                Text(stringResourceSafe(R.string.action_new_session))
+            }
+            Spacer(Modifier.size(8.dp))
+            LazyColumn(modifier = Modifier.weight(1f)) {
+                items(sessions, key = { it.id }) { s ->
+                    val selected = s.id == activeId
+                    NavigationDrawerItem(
+                        label = {
+                            Text(
+                                s.title.ifBlank { stringResourceSafe(R.string.title_new_chat) },
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        },
+                        selected = selected,
+                        onClick = { onSwitch(s.id) },
+                        badge = {
+                            if (sessions.size > 1) {
+                                IconButton(onClick = { onDelete(s.id) }) {
+                                    Icon(
+                                        Icons.Rounded.Delete,
+                                        contentDescription = "删除",
+                                        tint = MaterialTheme.colorScheme.error,
+                                    )
+                                }
+                            }
+                        },
+                        colors = NavigationDrawerItemDefaults.colors(
+                            selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        ),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SystemPromptSheet(
+    initial: String,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit,
+) {
+    var text by remember(initial) { mutableStateOf(initial) }
+    androidx.compose.material3.ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+    ) {
+        Column(modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 12.dp)) {
+            Text(
+                "系统提示",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Spacer(Modifier.size(4.dp))
+            Text(
+                "在每次对话前注入到模型上下文。留空则不注入。",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.size(16.dp))
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 120.dp, max = 320.dp),
+                placeholder = { Text("例如：你是一个语言简练、风格略带幽默的小说编辑…") },
+                shape = RoundedCornerShape(12.dp),
+            )
+            Spacer(Modifier.size(16.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                TextButton(onClick = onDismiss) { Text("取消") }
+                Spacer(Modifier.size(8.dp))
+                androidx.compose.material3.FilledTonalButton(onClick = { onSave(text) }) {
+                    Text("保存")
+                }
+            }
+            Spacer(Modifier.size(8.dp))
         }
     }
 }
