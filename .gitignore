@@ -29,3 +29,5 @@ fungal-war-flesh-war/
 # Built debug APK + Android SDK local config
 *.apk
 android-app/local.properties
+# But DO ship published release artifacts.
+!releases/**/*.apk
