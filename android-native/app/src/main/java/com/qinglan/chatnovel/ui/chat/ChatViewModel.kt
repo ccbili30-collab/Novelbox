@@ -213,6 +213,24 @@ class ChatViewModel(
         }
     }
 
+    /**
+     * Push the body of any message into the manuscript. UI calls this
+     * from the per-message dropdown ("送入正文") so the user can
+     * curate freely — pick the assistant replies that are worth
+     * keeping in the long-form draft.
+     */
+    fun sendMessageToManuscript(messageId: String) {
+        val session = _state.value.activeSession ?: return
+        val target = session.messages.firstOrNull { it.id == messageId } ?: return
+        appendToManuscript(target.content)
+    }
+
+    /** Recognise the "writer" persona by its roleLabel — mirrors the
+     *  web app convention. */
+    private fun isWriterPersona(p: Persona): Boolean =
+        p.roleLabel.trim().equals("写手", ignoreCase = true) ||
+        p.name.trim().equals("写手", ignoreCase = true)
+
     /** Remove a single message from the active session. */
     fun deleteMessage(messageId: String) {
         val activeId = _state.value.activeSession?.id ?: return
@@ -328,6 +346,15 @@ class ChatViewModel(
                 while (idx < queue.size) {
                     val persona = queue[idx]
                     val replyText = runPersonaTurn(prefs, activeId, persona, idx, queue.size, active.systemPrompt)
+                    // Writer personas auto-append their prose to the manuscript so
+                    // the user gets a built-up draft alongside the discussion.
+                    if (isWriterPersona(persona) && replyText.isNotBlank()) {
+                        sessions.mutateOne(activeId) { s ->
+                            val joined = if (s.manuscript.isBlank()) replyText.trim()
+                                         else s.manuscript.trimEnd() + "\n\n" + replyText.trim()
+                            s.copy(manuscript = joined, updatedAt = System.currentTimeMillis())
+                        }
+                    }
                     // Re-order remaining personas based on @mentions in the reply.
                     val mentioned = Roundtable.parseMentions(replyText, _state.value.personas)
                     queue = Roundtable.reorderForMentions(queue, idx, mentioned)

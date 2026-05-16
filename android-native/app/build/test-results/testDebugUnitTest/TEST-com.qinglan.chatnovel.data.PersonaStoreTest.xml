@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.qinglan.chatnovel.data.PersonaStoreTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-05-16T06:56:01" hostname="vm" time="0.149">
+<testsuite name="com.qinglan.chatnovel.data.PersonaStoreTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-05-16T07:00:23" hostname="vm" time="0.155">
   <properties/>
-  <testcase name="upsert is idempotent + persisted" classname="com.qinglan.chatnovel.data.PersonaStoreTest" time="0.138"/>
+  <testcase name="upsert is idempotent + persisted" classname="com.qinglan.chatnovel.data.PersonaStoreTest" time="0.144"/>
   <testcase name="mutate only touches the matching id" classname="com.qinglan.chatnovel.data.PersonaStoreTest" time="0.005"/>
   <testcase name="first load seeds Persona DEFAULTS" classname="com.qinglan.chatnovel.data.PersonaStoreTest" time="0.001"/>
   <testcase name="delete removes by id" classname="com.qinglan.chatnovel.data.PersonaStoreTest" time="0.003"/>

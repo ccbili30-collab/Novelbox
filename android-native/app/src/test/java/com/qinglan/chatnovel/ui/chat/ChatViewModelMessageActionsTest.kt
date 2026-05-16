@@ -98,9 +98,32 @@ class ChatViewModelMessageActionsTest {
         vm.state.filter { it.messages.size == 3 }.first()
         val before = sessions.get(sid)!!.messages.size
         vm.regenerateMessage("m-user")
-        // Should not generate anything; list unchanged.
         val state = vm.state.first()
         assertEquals(before, sessions.get(sid)!!.messages.size)
         assertEquals(false, state.isGenerating)
+    } }
+
+    @Test fun `sendMessageToManuscript copies the message content into the manuscript`() = runBlocking { withTimeout(5_000) {
+        val (vm, sessions, sid) = makeVm()
+        vm.state.filter { it.messages.size == 3 }.first()
+        vm.sendMessageToManuscript("m-asst-1")
+        val first = vm.state.filter { it.activeSession?.manuscript == "first reply" }.first()
+        assertEquals("first reply", first.activeSession!!.manuscript)
+        // A second send appends with the blank-line separator.
+        vm.sendMessageToManuscript("m-asst-2")
+        val second = vm.state.filter {
+            it.activeSession?.manuscript == "first reply\n\nsecond reply"
+        }.first()
+        assertEquals("first reply\n\nsecond reply", second.activeSession!!.manuscript)
+        assertEquals("first reply\n\nsecond reply", sessions.get(sid)!!.manuscript)
+    } }
+
+    @Test fun `sendMessageToManuscript ignores unknown ids`() = runBlocking { withTimeout(5_000) {
+        val (vm, sessions, sid) = makeVm()
+        vm.state.filter { it.messages.size == 3 }.first()
+        vm.sendMessageToManuscript("does-not-exist")
+        val state = vm.state.first()
+        assertEquals("", state.activeSession!!.manuscript)
+        assertEquals("", sessions.get(sid)!!.manuscript)
     } }
 }

@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.qinglan.chatnovel.ui.chat.ChatScreenUiTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-05-16T06:56:02" hostname="vm" time="8.07">
+<testsuite name="com.qinglan.chatnovel.ui.chat.ChatScreenUiTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-05-16T07:00:23" hostname="vm" time="7.818">
   <properties/>
-  <testcase name="tapping a suggestion chip pre-fills the composer" classname="com.qinglan.chatnovel.ui.chat.ChatScreenUiTest" time="7.184"/>
-  <testcase name="send button is disabled when composer is empty" classname="com.qinglan.chatnovel.ui.chat.ChatScreenUiTest" time="0.191"/>
-  <testcase name="tapping the settings icon invokes the navigation callback" classname="com.qinglan.chatnovel.ui.chat.ChatScreenUiTest" time="0.223"/>
-  <testcase name="empty state renders headline + suggestion chips" classname="com.qinglan.chatnovel.ui.chat.ChatScreenUiTest" time="0.178"/>
-  <testcase name="typing into composer enables send button" classname="com.qinglan.chatnovel.ui.chat.ChatScreenUiTest" time="0.293"/>
+  <testcase name="tapping a suggestion chip pre-fills the composer" classname="com.qinglan.chatnovel.ui.chat.ChatScreenUiTest" time="6.802"/>
+  <testcase name="send button is disabled when composer is empty" classname="com.qinglan.chatnovel.ui.chat.ChatScreenUiTest" time="0.185"/>
+  <testcase name="tapping the settings icon invokes the navigation callback" classname="com.qinglan.chatnovel.ui.chat.ChatScreenUiTest" time="0.267"/>
+  <testcase name="empty state renders headline + suggestion chips" classname="com.qinglan.chatnovel.ui.chat.ChatScreenUiTest" time="0.231"/>
+  <testcase name="typing into composer enables send button" classname="com.qinglan.chatnovel.ui.chat.ChatScreenUiTest" time="0.332"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>

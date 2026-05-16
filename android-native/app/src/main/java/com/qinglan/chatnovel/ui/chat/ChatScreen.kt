@@ -231,6 +231,7 @@ fun ChatScreen(
                                 MessageRow(
                                     msg = msg,
                                     onRegenerate = { vm.regenerateMessage(msg.id) },
+                                    onSendToManuscript = { vm.sendMessageToManuscript(msg.id) },
                                     onDelete = { vm.deleteMessage(msg.id) },
                                 )
                             }
@@ -531,6 +532,7 @@ private fun bubbleTintForSpeaker(speakerId: String?): Pair<Color, Color> {
 private fun MessageRow(
     msg: ChatMessage,
     onRegenerate: () -> Unit,
+    onSendToManuscript: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val isUser = msg.role == Role.USER
@@ -598,6 +600,12 @@ private fun MessageRow(
                         androidx.compose.material3.DropdownMenuItem(
                             text = { Text("重新生成") },
                             onClick = { onRegenerate(); menuOpen = false },
+                        )
+                    }
+                    if (!msg.streaming && msg.content.isNotBlank()) {
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("送入正文") },
+                            onClick = { onSendToManuscript(); menuOpen = false },
                         )
                     }
                     androidx.compose.material3.DropdownMenuItem(
