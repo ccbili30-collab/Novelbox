@@ -186,6 +186,66 @@ class ChatViewModel(
 
     fun clearError() = _state.update { it.copy(error = null) }
 
+    /** Remove a single message from the active session. */
+    fun deleteMessage(messageId: String) {
+        val activeId = _state.value.activeSession?.id ?: return
+        viewModelScope.launch {
+            sessions.mutateOne(activeId) { s ->
+                s.copy(
+                    messages = s.messages.filterNot { it.id == messageId },
+                    updatedAt = System.currentTimeMillis(),
+                )
+            }
+        }
+    }
+
+    /**
+     * Re-generate an assistant message in place. Drop that message and
+     * every later message (they were predicated on it), then re-run
+     * the same generation path: persona turn for roundtable replies,
+     * single-assistant pipeline for plain chats.
+     */
+    fun regenerateMessage(messageId: String) {
+        if (_state.value.isGenerating) return
+        val activeId = _state.value.activeSession?.id ?: return
+        val active = sessions.get(activeId) ?: return
+        val target = active.messages.firstOrNull { it.id == messageId } ?: return
+        if (target.role != Role.ASSISTANT) return
+
+        viewModelScope.launch {
+            val prefs = store.flow.first()
+            if (!prefs.isApiReady()) {
+                _state.update { it.copy(error = "未填写 API Key / Base URL") }
+                return@launch
+            }
+            // Truncate the session at and after the target message.
+            val keep = active.messages.takeWhile { it.id != messageId }
+            sessions.mutateOne(activeId) { s ->
+                s.copy(messages = keep, updatedAt = System.currentTimeMillis())
+            }
+            _state.update { it.copy(isGenerating = true, error = null) }
+
+            val personaId = target.speakerId
+            val persona = personaId?.let { id -> _state.value.personas.firstOrNull { it.id == id } }
+            if (persona != null) {
+                val snap = sessions.get(activeId)!!
+                runPersonaTurn(
+                    prefs = prefs,
+                    activeId = activeId,
+                    persona = persona,
+                    roundIndex = 0,
+                    totalSpeakers = 1,
+                    sessionSystemPrompt = snap.systemPrompt,
+                )
+            } else {
+                val placeholder = ChatMessage.assistantPlaceholder()
+                sessions.mutateOne(activeId) { it.copy(messages = it.messages + placeholder) }
+                runSingleAssistant(prefs, activeId, placeholder.id)
+            }
+            _state.update { it.copy(isGenerating = false) }
+        }
+    }
+
     // ---------- single-assistant path ----------
 
     private fun runSingleAssistant(prefs: AppPrefs, activeId: String, placeholderId: String) {

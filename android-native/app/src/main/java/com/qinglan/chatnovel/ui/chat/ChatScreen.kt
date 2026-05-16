@@ -223,7 +223,11 @@ fun ChatScreen(
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
                             items(state.messages, key = { it.id }) { msg ->
-                                MessageRow(msg)
+                                MessageRow(
+                                    msg = msg,
+                                    onRegenerate = { vm.regenerateMessage(msg.id) },
+                                    onDelete = { vm.deleteMessage(msg.id) },
+                                )
                             }
                         }
                     }
@@ -519,7 +523,11 @@ private fun bubbleTintForSpeaker(speakerId: String?): Pair<Color, Color> {
 }
 
 @Composable
-private fun MessageRow(msg: ChatMessage) {
+private fun MessageRow(
+    msg: ChatMessage,
+    onRegenerate: () -> Unit,
+    onDelete: () -> Unit,
+) {
     val isUser = msg.role == Role.USER
     val bubble = when {
         isUser -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
@@ -530,6 +538,9 @@ private fun MessageRow(msg: ChatMessage) {
         RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp)
     else
         RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 16.dp)
+
+    var menuOpen by remember { mutableStateOf(false) }
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -550,16 +561,49 @@ private fun MessageRow(msg: ChatMessage) {
                     modifier = Modifier.padding(start = 6.dp, bottom = 2.dp),
                 )
             }
-            Surface(shape = shape, color = bubble.first) {
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
-                    val showLoadingDots = msg.streaming && msg.content.isEmpty()
-                    if (showLoadingDots) {
-                        Text("…", color = bubble.second.copy(alpha = 0.7f),
-                            style = MaterialTheme.typography.bodyLarge)
-                    } else {
-                        Text(msg.content, color = bubble.second,
-                            style = MaterialTheme.typography.bodyLarge)
+            Box {
+                Surface(
+                    shape = shape,
+                    color = bubble.first,
+                    onClick = { menuOpen = true },
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                        val showLoadingDots = msg.streaming && msg.content.isEmpty()
+                        if (showLoadingDots) {
+                            Text("…", color = bubble.second.copy(alpha = 0.7f),
+                                style = MaterialTheme.typography.bodyLarge)
+                        } else {
+                            Text(msg.content, color = bubble.second,
+                                style = MaterialTheme.typography.bodyLarge)
+                        }
                     }
+                }
+                androidx.compose.material3.DropdownMenu(
+                    expanded = menuOpen,
+                    onDismissRequest = { menuOpen = false },
+                ) {
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Text("复制") },
+                        onClick = {
+                            clipboard.setText(androidx.compose.ui.text.AnnotatedString(msg.content))
+                            menuOpen = false
+                        },
+                    )
+                    if (msg.role == Role.ASSISTANT && !msg.streaming) {
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("重新生成") },
+                            onClick = { onRegenerate(); menuOpen = false },
+                        )
+                    }
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = {
+                            Text(
+                                "删除",
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        },
+                        onClick = { onDelete(); menuOpen = false },
+                    )
                 }
             }
         }
