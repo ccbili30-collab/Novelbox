@@ -129,6 +129,21 @@ class SessionStore(
         mutate({ it.id == id }, transform)
     }
 
+    /**
+     * Pure filter: returns sessions whose title or any message
+     * content contains the query (case-insensitive, trimmed). Empty
+     * query returns the full snapshot in current sort order.
+     */
+    fun search(query: String): List<Session> {
+        val q = query.trim().lowercase()
+        if (q.isEmpty()) return _sessions.value
+        return _sessions.value.filter { s ->
+            s.title.lowercase().contains(q) ||
+                s.manuscript.lowercase().contains(q) ||
+                s.messages.any { m -> m.content.lowercase().contains(q) }
+        }
+    }
+
     private fun persist(list: List<Session>) {
         try {
             storeFile.parentFile?.mkdirs()

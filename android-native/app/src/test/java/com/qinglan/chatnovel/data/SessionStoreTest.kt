@@ -130,4 +130,48 @@ class SessionStoreTest {
         store2.load()
         assertTrue(store2.snapshot().isEmpty())
     }
+
+    @Test fun `search empty query returns full snapshot`() = runTest {
+        store.upsert(Session(id = "a", title = "alpha", updatedAt = 1))
+        store.upsert(Session(id = "b", title = "beta", updatedAt = 2))
+        assertEquals(listOf("b", "a"), store.search("").map { it.id })
+        assertEquals(listOf("b", "a"), store.search("   ").map { it.id })
+    }
+
+    @Test fun `search matches title case-insensitively`() = runTest {
+        store.upsert(Session(id = "a", title = "Hello World", updatedAt = 1))
+        store.upsert(Session(id = "b", title = "另一个会话", updatedAt = 2))
+        assertEquals(listOf("a"), store.search("hello").map { it.id })
+        assertEquals(listOf("a"), store.search("WORLD").map { it.id })
+        assertEquals(listOf("b"), store.search("另一").map { it.id })
+    }
+
+    @Test fun `search matches manuscript body`() = runTest {
+        store.upsert(Session(id = "a", title = "x", manuscript = "从前有座山", updatedAt = 1))
+        store.upsert(Session(id = "b", title = "y", manuscript = "另起一行", updatedAt = 2))
+        assertEquals(listOf("a"), store.search("从前").map { it.id })
+        assertEquals(listOf("b"), store.search("另起").map { it.id })
+    }
+
+    @Test fun `search matches any message content`() = runTest {
+        store.upsert(
+            Session(
+                id = "a", title = "x", updatedAt = 1,
+                messages = listOf(
+                    ChatMessage(id = "m1", role = Role.USER, content = "needle in a haystack"),
+                ),
+            )
+        )
+        store.upsert(Session(id = "b", title = "y", updatedAt = 2))
+        assertEquals(listOf("a"), store.search("needle").map { it.id })
+        assertEquals(listOf("a"), store.search("HAYSTACK").map { it.id })
+        assertTrue(store.search("nothing-matches").isEmpty())
+    }
+
+    @Test fun `search results preserve updatedAt desc order`() = runTest {
+        store.upsert(Session(id = "a", title = "alpha apple", updatedAt = 1))
+        store.upsert(Session(id = "b", title = "beta apple", updatedAt = 3))
+        store.upsert(Session(id = "c", title = "carrot apple", updatedAt = 2))
+        assertEquals(listOf("b", "c", "a"), store.search("apple").map { it.id })
+    }
 }

@@ -22,6 +22,7 @@ import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Save
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -144,6 +145,22 @@ fun ManuscriptScreen(
                         }
                         IconButton(onClick = { startExport() }) {
                             Icon(Icons.Rounded.Download, contentDescription = "导出 Markdown")
+                        }
+                        IconButton(onClick = {
+                            val session = state.activeSession ?: return@IconButton
+                            val md = com.qinglan.chatnovel.data.ManuscriptExporter
+                                .exportManuscriptMarkdown(session)
+                            val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(android.content.Intent.EXTRA_TEXT, md)
+                                putExtra(android.content.Intent.EXTRA_SUBJECT, session.title.ifBlank { "正文" })
+                            }
+                            val chooser = android.content.Intent.createChooser(send, null).apply {
+                                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            ctx.startActivity(chooser)
+                        }) {
+                            Icon(Icons.Rounded.Share, contentDescription = "分享正文")
                         }
                     }
                     if (editing) {

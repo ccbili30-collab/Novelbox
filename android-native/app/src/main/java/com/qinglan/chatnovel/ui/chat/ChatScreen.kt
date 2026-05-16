@@ -27,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AddComment
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Chat
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Forum
@@ -400,6 +401,16 @@ private fun SessionDrawer(
     onExport: (String) -> Unit,
     onImport: () -> Unit,
 ) {
+    var query by remember { mutableStateOf("") }
+    val filtered = remember(sessions, query) {
+        val q = query.trim().lowercase()
+        if (q.isEmpty()) sessions
+        else sessions.filter { s ->
+            s.title.lowercase().contains(q) ||
+                s.manuscript.lowercase().contains(q) ||
+                s.messages.any { m -> m.content.lowercase().contains(q) }
+        }
+    }
     ModalDrawerSheet(
         drawerShape = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp),
     ) {
@@ -410,6 +421,29 @@ private fun SessionDrawer(
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 12.dp),
             )
+            // Search field — filters by title, manuscript body, and any
+            // message content, all case-insensitive.
+            androidx.compose.material3.OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                placeholder = { Text("搜索标题、正文或对话") },
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp),
+                shape = RoundedCornerShape(28.dp),
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        IconButton(onClick = { query = "" }) {
+                            Icon(
+                                Icons.Rounded.Close,
+                                contentDescription = "清除",
+                            )
+                        }
+                    }
+                },
+            )
+            Spacer(Modifier.size(8.dp))
             Row(modifier = Modifier.padding(horizontal = 8.dp)) {
                 TextButton(onClick = onNew) {
                     Icon(Icons.Rounded.AddComment, contentDescription = null)
@@ -428,7 +462,7 @@ private fun SessionDrawer(
             }
             Spacer(Modifier.size(8.dp))
             LazyColumn(modifier = Modifier.weight(1f)) {
-                items(sessions, key = { it.id }) { s ->
+                items(filtered, key = { it.id }) { s ->
                     val selected = s.id == activeId
                     NavigationDrawerItem(
                         label = {

@@ -188,6 +188,47 @@ fun SettingsScreen(
                     supportingContent = { Text("管理参与圆桌讨论的 AI 角色") },
                 )
             }
+
+            // --- Backup / restore ---
+            SectionTitle("备份")
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            val exportAllLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+                contract = androidx.activity.result.contract.ActivityResultContracts
+                    .CreateDocument("application/json"),
+            ) { uri: android.net.Uri? ->
+                val all = com.qinglan.chatnovel.TBirdApplication.get().sessionStore.snapshot()
+                if (uri != null) {
+                    val text = com.qinglan.chatnovel.data.SessionTransfer.exportAll(all)
+                    val ok = com.qinglan.chatnovel.ui.share.writeText(ctx, uri, text)
+                    scope.launch {
+                        snackbar.showSnackbar(
+                            if (ok) "已导出 ${all.size} 个会话"
+                            else "导出失败",
+                        )
+                    }
+                }
+            }
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                ),
+                onClick = {
+                    exportAllLauncher.launch("tbird-all-sessions.json")
+                },
+            ) {
+                ListItem(
+                    colors = androidx.compose.material3.ListItemDefaults.colors(
+                        containerColor = androidx.compose.ui.graphics.Color.Transparent,
+                    ),
+                    headlineContent = { Text("导出全部会话") },
+                    supportingContent = {
+                        Text(
+                            "把每一个会话 + 正文 + 圆桌配置打包成一个 JSON，可在系统选择器里选保存位置。",
+                        )
+                    },
+                )
+            }
             Spacer(Modifier.size(8.dp))
         }
     }
