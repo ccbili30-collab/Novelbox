@@ -1,10 +1,10 @@
 # TBird Roundtable Box — v0.2.0 MD3 redesign · debug build
 
 **File:** `tbird-roundtable-md3-debug.apk`
-**Size:** 519KB
-**SHA-256:** `131ccc1ddf12ec6256d5e031a66dd1962de06a89992d1d4bcc02728252bb784c`
+**Size:** 504KB
+**SHA-256:** `585779a5e6d45a2432a5d9a4d8a5bf2fd42f35e586d332252cfa3857b610fdcb`
 **Branch:** `claude/material-you-redesign-YzYgV`
-**Last rebuilt:** 2026-05-16 01:46 UTC
+**Last rebuilt:** 2026-05-16 03:02 UTC (perf hotfix)
 
 ## Install
 ```
