@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Seed used by the splash screen + as the fallback when Material
+         You dynamic color is unavailable (< Android 12). -->
+    <color name="seed">#FFFBFE</color>
+    <color name="seed_dark">#1C1B1F</color>
+</resources>

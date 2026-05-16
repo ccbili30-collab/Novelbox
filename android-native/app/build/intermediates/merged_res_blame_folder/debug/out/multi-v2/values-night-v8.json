@@ -1,0 +1,38 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.qinglan.chatnovel.app-mergeDebugResources-2:/values-night-v8/values-night-v8.xml",
+            "map": [
+                {
+                    "source": "/home/user/Novelbox/android-native/app/src/main/res/values-night/themes.xml",
+                    "from": {
+                        "startLines": "7,2",
+                        "startColumns": "4,4",
+                        "startOffsets": "340,55",
+                        "endLines": "9,6",
+                        "endColumns": "12,12",
+                        "endOffsets": "486,335"
+                    },
+                    "to": {
+                        "startLines": "3,6",
+                        "startColumns": "4,4",
+                        "startOffsets": "141,292",
+                        "endLines": "5,10",
+                        "endColumns": "12,12",
+                        "endOffsets": "287,572"
+                    }
+                },
+                {
+                    "source": "/root/.gradle/caches/transforms-4/06095f9aac7e90e319cf6d09fa679879/transformed/core-splashscreen-1.0.1/res/values-night-v8/values-night-v8.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "85",
+                        "endOffsets": "136"
+                    }
+                }
+            ]
+        }
+    ]
+}

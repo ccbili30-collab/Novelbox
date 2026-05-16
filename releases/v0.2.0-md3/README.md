@@ -58,3 +58,46 @@ window stubs and dynamically imports main.js to catch any
 future top-level error. This caught a real bug that the
 unit-test suite (165 module-level tests) couldn't see, because
 none of the tests load main.js itself.
+
+---
+
+## Native build (Phase 1)
+
+`tbird-roundtable-native-debug.apk` — **16 MB**, sha256
+`96c673c4b42cd6aa8d371da29ca76c4c304e37d8464d58033736435d535bbae5`
+
+Real **Kotlin + Jetpack Compose + Material 3** implementation. Lives in
+`android-native/` (entirely separate from the WebView wrapper in
+`android-app/`). App id: `com.qinglan.chatnovel.native.debug` — can
+be installed alongside the WebView build for side-by-side comparison.
+
+### What this build has
+
+- Material 3 + **Material You dynamic color** (Android 12+ pulls from
+  wallpaper). Toggleable in Settings.
+- Light / Dark / Follow-system theme switch.
+- Edge-to-edge layout, M3 top app bar, M3 composer with an animated
+  send/stop FAB-style icon button, M3 empty state with suggestion chips.
+- OpenAI-compatible Chat Completions client, streaming SSE deltas live
+  into the assistant bubble (kotlinx.serialization, no third-party HTTP
+  lib).
+- DataStore-backed prefs for theme + API config.
+- Splash screen + adaptive launcher icon.
+
+### What this build does NOT have yet (Phase 2+)
+
+The full web app has 7000+ LoC of business logic (multi-AI roundtable,
+creator memory, branch session tree, manuscript sync, mention picker,
+import/export, layout presets, sealed creator overlay, …). The native
+build is at MVP only — one assistant, single linear conversation,
+in-memory history. Those subsystems are deliberately out of scope for
+the first commit.
+
+### Build it yourself
+
+```bash
+cd android-native
+ANDROID_HOME=/opt/android-sdk ./gradlew assembleDebug --no-daemon
+```
+
+Output: `android-native/app/build/outputs/apk/debug/app-debug.apk`.

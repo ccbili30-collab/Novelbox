@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.TBird" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+    <style name="Theme.TBird.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/seed_dark</item>
+        <item name="postSplashScreenTheme">@style/Theme.TBird</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

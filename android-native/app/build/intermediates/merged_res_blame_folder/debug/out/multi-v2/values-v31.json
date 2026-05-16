@@ -1,0 +1,20 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.qinglan.chatnovel.app-mergeDebugResources-2:/values-v31/values-v31.xml",
+            "map": [
+                {
+                    "source": "/root/.gradle/caches/transforms-4/06095f9aac7e90e319cf6d09fa679879/transformed/core-splashscreen-1.0.1/res/values-v31/values-v31.xml",
+                    "from": {
+                        "startLines": "2,9",
+                        "startColumns": "4,4",
+                        "startOffsets": "55,473",
+                        "endLines": "8,13",
+                        "endColumns": "12,12",
+                        "endOffsets": "468,697"
+                    }
+                }
+            ]
+        }
+    ]
+}
