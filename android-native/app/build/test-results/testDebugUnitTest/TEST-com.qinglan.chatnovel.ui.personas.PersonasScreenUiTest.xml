@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.qinglan.chatnovel.ui.personas.PersonasScreenUiTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-05-16T12:15:53" hostname="vm" time="0.37">
-  <properties/>
-  <testcase name="empty library shows the inviting placeholder" classname="com.qinglan.chatnovel.ui.personas.PersonasScreenUiTest" time="0.122"/>
-  <testcase name="seeded library renders the first default personas" classname="com.qinglan.chatnovel.ui.personas.PersonasScreenUiTest" time="0.132"/>
-  <testcase name="back button invokes the navigation callback" classname="com.qinglan.chatnovel.ui.personas.PersonasScreenUiTest" time="0.114"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>
