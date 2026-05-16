@@ -28,9 +28,11 @@ import androidx.compose.material.icons.rounded.AddComment
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Chat
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Forum
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Menu
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.AssistChip
@@ -115,6 +117,18 @@ fun ChatScreen(
         }
     }
 
+    val exportSession = com.qinglan.chatnovel.ui.share.rememberSessionExporter()
+    val importSession = com.qinglan.chatnovel.ui.share.rememberSessionImporter { imported ->
+        if (imported != null) {
+            scope.launch {
+                com.qinglan.chatnovel.TBirdApplication.get().sessionStore.upsert(imported)
+                com.qinglan.chatnovel.TBirdApplication.get().sessionStore.setActive(imported.id)
+            }
+        } else {
+            scope.launch { snackbar.showSnackbar("导入失败：文件不是合法的会话 JSON") }
+        }
+    }
+
     ModalNavigationDrawer(
         drawerState = drawer,
         drawerContent = {
@@ -130,6 +144,11 @@ fun ChatScreen(
                     scope.launch { drawer.close() }
                 },
                 onDelete = vm::deleteSession,
+                onExport = { id ->
+                    val target = state.sessions.firstOrNull { it.id == id } ?: return@SessionDrawer
+                    exportSession(target)
+                },
+                onImport = importSession,
             )
         },
     ) {
@@ -331,6 +350,8 @@ private fun SessionDrawer(
     onSwitch: (String) -> Unit,
     onNew: () -> Unit,
     onDelete: (String) -> Unit,
+    onExport: (String) -> Unit,
+    onImport: () -> Unit,
 ) {
     ModalDrawerSheet(
         drawerShape = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp),
@@ -342,10 +363,21 @@ private fun SessionDrawer(
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(start = 8.dp, top = 8.dp, bottom = 12.dp),
             )
-            TextButton(onClick = onNew, modifier = Modifier.padding(horizontal = 8.dp)) {
-                Icon(Icons.Rounded.AddComment, contentDescription = null)
-                Spacer(Modifier.size(8.dp))
-                Text(stringResourceSafe(R.string.action_new_session))
+            Row(modifier = Modifier.padding(horizontal = 8.dp)) {
+                TextButton(onClick = onNew) {
+                    Icon(Icons.Rounded.AddComment, contentDescription = null)
+                    Spacer(Modifier.size(8.dp))
+                    Text(stringResourceSafe(R.string.action_new_session))
+                }
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick = onImport) {
+                    Icon(
+                        Icons.Rounded.Download,
+                        contentDescription = "导入会话",
+                    )
+                    Spacer(Modifier.size(4.dp))
+                    Text("导入")
+                }
             }
             Spacer(Modifier.size(8.dp))
             LazyColumn(modifier = Modifier.weight(1f)) {
@@ -361,10 +393,22 @@ private fun SessionDrawer(
                         selected = selected,
                         onClick = { onSwitch(s.id) },
                         badge = {
-                            if (sessions.size > 1) {
-                                IconButton(onClick = { onDelete(s.id) }) {
-                                    Icon(Icons.Rounded.Delete, contentDescription = "删除",
-                                        tint = MaterialTheme.colorScheme.error)
+                            Row {
+                                IconButton(onClick = { onExport(s.id) }) {
+                                    Icon(
+                                        Icons.Rounded.Share,
+                                        contentDescription = "导出 ${s.title}",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                if (sessions.size > 1) {
+                                    IconButton(onClick = { onDelete(s.id) }) {
+                                        Icon(
+                                            Icons.Rounded.Delete,
+                                            contentDescription = "删除",
+                                            tint = MaterialTheme.colorScheme.error,
+                                        )
+                                    }
                                 }
                             }
                         },

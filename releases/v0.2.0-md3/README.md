@@ -6,7 +6,7 @@ web app inside a WebView. Source: `android-app/`.
 
 ## 2. Native build (Kotlin + Jetpack Compose + Material 3)
 `tbird-roundtable-native-debug.apk` — 16 MB
-SHA-256: `04a7ed39f3ada615960d5f86b7e430ec86bce595a945ea9ee886aaa7dd9d806c`
+SHA-256: ``
 App id: `com.qinglan.chatnovel.native.debug`. Installable alongside #1.
 
 ### Features in this APK

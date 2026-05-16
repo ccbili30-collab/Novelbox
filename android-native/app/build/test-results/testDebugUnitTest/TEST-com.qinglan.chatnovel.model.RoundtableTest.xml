@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.qinglan.chatnovel.model.RoundtableTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-05-16T06:25:18" hostname="vm" time="0.009">
+<testsuite name="com.qinglan.chatnovel.model.RoundtableTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-05-16T06:32:03" hostname="vm" time="0.013">
   <properties/>
-  <testcase name="parseMentions returns empty on empty inputs" classname="com.qinglan.chatnovel.model.RoundtableTest" time="0.001"/>
-  <testcase name="composeSystemPrompt omits blank parts cleanly" classname="com.qinglan.chatnovel.model.RoundtableTest" time="0.002"/>
-  <testcase name="parseMentions deduplicates while preserving first-mention order" classname="com.qinglan.chatnovel.model.RoundtableTest" time="0.003"/>
-  <testcase name="reorderForMentions returns input unchanged when index out of range" classname="com.qinglan.chatnovel.model.RoundtableTest" time="0.001"/>
+  <testcase name="parseMentions returns empty on empty inputs" classname="com.qinglan.chatnovel.model.RoundtableTest" time="0.0"/>
+  <testcase name="composeSystemPrompt omits blank parts cleanly" classname="com.qinglan.chatnovel.model.RoundtableTest" time="0.003"/>
+  <testcase name="parseMentions deduplicates while preserving first-mention order" classname="com.qinglan.chatnovel.model.RoundtableTest" time="0.004"/>
+  <testcase name="reorderForMentions returns input unchanged when index out of range" classname="com.qinglan.chatnovel.model.RoundtableTest" time="0.0"/>
   <testcase name="parseMentions ignores unknown handles" classname="com.qinglan.chatnovel.model.RoundtableTest" time="0.0"/>
-  <testcase name="parseMentions matches ASCII and CJK aliases case-insensitively" classname="com.qinglan.chatnovel.model.RoundtableTest" time="0.001"/>
-  <testcase name="reorderForMentions ignores mentions of already-spoken personas" classname="com.qinglan.chatnovel.model.RoundtableTest" time="0.0"/>
+  <testcase name="parseMentions matches ASCII and CJK aliases case-insensitively" classname="com.qinglan.chatnovel.model.RoundtableTest" time="0.0"/>
+  <testcase name="reorderForMentions ignores mentions of already-spoken personas" classname="com.qinglan.chatnovel.model.RoundtableTest" time="0.001"/>
   <testcase name="reorderForMentions moves later speakers ahead of un-spoken ones" classname="com.qinglan.chatnovel.model.RoundtableTest" time="0.0"/>
-  <testcase name="composeSystemPrompt includes session prompt + persona prompt + turn hint" classname="com.qinglan.chatnovel.model.RoundtableTest" time="0.0"/>
+  <testcase name="composeSystemPrompt includes session prompt + persona prompt + turn hint" classname="com.qinglan.chatnovel.model.RoundtableTest" time="0.001"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>
