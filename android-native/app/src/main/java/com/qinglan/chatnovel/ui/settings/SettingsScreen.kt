@@ -3,8 +3,10 @@ package com.qinglan.chatnovel.ui.settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -49,7 +51,10 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onBack: () -> Unit) {
+fun SettingsScreen(
+    onBack: () -> Unit,
+    onOpenPersonas: () -> Unit = {},
+) {
     val store = remember { TBirdApplication.get().settingsStore }
     val prefs by store.flow.collectAsState(initial = AppPrefs.DEFAULT)
     val snackbar = remember { SnackbarHostState() }
@@ -165,6 +170,25 @@ fun SettingsScreen(onBack: () -> Unit) {
                     }
                 }
             }
+
+            // --- Personas ---
+            SectionTitle("圆桌议员")
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                ),
+                onClick = onOpenPersonas,
+            ) {
+                ListItem(
+                    colors = androidx.compose.material3.ListItemDefaults.colors(
+                        containerColor = androidx.compose.ui.graphics.Color.Transparent,
+                    ),
+                    headlineContent = { Text("议员（创作者）") },
+                    supportingContent = { Text("管理参与圆桌讨论的 AI 角色") },
+                )
+            }
+            Spacer(Modifier.size(8.dp))
         }
     }
 }

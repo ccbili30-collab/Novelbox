@@ -1,15 +1,12 @@
 # TBird Roundtable Box — v0.2.0 MD3 redesign · debug builds
 
 ## 1. WebView build
-
-`tbird-roundtable-md3-debug.apk` (app id `com.qinglan.chatnovel`)
-The full legacy web app wrapped in a WebView. Source: `android-app/`
-+ `index.html` + `src/`.
+`tbird-roundtable-md3-debug.apk` (app id `com.qinglan.chatnovel`) — full
+legacy web app wrapped in a WebView. Source: `android-app/`.
 
 ## 2. Native build (Kotlin + Jetpack Compose + Material 3)
-
 `tbird-roundtable-native-debug.apk` — 16 MB
-SHA-256: `43796e07a55b074a424993881e423ebf213ac53aeda5254f6925d5217ce95bff`
+SHA-256: `dbaf0f4e713751939622e2e30397193e9882adccb2cac10c61da33b1ca9c07ed`
 App id: `com.qinglan.chatnovel.native.debug`. Installable alongside #1.
 
 ### Features in this APK
@@ -20,37 +17,43 @@ App id: `com.qinglan.chatnovel.native.debug`. Installable alongside #1.
 - Auto title from the first user message.
 - System prompt via M3 ModalBottomSheet — prepended to every API call.
 - Streaming OpenAI Chat Completions with mid-stream abort.
-- Persona library auto-seeded (设定 / 剧情 / 文风 / 质疑).
-- Roundtable kernel (parseMentions / reorderForMentions / composeSystemPrompt) — pure + tested.
+- **Persona library editor** (PersonasScreen): list / add / edit / delete
+  the AI participants that will join the roundtable. Auto-seeded with
+  4 starter creators (设定师 / 剧情师 / 文风师 / 怀疑型主创) on first launch.
+- Roundtable kernel (parseMentions / reorderForMentions /
+  composeSystemPrompt) — pure + tested.
 - Single-session import/export helpers.
+- Settings page navigates to the persona editor via M3 list card.
 - Edge-to-edge layout, IME-aware composer, splash + adaptive icon.
 
-### Verified by 42 tests (37 JVM unit + 5 Robolectric Compose UI), 0 failures
+### Verified by 45 tests (37 JVM unit + 8 Robolectric Compose UI), 0 failures
 
 ```
-AppPrefsTest          2
-ChatMessageTest       2
-PersonaStoreTest      6
-RoundtableTest        9
-SessionStoreTest     11
-SessionTransferTest   7
-ChatScreenUiTest      5  ← Robolectric + Compose UI
-TOTAL                42
+AppPrefsTest                  2
+ChatMessageTest               2
+PersonaStoreTest              6
+RoundtableTest                9
+SessionStoreTest             11
+SessionTransferTest           7
+ChatScreenUiTest              5   ← Robolectric + Compose UI
+PersonasScreenUiTest          3   ← Robolectric + Compose UI
+─────────────────────────────────
+TOTAL                        45
 ```
 
-**ChatScreenUiTest** drives the real Compose tree on Robolectric — no
-KVM-accelerated emulator required (the build sandbox has neither
-`/dev/kvm` nor vmx/svm CPU flags so the standard Android emulator
-can't run). The tests check semantic-tree invariants that mirror what
-a real user sees:
+**Emulator constraints in this build sandbox**: no `/dev/kvm`, no
+vmx/svm CPU flags — the standard Android emulator can't run.
+Robolectric is the working alternative: it mounts the Android
+framework + Compose semantic tree on the JVM and exercises the
+same Composable functions that ship in the APK.
 
-1. **empty state** — headline + both suggestion chips visible.
-2. **send disabled** — button is disabled when the composer is empty.
-3. **typing enables send** — typing into the composer enables it.
-4. **chip pre-fills composer** — tapping a suggestion writes its
-   template into the input field.
-5. **settings nav** — the gear icon invokes the supplied callback
-   exactly once.
+What the UI tests cover:
+- Chat screen: empty-state copy + chips, send disabled when composer
+  is empty, typing enables send, suggestion chip pre-fills the
+  composer, the gear icon invokes onOpenSettings exactly once.
+- Personas screen: seeded library renders the first defaults,
+  empty-library placeholder shows the inviting copy, back button
+  invokes onBack exactly once.
 
 ### Build it yourself
 
@@ -61,7 +64,6 @@ ANDROID_HOME=/opt/android-sdk ./gradlew testDebugUnitTest assembleDebug --no-dae
 
 ### Phase 4+ backlog
 
-UI surface for the roundtable orchestrator (turn-taking renderer,
-mention picker dropdown, persona editor screen), manuscript paper
-sync, creator memory, branching session tree, import/export glue
-to the system file picker.
+Roundtable run-loop UI (turn-taking, mention-picker dropdown in the
+composer, per-persona bubble tinting), manuscript paper sync, creator
+memory, branching session tree, system file-picker glue for import/export.
