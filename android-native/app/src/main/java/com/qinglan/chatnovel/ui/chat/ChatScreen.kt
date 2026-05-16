@@ -214,6 +214,7 @@ fun ChatScreen(
                     text = state.composer,
                     isGenerating = state.isGenerating,
                     isRoundtable = state.roundtable.enabled,
+                    mentionCandidates = state.personas,
                     onChange = vm::updateComposer,
                     onSend = vm::send,
                     onStop = vm::stop,
@@ -526,11 +527,31 @@ private fun Composer(
     text: String,
     isGenerating: Boolean,
     isRoundtable: Boolean,
+    mentionCandidates: List<Persona>,
     onChange: (String) -> Unit,
     onSend: () -> Unit,
     onStop: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Local TextFieldValue so we can read the caret for @-mention
+    // detection. Synced FROM the VM's plain String whenever the VM
+    // pushes a new value (e.g. after send clears the composer or a
+    // suggestion chip pre-fills it).
+    var fv by remember { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(text)) }
+    androidx.compose.runtime.LaunchedEffect(text) {
+        if (text != fv.text) {
+            fv = androidx.compose.ui.text.input.TextFieldValue(
+                text,
+                selection = androidx.compose.ui.text.TextRange(text.length),
+            )
+        }
+    }
+
+    val mention = com.qinglan.chatnovel.model.MentionResolver.activeMention(fv.text, fv.selection.end)
+    val mentionList = if (isRoundtable && mention != null)
+        com.qinglan.chatnovel.model.MentionResolver.candidatesFor(mentionCandidates, mention.partial)
+    else emptyList()
+
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainer,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
@@ -554,10 +575,74 @@ private fun Composer(
                     )
                 }
             }
+            // @-mention picker — only appears while typing inside an
+            // unclosed @ fragment in roundtable mode.
+            if (mentionList.isNotEmpty() && mention != null) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 192.dp)
+                        .padding(bottom = 6.dp),
+                ) {
+                    items(mentionList, key = { it.id }) { p ->
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            onClick = {
+                                val ins = com.qinglan.chatnovel.model.MentionResolver
+                                    .insertMention(fv.text, mention, p)
+                                fv = androidx.compose.ui.text.input.TextFieldValue(
+                                    ins.newText,
+                                    selection = androidx.compose.ui.text.TextRange(ins.newCaret),
+                                )
+                                onChange(ins.newText)
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 2.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(50),
+                                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                                    modifier = Modifier.size(28.dp),
+                                ) {
+                                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                        Text(
+                                            p.name.take(1),
+                                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                            style = MaterialTheme.typography.labelLarge,
+                                        )
+                                    }
+                                }
+                                Spacer(Modifier.size(8.dp))
+                                Text(
+                                    "@${p.name}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = FontWeight.W500,
+                                )
+                                Spacer(Modifier.size(8.dp))
+                                Text(
+                                    p.roleLabel,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
             Row(verticalAlignment = Alignment.Bottom) {
                 TextField(
-                    value = text,
-                    onValueChange = onChange,
+                    value = fv,
+                    onValueChange = { next ->
+                        fv = next
+                        if (next.text != text) onChange(next.text)
+                    },
                     placeholder = { Text(stringResourceSafe(R.string.composer_hint)) },
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp, max = 188.dp),
                     colors = TextFieldDefaults.colors(
