@@ -74,17 +74,26 @@ textarea {
 
 /* M3 focus indicator: 3px outline in primary, 2px offset.
  * Only shows on keyboard navigation thanks to :focus-visible.
+ *
+ * Inputs / textareas / selects get their own M3 focus styling
+ * (a 2dp primary border or inset ring inside md3-shell.css) so
+ * doubling them up here would draw two concentric rings — visible
+ * as the weird purple double-ring around #modelSelect on Android.
+ * Skip those tag names; they style their own focus state.
  */
 button:focus-visible,
 summary:focus-visible,
-select:focus-visible,
-input:focus-visible,
-textarea:focus-visible,
 a:focus-visible,
 [tabindex]:focus-visible {
   outline: 3px solid var(--md-sys-color-primary);
   outline-offset: 2px;
   border-radius: 6px;
+}
+/* :focus state of inputs/selects/textareas — let M3 shell control. */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
 }
 
 /* Selection — primary container per M3 spec. */

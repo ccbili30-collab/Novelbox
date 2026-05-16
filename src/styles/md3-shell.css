@@ -552,76 +552,30 @@ body.is-generating .app .composer .send-button {
  * transform. Pointer events follow visibility so closed panels
  * never intercept clicks.
  */
-.app .side-panel,
-.app .side-panel.left-panel,
-.app .side-panel.right-panel {
-  animation: none;                                /* override legacy keyframe */
-  transition:
-    transform var(--md-sys-motion-duration-medium4)
-              var(--md-sys-motion-easing-emphasized-decelerate),
-    opacity   var(--md-sys-motion-duration-medium2)
-              var(--md-sys-motion-easing-standard),
-    visibility 0s linear var(--md-sys-motion-duration-medium4);
-  will-change: transform, opacity;
+/* M3 standard drawer enter animation. The exit animation has been
+ * rolled back because forcing `display: block` on [hidden] panels
+ * leaves the fixed-positioned element in the layout — on Android
+ * WebView the `pointer-events:none` over a fixed bottom-panel was
+ * not always propagated through, blocking clicks on the composer
+ * underneath. Now closed panels go back to `display:none` (set by
+ * the global `[hidden] { display:none !important }` rule), which
+ * is guaranteed to release every pointer.
+ */
+.app .side-panel.left-panel:not([hidden]) {
+  animation: panel-left-in var(--md-sys-motion-duration-medium4)
+             var(--md-sys-motion-easing-emphasized-decelerate) both;
 }
-/* Open state */
-.app .side-panel:not([hidden]) {
-  visibility: visible;
-  opacity: 1;
-  transform: translateX(0);
-  transition-delay: 0s, 0s, 0s;
-}
-.app .side-panel.left-panel:not([hidden])  { transform: translateX(0); }
-.app .side-panel.right-panel:not([hidden]) { transform: translateX(0); }
-/* Closed state — beat the global [hidden]{display:none!important} rule
- * by raising specificity (.app + tag + class + attribute selector). */
-.app aside.side-panel[hidden] {
-  display: block !important;
-  visibility: hidden;
-  opacity: 0;
-  pointer-events: none;
-}
-.app aside.side-panel.left-panel[hidden]  { transform: translateX(-104%); }
-.app aside.side-panel.right-panel[hidden] { transform: translateX(104%); }
-
-.app .backdrop {
-  animation: none;
-  transition:
-    opacity var(--md-sys-motion-duration-medium2) var(--md-sys-motion-easing-standard),
-    visibility 0s linear var(--md-sys-motion-duration-medium2);
-}
-.app .backdrop:not([hidden]) {
-  visibility: visible;
-  opacity: 1;
-  transition-delay: 0s, 0s;
-}
-.app .backdrop[hidden] {
-  display: block !important;
-  visibility: hidden;
-  opacity: 0;
-  pointer-events: none;
-}
-
-/* Bottom panel (context dock etc.) — slide up/down. */
-.app .bottom-panel {
-  animation: none;
-  transition:
-    transform var(--md-sys-motion-duration-medium4)
-              var(--md-sys-motion-easing-emphasized-decelerate),
-    opacity   var(--md-sys-motion-duration-medium2)
-              var(--md-sys-motion-easing-standard),
-    visibility 0s linear var(--md-sys-motion-duration-medium4);
+.app .side-panel.right-panel:not([hidden]) {
+  animation: panel-right-in var(--md-sys-motion-duration-medium4)
+             var(--md-sys-motion-easing-emphasized-decelerate) both;
 }
 .app .bottom-panel:not([hidden]) {
-  visibility: visible; opacity: 1; transform: translateY(0);
-  transition-delay: 0s, 0s, 0s;
+  animation: panel-bottom-in var(--md-sys-motion-duration-medium3)
+             var(--md-sys-motion-easing-emphasized-decelerate) both;
 }
-.app .bottom-panel[hidden] {
-  display: block !important;
-  visibility: hidden;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(20px) scale(0.985);
+.app .backdrop:not([hidden]) {
+  animation: backdrop-soft-in var(--md-sys-motion-duration-medium2)
+             var(--md-sys-motion-easing-standard) both;
 }
 
 /* ============================================================== */
@@ -1511,3 +1465,55 @@ body.is-generating .app .composer .send-button {
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
 }
+
+/* ============================================================== */
+/* Roundtable workspace empty-ish state                            */
+/* The discussion <div> is empty on a fresh roundtable; give it a
+ * minimum height + an idle hint so the page never reads blank.
+ */
+.roundtable-discussion:empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 240px;
+  padding: 32px 16px;
+  color: var(--md-sys-color-on-surface-variant);
+  font: var(--md-sys-typescale-body-medium);
+  text-align: center;
+  gap: 8px;
+}
+.roundtable-discussion:empty::before {
+  content: "groups";
+  font-family: "Material Symbols Rounded";
+  font-size: 40px;
+  opacity: 0.45;
+  margin-bottom: 4px;
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 40;
+}
+.roundtable-discussion:empty::after {
+  content: "选择圆桌成员，按右下角 \201C 轮 \201D 开始一轮讨论。";
+  max-width: 280px;
+  line-height: 1.55;
+}
+
+/* Manuscript paper grip — make the tap target bigger + active layer */
+.manuscript-paper .paper-grip {
+  min-height: 32px;
+  padding: 8px 16px;
+}
+.manuscript-paper .paper-grip:active::before {
+  /* Use the M3 state layer so users see a tap response. */
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--md-sys-color-on-surface);
+  opacity: 0.08;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* Top app bar: a touch more horizontal breathing room so 6 icons
+ * stop cramming together on narrow screens. */
+.app .topbar { padding-inline: 8px; gap: 2px; }
+.app .topbar h1#sessionTitle { padding-inline: 4px; }
